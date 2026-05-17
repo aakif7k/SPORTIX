@@ -1,0 +1,276 @@
+import type { User, Post, Event, Conversation, Message, Notification, Story } from '../types';
+
+// ─── SPORT CATEGORIES ──────────────────────────────────────────────────────
+export const SPORT_CATEGORIES = [
+  { id: 'football', label: 'Football', emoji: '⚽', color: '#22c55e' },
+  { id: 'basketball', label: 'Basketball', emoji: '🏀', color: '#f97316' },
+  { id: 'tennis', label: 'Tennis', emoji: '🎾', color: '#eab308' },
+  { id: 'cricket', label: 'Cricket', emoji: '🏏', color: '#84cc16' },
+  { id: 'swimming', label: 'Swimming', emoji: '🏊', color: '#06b6d4' },
+  { id: 'athletics', label: 'Athletics', emoji: '🏃', color: '#CCFF00' },
+  { id: 'boxing', label: 'Boxing', emoji: '🥊', color: '#ef4444' },
+  { id: 'cycling', label: 'Cycling', emoji: '🚴', color: '#3b82f6' },
+  { id: 'volleyball', label: 'Volleyball', emoji: '🏐', color: '#a855f7' },
+  { id: 'rugby', label: 'Rugby', emoji: '🏉', color: '#78716c' },
+  { id: 'baseball', label: 'Baseball', emoji: '⚾', color: '#ec4899' },
+  { id: 'golf', label: 'Golf', emoji: '⛳', color: '#10b981' },
+  { id: 'hockey', label: 'Hockey', emoji: '🏑', color: '#f59e0b' },
+  { id: 'mma', label: 'MMA', emoji: '🥋', color: '#FF3B00' },
+  { id: 'gymnastics', label: 'Gymnastics', emoji: '🤸', color: '#8b5cf6' },
+  { id: 'badminton', label: 'Badminton', emoji: '🏸', color: '#14b8a6' },
+];
+
+export const SPORT_POSITIONS: Record<string, string[]> = {
+  football: ['GK', 'CB', 'LB', 'RB', 'CDM', 'CM', 'CAM', 'LW', 'RW', 'ST', 'CF'],
+  basketball: ['PG', 'SG', 'SF', 'PF', 'C'],
+  volleyball: ['S', 'OH', 'MB', 'OPP', 'L'],
+  rugby: ['Prop', 'Hooker', 'Lock', 'Flanker', 'No.8', 'Scrum-half', 'Fly-half', 'Wing', 'Centre', 'Fullback'],
+  baseball: ['P', 'C', '1B', '2B', '3B', 'SS', 'LF', 'CF', 'RF', 'DH'],
+  hockey: ['GK', 'CB', 'LB', 'RB', 'CM', 'LW', 'RW', 'CF'],
+  cricket: ['Bat', 'Bowl', 'WK', 'All-rounder'],
+  default: ['Captain', 'Co-Captain', 'Member'],
+};
+
+// ─── MOCK USERS ────────────────────────────────────────────────────────────
+export const MOCK_USERS: User[] = [
+  {
+    id: 'u1', uid: 'u1', name: 'Marcus Thielemann', username: 'marcus_thiel',
+    email: 'marcus@sportix.io', avatar: 'https://i.pravatar.cc/150?img=11',
+    coverImage: 'https://images.unsplash.com/photo-1574629810360-7efbbe195018?w=1200&q=80',
+    role: 'athlete', sport: 'football', sports: ['football'],
+    location: 'Berlin, Germany', bio: 'Professional midfielder. Champions League finalist. Obsessed with data-driven performance.',
+    experienceLevel: 'professional', openToRecruit: false, isOnline: true, isVerified: true,
+    createdAt: '2023-06-01',
+    stats: { matches: 284, events: 47, followers: 128400, following: 312, wins: 189, losses: 61, rating: 91, yearsExperience: 11 },
+    performanceData: { speed: 88, strength: 79, endurance: 92, agility: 86, technique: 94, teamwork: 90 },
+    achievements: [
+      { id: 'a1', title: 'Champions League Finalist', description: 'Reached UCL final', icon: '🏆', date: '2024-05-25', rarity: 'legendary' },
+      { id: 'a2', title: '100 Clean Sheets', description: 'Contributed to 100 clean sheets', icon: '🛡️', date: '2023-11-01', rarity: 'epic' },
+    ],
+  },
+  {
+    id: 'u2', uid: 'u2', name: 'Priya Krishnamurthy', username: 'priya_k',
+    email: 'priya@sportix.io', avatar: 'https://i.pravatar.cc/150?img=47',
+    coverImage: 'https://images.unsplash.com/photo-1547941126-3d5322b218b0?w=1200&q=80',
+    role: 'athlete', sport: 'tennis', sports: ['tennis', 'badminton'],
+    location: 'Mumbai, India', bio: 'WTA Top-50 player. Grand Slam veteran. Training never stops.',
+    experienceLevel: 'elite', openToRecruit: true, isOnline: false, isVerified: true,
+    createdAt: '2023-02-14',
+    stats: { matches: 412, events: 89, followers: 342000, following: 145, wins: 318, losses: 94, rating: 94, yearsExperience: 16 },
+    performanceData: { speed: 92, strength: 74, endurance: 90, agility: 96, technique: 97, teamwork: 70 },
+    achievements: [
+      { id: 'a3', title: 'Grand Slam Quarterfinalist', description: 'Reached QF at Roland Garros', icon: '🎾', date: '2024-06-05', rarity: 'legendary' },
+    ],
+  },
+  {
+    id: 'u3', uid: 'u3', name: 'DeShawn Williams', username: 'deshawn_w',
+    email: 'deshawn@sportix.io', avatar: 'https://i.pravatar.cc/150?img=52',
+    coverImage: 'https://images.unsplash.com/photo-1546519638-68e109498ffc?w=1200&q=80',
+    role: 'athlete', sport: 'basketball', sports: ['basketball'],
+    location: 'Atlanta, GA, USA', bio: 'SG | NBA hopeful | 28 PPG avg | The court is my lab.',
+    experienceLevel: 'semi-pro', openToRecruit: true, isOnline: true, isVerified: false,
+    createdAt: '2023-09-10',
+    stats: { matches: 178, events: 34, followers: 67200, following: 892, wins: 112, losses: 66, rating: 87, yearsExperience: 7 },
+    performanceData: { speed: 90, strength: 82, endurance: 85, agility: 94, technique: 88, teamwork: 83 },
+    achievements: [
+      { id: 'a4', title: 'Triple-Double Record', description: 'Most triple-doubles in a season', icon: '🏀', date: '2024-03-15', rarity: 'epic' },
+    ],
+  },
+  {
+    id: 'u4', uid: 'u4', name: 'Isabela Moraes', username: 'isa_moraes',
+    email: 'isa@sportix.io', avatar: 'https://i.pravatar.cc/150?img=45',
+    coverImage: 'https://images.unsplash.com/photo-1567427017947-545c5f8d16ad?w=1200&q=80',
+    role: 'athlete', sport: 'swimming', sports: ['swimming', 'athletics'],
+    location: 'São Paulo, Brazil', bio: 'Olympic swimmer | 4x World Championship medalist | Water is home.',
+    experienceLevel: 'elite', openToRecruit: false, isOnline: false, isVerified: true,
+    createdAt: '2022-11-01',
+    stats: { matches: 521, events: 112, followers: 891000, following: 78, wins: 445, losses: 76, rating: 98, yearsExperience: 18 },
+    performanceData: { speed: 98, strength: 86, endurance: 99, agility: 88, technique: 99, teamwork: 75 },
+    achievements: [
+      { id: 'a5', title: 'Olympic Medalist', description: 'Gold medal at Paris 2024', icon: '🥇', date: '2024-08-01', rarity: 'legendary' },
+    ],
+  },
+  {
+    id: 'u5', uid: 'u5', name: 'Yuki Tanaka', username: 'yuki_mma',
+    email: 'yuki@sportix.io', avatar: 'https://i.pravatar.cc/150?img=61',
+    coverImage: 'https://images.unsplash.com/photo-1544367567-0f2fcb009e0b?w=1200&q=80',
+    role: 'athlete', sport: 'mma', sports: ['mma', 'wrestling'],
+    location: 'Tokyo, Japan', bio: 'Undefeated prospect. 12-0. Striking + grappling specialist.',
+    experienceLevel: 'professional', openToRecruit: true, isOnline: true, isVerified: true,
+    createdAt: '2023-04-20',
+    stats: { matches: 12, events: 8, followers: 234000, following: 67, wins: 12, losses: 0, rating: 93, yearsExperience: 8 },
+    performanceData: { speed: 89, strength: 94, endurance: 91, agility: 87, technique: 96, teamwork: 60 },
+    achievements: [
+      { id: 'a6', title: 'Undefeated Record', description: '12-0 professional record', icon: '🥋', date: '2025-01-15', rarity: 'legendary' },
+    ],
+  },
+];
+
+export const CURRENT_USER: User = {
+  id: 'cu1', uid: 'cu1', name: 'Alex Rivera', username: 'alex_rivera',
+  email: 'alex@sportix.io', avatar: 'https://i.pravatar.cc/150?img=33',
+  coverImage: 'https://images.unsplash.com/photo-1431324155629-1a6deb1dec8d?w=1200&q=80',
+  role: 'athlete', sport: 'athletics', sports: ['athletics', 'cycling'],
+  location: 'Madrid, Spain', bio: '400m specialist | National champion | Fueled by data.',
+  experienceLevel: 'professional', openToRecruit: false, isOnline: true, isVerified: true,
+  createdAt: '2023-01-15',
+  stats: { matches: 94, events: 28, followers: 52100, following: 431, wins: 71, losses: 23, rating: 89, yearsExperience: 9 },
+  performanceData: { speed: 96, strength: 78, endurance: 94, agility: 91, technique: 87, teamwork: 82 },
+  achievements: [
+    { id: 'a7', title: 'National Champion', description: '400m National Championship gold', icon: '🏅', date: '2024-07-20', rarity: 'epic' },
+  ],
+};
+
+// ─── MOCK POSTS ────────────────────────────────────────────────────────────
+export const MOCK_POSTS: Post[] = [
+  {
+    id: 'p1', authorId: 'u1', author: MOCK_USERS[0],
+    content: 'Just wrapped up 3-hour tactical session with the analytics team. Heat maps don\'t lie — we\'re covering 37% more pressing zones this season. The data never sleeps. 📊⚽',
+    mediaUrl: 'https://images.unsplash.com/photo-1574629810360-7efbbe195018?w=800&q=80',
+    mediaType: 'image', category: 'training', timestamp: new Date(Date.now() - 2 * 3600000).toISOString(),
+    reactions: { likes: ['cu1', 'u2', 'u3', 'u4', 'u5'], comments: [], shares: 28, saves: ['cu1', 'u4'] },
+  },
+  {
+    id: 'p2', authorId: 'u2', author: MOCK_USERS[1],
+    content: 'Roland Garros prep day 47. Serve speed up to 198 km/h. Return accuracy at 84%. Numbers are climbing — form is peaking at the right time. Clay season is mine. 🎾🔥',
+    category: 'training', timestamp: new Date(Date.now() - 4 * 3600000).toISOString(),
+    reactions: { likes: ['u1', 'u3', 'cu1'], comments: [], shares: 14, saves: [] },
+  },
+  {
+    id: 'p3', authorId: 'u3', author: MOCK_USERS[2],
+    content: '28 points. 11 assists. 9 rebounds. One bucket away from a triple-double. We move. Next game in 48 hours. No days off. 🏀💯',
+    mediaUrl: 'https://images.unsplash.com/photo-1546519638-68e109498ffc?w=800&q=80',
+    mediaType: 'image', category: 'highlights', timestamp: new Date(Date.now() - 6 * 3600000).toISOString(),
+    reactions: { likes: ['cu1', 'u1', 'u2', 'u4'], comments: [], shares: 52, saves: ['cu1'] },
+  },
+  {
+    id: 'p4', authorId: 'u4', author: MOCK_USERS[3],
+    content: 'Olympic gold one year later. Still processing. Still working. The pool at 5AM never lies to you — it just shows you who you are. Back in training for World Champs. 🏊‍♀️🥇',
+    mediaUrl: 'https://images.unsplash.com/photo-1567427017947-545c5f8d16ad?w=800&q=80',
+    mediaType: 'image', category: 'achievements', timestamp: new Date(Date.now() - 8 * 3600000).toISOString(),
+    reactions: { likes: ['u1', 'u2', 'u3', 'u5', 'cu1'], comments: [], shares: 187, saves: ['cu1', 'u5'] },
+  },
+  {
+    id: 'p5', authorId: 'u5', author: MOCK_USERS[4],
+    content: 'Camp starts Monday. 8 weeks of hell before the title shot. My coaches say I\'m in the best shape of my life. My opponents should be scared. 12-0 and counting. 🥋💀',
+    category: 'training', timestamp: new Date(Date.now() - 12 * 3600000).toISOString(),
+    reactions: { likes: ['cu1', 'u1', 'u3'], comments: [], shares: 31, saves: [] },
+  },
+];
+
+// ─── MOCK STORIES ──────────────────────────────────────────────────────────
+export const MOCK_STORIES: Story[] = MOCK_USERS.map((user, i) => ({
+  id: `s${i + 1}`, userId: user.id, userAvatar: user.avatar, userName: user.name.split(' ')[0],
+  userSport: user.sport, mediaUrl: user.coverImage || '',
+  mediaType: 'image', timestamp: new Date(Date.now() - i * 1800000).toISOString(), viewed: i > 2,
+}));
+
+// ─── MOCK EVENTS ───────────────────────────────────────────────────────────
+export const MOCK_EVENTS: Event[] = [
+  {
+    id: 'e1', title: 'Pro Football 5v5 Championship', sport: 'football',
+    description: 'Elite 5v5 indoor football tournament featuring top professionals from across Europe. AI-powered team balancing ensures competitive matchups.',
+    date: '2025-06-15', venue: 'Berlin Indoor Arena', location: 'Berlin, Germany',
+    format: 'tournament', skillLevel: 'professional',
+    maxParticipants: 64, participants: ['u1', 'cu1', 'u3'],
+    teams: [], organizerId: 'u1', status: 'upcoming', aiTeamAvailable: true, aiGenerated: false,
+    prizePool: '€25,000', entryFee: '€150',
+    rules: ['5v5 format', '10-minute halves', 'No offside', 'Unlimited substitutions'],
+    tags: ['football', 'professional', 'indoor', 'europe'],
+    bannerImage: 'https://images.unsplash.com/photo-1574629810360-7efbbe195018?w=800&q=80',
+    createdAt: '2025-04-01',
+  },
+  {
+    id: 'e2', title: 'Asia Pacific Basketball Open', sport: 'basketball',
+    description: 'Premier 3x3 basketball tournament in Tokyo. Join as a team or let AI match you with compatible teammates.',
+    date: '2025-06-28', venue: 'Yoyogi National Gymnasium', location: 'Tokyo, Japan',
+    format: 'tournament', skillLevel: 'semi-pro',
+    maxParticipants: 48, participants: ['u3', 'u5'],
+    teams: [], organizerId: 'u5', status: 'upcoming', aiTeamAvailable: true, aiGenerated: false,
+    prizePool: '¥500,000', entryFee: '¥5,000',
+    rules: ['3x3 format', '10-minute games', 'Win by 2 or first to 21'],
+    tags: ['basketball', '3x3', 'asia', 'open'],
+    bannerImage: 'https://images.unsplash.com/photo-1546519638-68e109498ffc?w=800&q=80',
+    createdAt: '2025-04-10',
+  },
+  {
+    id: 'e3', title: 'Grand Prix Tennis Invitational', sport: 'tennis',
+    description: 'Exclusive clay-court exhibition featuring top-50 ranked players. Singles and doubles formats available.',
+    date: '2025-07-05', venue: 'Monte Carlo Country Club', location: 'Monaco',
+    format: 'tournament', skillLevel: 'elite',
+    maxParticipants: 32, participants: ['u2'],
+    teams: [], organizerId: 'u2', status: 'upcoming', aiTeamAvailable: false, aiGenerated: false,
+    prizePool: '€50,000', entryFee: 'Invitation Only',
+    rules: ['Best of 3 sets', 'Clay surface', 'Hawk-Eye available'],
+    tags: ['tennis', 'clay', 'elite', 'europe'],
+    bannerImage: 'https://images.unsplash.com/photo-1547941126-3d5322b218b0?w=800&q=80',
+    createdAt: '2025-04-15',
+  },
+  {
+    id: 'e4', title: 'MMA Prospect Showcase', sport: 'mma',
+    description: 'Platform for undefeated prospects to compete in front of global promoters. Sanctioned bouts, full medical staff.',
+    date: '2025-07-20', venue: 'Saitama Super Arena', location: 'Saitama, Japan',
+    format: 'tournament', skillLevel: 'professional',
+    maxParticipants: 16, participants: ['u5'],
+    teams: [], organizerId: 'u5', status: 'upcoming', aiTeamAvailable: false, aiGenerated: false,
+    prizePool: '$100,000', entryFee: 'Invite Only',
+    rules: ['MMA unified rules', '5x5 minute rounds', 'Weight classes: 145lb, 155lb, 170lb'],
+    tags: ['mma', 'prospect', 'sanctioned'],
+    bannerImage: 'https://images.unsplash.com/photo-1544367567-0f2fcb009e0b?w=800&q=80',
+    createdAt: '2025-04-20',
+  },
+];
+
+// ─── MOCK CONVERSATIONS ────────────────────────────────────────────────────
+export const MOCK_CONVERSATIONS: Conversation[] = [
+  {
+    id: 'c1', participants: ['cu1', 'u1'],
+    participantDetails: [{ id: 'u1', name: 'Marcus Thielemann', avatar: MOCK_USERS[0].avatar, isOnline: true }],
+    lastMessage: { id: 'm1', conversationId: 'c1', senderId: 'u1', content: 'Bro that sprint data is insane, what tracker are you using?', timestamp: new Date(Date.now() - 1800000).toISOString(), read: false },
+    unreadCount: 3, isEventChat: false, createdAt: '2025-01-01', updatedAt: new Date(Date.now() - 1800000).toISOString(),
+  },
+  {
+    id: 'c2', participants: ['cu1', 'u2'],
+    participantDetails: [{ id: 'u2', name: 'Priya Krishnamurthy', avatar: MOCK_USERS[1].avatar, isOnline: false }],
+    lastMessage: { id: 'm2', conversationId: 'c2', senderId: 'cu1', content: 'Good luck at Roland Garros! You\'ve got this 🎾', timestamp: new Date(Date.now() - 7200000).toISOString(), read: true },
+    unreadCount: 0, isEventChat: false, createdAt: '2025-01-15', updatedAt: new Date(Date.now() - 7200000).toISOString(),
+  },
+  {
+    id: 'c3', participants: ['cu1', 'u3', 'u5'],
+    participantDetails: [
+      { id: 'u3', name: 'DeShawn Williams', avatar: MOCK_USERS[2].avatar, isOnline: true },
+      { id: 'u5', name: 'Yuki Tanaka', avatar: MOCK_USERS[4].avatar, isOnline: true },
+    ],
+    lastMessage: { id: 'm3', conversationId: 'c3', senderId: 'u3', content: 'Team is confirmed! See you all at the arena 🏀', timestamp: new Date(Date.now() - 3600000).toISOString(), read: false },
+    unreadCount: 7, isEventChat: true, eventId: 'e2', eventName: 'Asia Pacific Basketball Open',
+    createdAt: '2025-03-01', updatedAt: new Date(Date.now() - 3600000).toISOString(),
+  },
+];
+
+export const MOCK_MESSAGES: Record<string, Message[]> = {
+  c1: [
+    { id: 'm1a', conversationId: 'c1', senderId: 'u1', content: 'Hey man, saw your 400m splits last week. Absolute unit.', timestamp: new Date(Date.now() - 3600000 * 5).toISOString(), read: true },
+    { id: 'm1b', conversationId: 'c1', senderId: 'cu1', content: 'Thanks Marcus! Been grinding the lactate threshold work. You should try the Polar Vantage V3 for HRV tracking.', timestamp: new Date(Date.now() - 3600000 * 4).toISOString(), read: true },
+    { id: 'm1c', conversationId: 'c1', senderId: 'u1', content: 'Bro that sprint data is insane, what tracker are you using?', timestamp: new Date(Date.now() - 1800000).toISOString(), read: false },
+  ],
+  c2: [
+    { id: 'm2a', conversationId: 'c2', senderId: 'cu1', content: 'Priya! Watched your training highlights. Your backhand cross-court is lethal now.', timestamp: new Date(Date.now() - 86400000).toISOString(), read: true },
+    { id: 'm2b', conversationId: 'c2', senderId: 'u2', content: '3 years of work on that shot. Finally feels automatic. Thanks for noticing!', timestamp: new Date(Date.now() - 82800000).toISOString(), read: true },
+    { id: 'm2c', conversationId: 'c2', senderId: 'cu1', content: 'Good luck at Roland Garros! You\'ve got this 🎾', timestamp: new Date(Date.now() - 7200000).toISOString(), read: true },
+  ],
+  c3: [
+    { id: 'm3a', conversationId: 'c3', senderId: 'u5', content: 'SportiX matched us for the Tokyo tournament. Ready to ball out?', timestamp: new Date(Date.now() - 7200000).toISOString(), read: true },
+    { id: 'm3b', conversationId: 'c3', senderId: 'cu1', content: 'Let\'s go! The AI picked a solid lineup tbh.', timestamp: new Date(Date.now() - 5400000).toISOString(), read: true },
+    { id: 'm3c', conversationId: 'c3', senderId: 'u3', content: 'Team is confirmed! See you all at the arena 🏀', timestamp: new Date(Date.now() - 3600000).toISOString(), read: false },
+  ],
+};
+
+// ─── MOCK NOTIFICATIONS ────────────────────────────────────────────────────
+export const MOCK_NOTIFICATIONS: Notification[] = [
+  { id: 'n1', userId: 'cu1', type: 'event_invite', title: 'Event Invitation', message: 'Marcus Thielemann invited you to join Pro Football 5v5 Championship', read: false, timestamp: new Date(Date.now() - 1800000).toISOString(), relatedId: 'e1', actorAvatar: MOCK_USERS[0].avatar, actorName: 'Marcus Thielemann' },
+  { id: 'n2', userId: 'cu1', type: 'ai_match', title: 'AI Team Match', message: 'SportiX AI found you 3 compatible teammates for Asia Pacific Basketball Open', read: false, timestamp: new Date(Date.now() - 3600000).toISOString(), relatedId: 'e2', actorName: 'SportiX AI' },
+  { id: 'n3', userId: 'cu1', type: 'like', title: 'New Like', message: 'Isabela Moraes liked your training post', read: false, timestamp: new Date(Date.now() - 7200000).toISOString(), relatedId: 'p1', actorAvatar: MOCK_USERS[3].avatar, actorName: 'Isabela Moraes' },
+  { id: 'n4', userId: 'cu1', type: 'connection_request', title: 'Connection Request', message: 'Yuki Tanaka wants to connect with you', read: true, timestamp: new Date(Date.now() - 86400000).toISOString(), actorAvatar: MOCK_USERS[4].avatar, actorName: 'Yuki Tanaka' },
+  { id: 'n5', userId: 'cu1', type: 'match_reminder', title: 'Match Reminder', message: 'Pro Football 5v5 Championship starts in 48 hours', read: true, timestamp: new Date(Date.now() - 86400000 * 2).toISOString(), relatedId: 'e1' },
+  { id: 'n6', userId: 'cu1', type: 'achievement', title: 'New Achievement', message: 'You unlocked "Early Adopter" — joined SportiX in the first wave', read: true, timestamp: new Date(Date.now() - 86400000 * 3).toISOString() },
+];
