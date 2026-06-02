@@ -28,6 +28,11 @@ import { SearchPage } from './pages/discover/SearchPage';
 import { NotificationCenter } from './pages/notifications/NotificationCenter';
 import { SettingsPage } from './pages/settings/SettingsPage';
 
+// ClashHub Performance Pages
+import { MatchReport } from './pages/clashhub/MatchReport';
+import { MatchHistory as ClashMatchHistory } from './pages/clashhub/MatchHistory';
+import { PerformanceTracker } from './pages/clashhub/PerformanceTracker';
+
 // Pulse Pages
 import { PulseLobby } from './pages/pulse/PulseLobby';
 import { SquadFormation } from './pages/pulse/SquadFormation';
@@ -75,6 +80,11 @@ const App: React.FC = () => {
             <Route path="discover" element={<SearchPage />} />
             <Route path="notifications" element={<NotificationCenter />} />
             <Route path="settings" element={<SettingsPage />} />
+
+            {/* ── ClashHub Performance Tracking ── */}
+            <Route path="clashhub/report/:matchId" element={<MatchReport />} />
+            <Route path="clashhub/history" element={<ClashMatchHistory />} />
+            <Route path="clashhub/performance" element={<PerformanceTracker />} />
           </Route>
 
           {/* Protected Pulse */}

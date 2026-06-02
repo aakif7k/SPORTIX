@@ -9,6 +9,7 @@ import { useEventStore } from '../../store/eventStore';
 import { useAISettingsStore } from '../../store/aiSettingsStore';
 import { SPORT_CATEGORIES } from '../../services/mockData';
 import type { Event } from '../../types';
+import { PendingReportBanner } from '../../components/performance/PendingReportBanner';
 
 const MOCK_EVENT_DISTANCES: Record<string, number> = {
   e1: 4.8,
@@ -150,7 +151,6 @@ const EventCard: React.FC<{ event: Event; index: number; featured?: boolean }> =
   );
 };
 
-// ─── Event Browse ─────────────────────────────────────────────────────────────
 export const EventBrowse: React.FC = () => {
   const { events }   = useEventStore();
   const { nearbyRadius } = useAISettingsStore();
@@ -158,7 +158,12 @@ export const EventBrowse: React.FC = () => {
   const [sportFilter, setSportFilter] = useState('all');
   const [searchQuery, setSearchQuery] = useState('');
   const [showFilters, setShowFilters] = useState(false);
+  const [visibleCount, setVisibleCount] = useState(5);
   const searchRef = useRef<HTMLInputElement>(null);
+
+  React.useEffect(() => {
+    setVisibleCount(5);
+  }, [sportFilter, searchQuery, nearbyRadius]);
 
   const filtered = events.filter(e => {
     const matchesSport = sportFilter === 'all' || e.sport === sportFilter;
@@ -168,7 +173,7 @@ export const EventBrowse: React.FC = () => {
   });
 
   const featuredEvent  = filtered[0];
-  const remainingEvents = filtered.slice(1);
+  const remainingEvents = filtered.slice(1, visibleCount);
 
   return (
     <div className="space-y-6 text-text-primary">
@@ -208,6 +213,9 @@ export const EventBrowse: React.FC = () => {
           className="w-full pl-10 pr-4 py-3 rounded-[16px] font-mono text-[12px] bg-surface border border-border-muted text-text-primary outline-none transition-all focus:border-volt/50 focus:ring-1 focus:ring-volt/30"
         />
       </motion.div>
+
+      {/* ── PENDING REPORT BANNER ────────────────────────────── */}
+      <PendingReportBanner />
 
       {/* ── SPORT FILTER CHIPS ──────────────────────────────── */}
       <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }}>
@@ -288,6 +296,19 @@ export const EventBrowse: React.FC = () => {
                 <EventCard key={event.id} event={event} index={i + 1} />
               ))}
             </div>
+            {/* Pagination button */}
+            {filtered.length > visibleCount && (
+              <div className="flex justify-center pt-4">
+                <motion.button
+                  whileHover={{ scale: 1.02 }}
+                  whileTap={{ scale: 0.98 }}
+                  onClick={() => setVisibleCount(prev => prev + 10)}
+                  className="flex items-center gap-2 px-6 py-3 rounded-[16px] font-mono text-[11px] font-bold bg-surface border border-border-muted text-text-primary hover:text-volt hover:border-volt/35 transition-all shadow-md"
+                >
+                  More clashes fr fr ⚡ <ArrowRight size={14} className="text-volt" />
+                </motion.button>
+              </div>
+            )}
           </motion.div>
         )}
       </AnimatePresence>

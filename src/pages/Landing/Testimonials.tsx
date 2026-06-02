@@ -37,7 +37,7 @@ export const Testimonials: React.FC = () => (
 
       {/* Heading */}
       <motion.div className="text-center mb-16" {...fadeUp()}>
-        <h2 className="font-['Bebas_Neue'] text-white" style={{ fontSize: 'clamp(48px,6vw,96px)', lineHeight: 1 }}>
+        <h2 className="font-['Bebas_Neue'] text-[#FFFFFF]" style={{ fontSize: 'clamp(48px,6vw,96px)', lineHeight: 1 }}>
           ATHLETES SPEAK.
         </h2>
         <p className="font-mono text-[14px] text-[#888] mt-4">Real athletes. Real squads. Real results.</p>

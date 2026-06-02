@@ -17,7 +17,14 @@ import { SemiCircleProgress, LevelBadge } from '../../components/gamification/Pr
 import { BadgeIcon } from '../../components/gamification/BadgeIcon';
 import { Award, Sparkles, Clock, Activity, Flame, Shield, Lock as LockIcon } from 'lucide-react';
 
-const TABS = ['Overview', 'PlayerDNA', 'PeakStats', 'Highlights', 'ClashHub', 'GloryBoard'];
+// Performance tracking imports
+import { CareerStatCard } from '../../components/performance/CareerStatCard';
+import { PerformanceRadar } from '../../components/performance/PerformanceRadar';
+import { MatchHistoryCard } from '../../components/performance/MatchHistoryCard';
+import { useCareerStats } from '../../hooks/useCareerStats';
+import { useMatchReportStore } from '../../store/matchReportStore';
+
+const TABS = ['Overview', 'PlayerDNA', 'PeakStats', 'Highlights', 'ClashHub', 'Performance', 'GloryBoard'];
 
 const SquadProfileWidget: React.FC = () => {
   const navigate = useNavigate();
@@ -138,6 +145,8 @@ export const AthleteProfile: React.FC = () => {
   const navigate = useNavigate();
   const { user: authUser } = useAuthStore();
   const { currentPulse, currentLevel, streakDays } = useGamificationStore();
+  const careerStats = useCareerStats();
+  const { matchHistory } = useMatchReportStore();
   const [activeTab, setActiveTab] = useState('Overview');
   const [following, setFollowing] = useState(false);
   const [openToRecruit, setOpenToRecruit] = useState(false);
@@ -610,6 +619,44 @@ export const AthleteProfile: React.FC = () => {
               <div className="glass rounded-xl p-5 text-center">
                 <p className="font-mono text-text-secondary text-sm">No event history yet</p>
                 <Button variant="ghost" size="sm" className="mt-3" onClick={() => navigate('/app/events')}>Browse ClashHub</Button>
+              </div>
+            )}
+
+            {/* PERFORMANCE */}
+            {activeTab === 'Performance' && (
+              <div className="space-y-5">
+                {/* Career stat cards */}
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+                  <CareerStatCard icon="⚽" value={careerStats.football?.totalGoals ?? 0} label="Total Goals"  trend="+2 this month" trendUp index={0} />
+                  <CareerStatCard icon="🏆" value={`${careerStats.winRate}%`}             label="Win Rate"    trend="+5%"          trendUp index={1} />
+                  <CareerStatCard icon="⚡" value={careerStats.totalPulseEarned}           label="Pulse"       trend="+91 today"    trendUp index={2} />
+                  <CareerStatCard icon="👑" value={careerStats.football?.mvpCount ?? 0}   label="MVP Titles" trend="1 recent"     trendUp index={3} color="#FBBF24" />
+                </div>
+
+                {/* Radar */}
+                <div className="glass rounded-xl p-5">
+                  <h3 className="font-display text-base text-text-primary tracking-wide mb-3">PERFORMANCE RADAR</h3>
+                  <PerformanceRadar sport="football" size="md" />
+                </div>
+
+                {/* Match history preview */}
+                <div className="glass rounded-xl p-5 space-y-4">
+                  <div className="flex items-center justify-between">
+                    <h3 className="font-display text-base text-text-primary tracking-wide">RECENT MATCHES</h3>
+                    <button
+                      onClick={() => navigate('/app/clashhub/history')}
+                      className="font-mono text-[12px]"
+                      style={{ color: 'var(--accent)' }}
+                    >
+                      View all →
+                    </button>
+                  </div>
+                  <div className="space-y-3">
+                    {matchHistory.slice(0, 3).map((match, i) => (
+                      <MatchHistoryCard key={match.id} match={match} compact index={i} />
+                    ))}
+                  </div>
+                </div>
               </div>
             )}
 

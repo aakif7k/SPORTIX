@@ -79,7 +79,7 @@ export const FinalCTA: React.FC = () => {
             onClick={() => navigate('/login')}
             whileHover={{ borderColor: 'rgba(204,255,0,0.3)', color: '#CCFF00' }}
             whileTap={{ scale: 0.97 }}
-            className="h-16 px-12 rounded-[14px] font-['Barlow_Condensed'] font-semibold text-[20px] text-white border w-full sm:w-auto transition-all"
+            className="h-16 px-12 rounded-[14px] font-['Barlow_Condensed'] font-semibold text-[20px] text-[#FFFFFF] border w-full sm:w-auto transition-all"
             style={{ borderColor: 'rgba(255,255,255,0.1)', background: 'transparent' }}>
             Explore Platform
           </motion.button>

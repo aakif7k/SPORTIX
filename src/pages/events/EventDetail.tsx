@@ -3,7 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence, useScroll, useTransform } from 'framer-motion';
 import {
   Calendar, MapPin, Users, Zap, MessageSquare, Bell, BellOff,
-  Trophy, Activity, Cpu, Clock, Star, ArrowRight, UserPlus,
+  Trophy, Activity, Cpu, Clock, Star, ArrowRight, ArrowLeft, UserPlus,
   Shield, BarChart3, CheckCircle2, Swords, Timer,
   Hash, Share2, Settings
 } from 'lucide-react';
@@ -234,6 +234,17 @@ export const EventDetail: React.FC = () => {
           {/* Top row */}
           <div className="flex items-start justify-between">
             <div className="flex items-center gap-2 flex-wrap">
+              {/* Back button */}
+              <motion.button
+                whileHover={{ scale: 1.05 }}
+                whileTap={{ scale: 0.95 }}
+                onClick={() => navigate('/app/events')}
+                className="w-9 h-9 rounded-full flex items-center justify-center backdrop-blur-md transition-all mr-1"
+                style={{ background: 'rgba(0,0,0,0.45)', border: '1px solid rgba(255,255,255,0.18)' }}
+              >
+                <ArrowLeft size={16} color="white" />
+              </motion.button>
+
               {/* Sport tag */}
               <motion.div initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }}
                 className="flex items-center gap-1.5 px-3 py-1.5 rounded-full font-mono text-[10px] font-bold backdrop-blur-md"

@@ -9,13 +9,13 @@ import { useAuthStore } from '../../store/authStore';
 import { useAISettingsStore } from '../../store/aiSettingsStore';
 import { BadgeIcon } from '../../components/gamification/BadgeIcon';
 import type { Athlete } from '../../types/pulse.types';
-import {
-  Sparkles, Zap, Compass, Trash2, Check,
+import { Sparkles, Zap, Compass, Trash2, Check,
   Lock, MapPin, Users, MessageSquare,
   Activity, Plus, Shield,
   Trophy, Star, Brain, ArrowRight,
   Clock, CheckCircle2
 } from 'lucide-react';
+import { PendingReportBanner } from '../../components/performance/PendingReportBanner';
 
 // ─── Sport Config ────────────────────────────────────────────────────────────
 const SPORT_OPTIONS = [
@@ -734,6 +734,9 @@ export const SquadFormation: React.FC = () => {
   // ─── Main Render ─────────────────────────────────────────────────────────
   return (
     <div className="p-4 md:p-8 max-w-7xl mx-auto text-text-primary space-y-6 min-h-screen pb-20">
+
+      {/* Pending report banner */}
+      <PendingReportBanner />
 
       {/* Header */}
       <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }}

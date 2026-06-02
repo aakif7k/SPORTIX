@@ -86,10 +86,10 @@ export const HeroSection: React.FC = () => {
               onClick={() => setShowDemo(true)}
               whileHover={{ scale: 1.03 }}
               whileTap={{ scale: 0.98 }}
-              className="w-full sm:w-auto h-14 px-8 rounded-[12px] font-['Barlow_Condensed'] font-semibold text-[18px] text-white border transition-all"
+              className="w-full sm:w-auto h-14 px-8 rounded-[12px] font-['Barlow_Condensed'] font-semibold text-[18px] text-[#FFFFFF] border transition-all"
               style={{ borderColor: 'rgba(255,255,255,0.12)', background: 'transparent' }}
               onMouseEnter={e => { (e.currentTarget as HTMLElement).style.borderColor = 'rgba(204,255,0,0.4)'; (e.currentTarget as HTMLElement).style.color = '#CCFF00'; }}
-              onMouseLeave={e => { (e.currentTarget as HTMLElement).style.borderColor = 'rgba(255,255,255,0.12)'; (e.currentTarget as HTMLElement).style.color = '#fff'; }}
+              onMouseLeave={e => { (e.currentTarget as HTMLElement).style.borderColor = 'rgba(255,255,255,0.12)'; (e.currentTarget as HTMLElement).style.color = '#ffffff'; }}
             >
               ▶ Watch Demo
             </motion.button>
