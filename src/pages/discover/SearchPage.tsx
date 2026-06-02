@@ -12,6 +12,11 @@ const MOCK_USER_DISTANCES: Record<string, number> = {
   u3: 27.8,
   u4: 54.2,
   u5: 8.1,
+  u6: 15.4,
+  u7: 5.2,
+  u8: 24.8,
+  u9: 11.6,
+  u10: 38.4,
   cu1: 0,
 };
 
@@ -20,6 +25,22 @@ const MOCK_EVENT_DISTANCES: Record<string, number> = {
   e2: 18.2,
   e3: 35.5,
   e4: 82.1,
+  e5: 12.4,
+  e6: 22.1,
+  e7: 42.6,
+  e8: 68.3,
+  e9: 8.5,
+  e10: 14.2,
+  e11: 3.1,
+  e12: 55.4,
+  e13: 11.2,
+  e14: 28.6,
+  e15: 72.1,
+  e16: 9.3,
+  e17: 4.5,
+  e18: 1.2,
+  e19: 19.5,
+  e20: 34.2,
 };
 import { Avatar } from '../../components/ui/Avatar';
 import { SportBadge, AIBadge } from '../../components/ui/Badge';
