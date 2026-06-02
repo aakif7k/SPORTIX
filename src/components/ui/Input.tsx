@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 
 // ─── INPUT ─────────────────────────────────────────────────────────────────
 interface InputProps extends React.InputHTMLAttributes<HTMLInputElement> {
@@ -24,7 +24,7 @@ export const Input = React.forwardRef<HTMLInputElement, InputProps>(
             ref={ref}
             id={inputId}
             className={[
-              'w-full bg-elevated border rounded-lg font-mono text-sm text-white placeholder-text-muted',
+              'w-full bg-elevated border rounded-lg font-mono text-sm text-text-primary placeholder-text-muted',
               'transition-all duration-200 outline-none',
               'border-border-muted focus:border-volt/50 focus:shadow-[0_0_0_3px_rgba(204,255,0,0.08)]',
               icon ? 'pl-10' : 'pl-4',
@@ -57,7 +57,7 @@ export const Textarea = React.forwardRef<HTMLTextAreaElement, TextareaProps>(
         {label && <label htmlFor={inputId} className="block text-xs font-label font-medium text-text-secondary uppercase tracking-widest mb-2">{label}</label>}
         <textarea
           ref={ref} id={inputId}
-          className={['w-full bg-elevated border border-border-muted rounded-lg font-mono text-sm text-white placeholder-text-muted px-4 py-3 resize-none transition-all duration-200 outline-none focus:border-volt/50 focus:shadow-[0_0_0_3px_rgba(204,255,0,0.08)]', className].join(' ')}
+          className={['w-full bg-elevated border border-border-muted rounded-lg font-mono text-sm text-text-primary placeholder-text-muted px-4 py-3 resize-none transition-all duration-200 outline-none focus:border-volt/50 focus:shadow-[0_0_0_3px_rgba(204,255,0,0.08)]', className].join(' ')}
           {...props}
         />
         {error && <p className="mt-1.5 text-xs text-hot font-label">{error}</p>}
@@ -80,7 +80,7 @@ export const Select: React.FC<SelectProps> = ({ label, error, options, className
       {label && <label htmlFor={inputId} className="block text-xs font-label font-medium text-text-secondary uppercase tracking-widest mb-2">{label}</label>}
       <select
         id={inputId}
-        className={['w-full bg-elevated border border-border-muted rounded-lg font-mono text-sm text-white px-4 py-3 outline-none transition-all duration-200 focus:border-volt/50', className].join(' ')}
+        className={['w-full bg-elevated border border-border-muted rounded-lg font-mono text-sm text-text-primary px-4 py-3 outline-none transition-all duration-200 focus:border-volt/50', className].join(' ')}
         {...props}
       >
         {options.map(o => <option key={o.value} value={o.value} className="bg-elevated">{o.label}</option>)}

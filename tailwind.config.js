@@ -4,59 +4,71 @@ export default {
   theme: {
     extend: {
       colors: {
-        // Core neon palette
-        volt:        '#CCFF00',
-        'volt-dim':  'rgba(204,255,0,0.08)',
-        'volt-mid':  'rgba(204,255,0,0.25)',
-        'volt-glow': 'rgba(204,255,0,0.6)',
-        hot:         '#FF3B00',
-        'hot-dim':   'rgba(255,59,0,0.12)',
-        // New futuristic secondaries
-        cyan:        '#00D4FF',
-        'cyan-dim':  'rgba(0,212,255,0.1)',
-        plasma:      '#BF5FFF',
-        'plasma-dim':'rgba(191,95,255,0.1)',
-        ember:       '#FF6B35',
+        // Core mapped to CSS vars for backwards compatibility & consistency
+        volt:        'var(--accent)',
+        'volt-dim':  'var(--accent-surface)',
+        'volt-glow': 'var(--accent-glow)',
+        
+        // Status Colors mapped from CSS vars
+        success: 'var(--success)',
+        'success-dim': 'var(--success-dim)',
+        warning: 'var(--warning)',
+        'warning-dim': 'var(--warning-dim)',
+        danger:  'var(--danger)',
+        'danger-dim': 'var(--danger-dim)',
+        info:    'var(--info)',
+        'info-dim': 'var(--info-dim)',
+        
         // Backgrounds
-        base:      '#050508',
-        surface:   '#0C0C12',
-        elevated:  '#13131C',
-        panel:     '#16161F',
+        base:      'var(--bg-base)',
+        surface:   'var(--bg-surface)',
+        elevated:  'var(--bg-elevated)',
+        panel:     'var(--bg-elevated)', // mapped for backward compatibility
+        
         // Borders
-        'border-muted':  '#1E1E2E',
-        'border-glow':   'rgba(204,255,0,0.15)',
-        'border-plasma': 'rgba(191,95,255,0.2)',
-        'border-cyan':   'rgba(0,212,255,0.15)',
+        'border-muted':  'var(--border)',
+        'border-glow':   'var(--accent-border)',
+        
         // Text
-        'text-muted':     '#333345',
-        'text-secondary': '#6E6E8A',
-        'text-dim':       '#9090AA',
+        'text-primary':   'var(--text-primary)',
+        'text-secondary': 'var(--text-secondary)',
+        'text-muted':     'var(--text-muted)',
+        'text-dim':       'var(--text-disabled)',
+        
+        // Accent
+        accent:           'var(--accent)',
+        'accent-surface': 'var(--accent-surface)',
+        'accent-text':    'var(--accent-text)',
+
+        // Custom cyber/neon theme variables
+        cyan:             'var(--cyan)',
+        'cyan-dim':       'var(--cyan-dim)',
+        'cyan-text':      'var(--cyan-text)',
+        plasma:           'var(--plasma)',
+        'plasma-dim':     'var(--plasma-dim)',
+        hot:              'var(--hot)',
+        'hot-dim':        'var(--hot-dim)',
+        'volt-text':      'var(--volt-text)',
       },
       fontFamily: {
-        display: ['"Bebas Neue"', '"Barlow Condensed"', 'sans-serif'],
-        mono:    ['"DM Mono"', '"IBM Plex Mono"', 'monospace'],
-        label:   ['"Space Grotesk"', 'sans-serif'],
+        display: ['"Bebas Neue"', 'sans-serif'],
+        mono:    ['"DM Mono"', 'monospace'],
+        body:    ['"Inter"', 'sans-serif'], // Inter is the new body text
+        condensed: ['"Barlow Condensed"', 'sans-serif'], // subheadings, cards, nav
       },
       boxShadow: {
-        // Volt
-        'glow-volt-xs': '0 0 6px rgba(204,255,0,0.4)',
-        'glow-volt-sm': '0 0 12px rgba(204,255,0,0.3), 0 0 24px rgba(204,255,0,0.08)',
-        'glow-volt':    '0 0 20px rgba(204,255,0,0.25), 0 0 60px rgba(204,255,0,0.08)',
-        'glow-volt-lg': '0 0 40px rgba(204,255,0,0.35), 0 0 100px rgba(204,255,0,0.1)',
-        // Cyan
-        'glow-cyan-sm': '0 0 12px rgba(0,212,255,0.35)',
-        'glow-cyan':    '0 0 20px rgba(0,212,255,0.25), 0 0 60px rgba(0,212,255,0.08)',
-        // Plasma
-        'glow-plasma-sm': '0 0 12px rgba(191,95,255,0.35)',
-        'glow-plasma':    '0 0 20px rgba(191,95,255,0.25), 0 0 60px rgba(191,95,255,0.08)',
-        // Hot
-        'glow-hot-sm': '0 0 12px rgba(255,59,0,0.4)',
-        'glow-hot':    '0 0 20px rgba(255,59,0,0.3), 0 0 60px rgba(255,59,0,0.08)',
+        // Strip green glows -> map to neutral elevation system
+        'glow-volt-xs': 'var(--shadow-card)',
+        'glow-volt-sm': 'var(--shadow-card)',
+        'glow-volt':    'var(--shadow-hover)',
+        'glow-volt-lg': 'var(--shadow-hover)',
         // Card
-        'card-float': '0 8px 32px rgba(0,0,0,0.5), 0 2px 8px rgba(0,0,0,0.3)',
-        'card-hover': '0 16px 48px rgba(0,0,0,0.6), 0 4px 16px rgba(204,255,0,0.05)',
-        'neuo':       'inset 2px 2px 5px rgba(0,0,0,0.7), inset -1px -1px 4px rgba(255,255,255,0.02)',
-        'neuo-out':   '4px 4px 12px rgba(0,0,0,0.8), -2px -2px 8px rgba(255,255,255,0.02)',
+        card:         'var(--shadow-card)',
+        hover:        'var(--shadow-hover)',
+        'card-float': 'var(--shadow-card)',
+        'card-hover': 'var(--shadow-hover)',
+        'neuo':       'inset 2px 2px 5px rgba(0,0,0,0.05), inset -1px -1px 4px rgba(255,255,255,0.5)',
+        'neuo-out':   'var(--shadow-card)',
       },
       backgroundImage: {
         // Grids
@@ -154,9 +166,12 @@ export default {
         'sidebar-expanded': '260px',
       },
       borderRadius: {
-        '2xl': '1rem',
-        '3xl': '1.5rem',
-        '4xl': '2rem',
+        'lg': '12px',
+        'xl': '14px',
+        '2xl': '20px',
+        '3xl': '24px',
+        '4xl': '28px',
+        'full': '999px',
       },
     },
   },

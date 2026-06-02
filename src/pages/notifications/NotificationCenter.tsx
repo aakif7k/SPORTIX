@@ -1,20 +1,51 @@
-import React, { useState } from 'react';
+import React from 'react';
 import { motion } from 'framer-motion';
 import { CheckCheck, Trash2, Calendar, Brain, User2, Heart, Clock, Trophy } from 'lucide-react';
 import { useNotificationStore } from '../../store/notificationStore';
 import type { Notification, NotificationType } from '../../types';
 import { Button } from '../../components/ui/Button';
-import { Avatar } from '../../components/ui/Avatar';
+
+const UPCOMING_DROPS = [
+  { id: 1, title: 'Summer Championship', time: '14:00', type: 'Event' },
+  { id: 2, title: 'Pro Training Tips', time: '16:30', type: 'Guide' },
+  { id: 3, title: 'Top 10 Goals', time: '18:00', type: 'Highlight' },
+];
+
+const UpcomingDropsRow: React.FC = () => (
+  <div className="mb-6">
+    <div className="flex items-center gap-2 mb-3">
+      <div className="w-2 h-2 rounded-full bg-accent animate-pulse" />
+      <span className="font-mono text-[10px] font-bold text-text-muted tracking-widest uppercase">UPCOMING · SCHEDULED DROPS</span>
+    </div>
+    <div className="flex gap-3 overflow-x-auto pb-2 scrollbar-hide" style={{ scrollbarWidth: 'none' }}>
+      {UPCOMING_DROPS.map((drop, i) => (
+        <motion.div key={drop.id} initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} transition={{ delay: i * 0.1 }}
+          className="flex-shrink-0 flex items-center gap-3 px-4 py-2.5 rounded-[12px] cursor-pointer group bg-surface border border-border-muted/50 shadow-card hover:shadow-hover transition-all"
+        >
+          <div className="flex flex-col items-center">
+            <span className="font-display text-[16px] text-accent leading-none">{drop.time.split(':')[0]}</span>
+            <span className="font-mono text-[9px] text-text-muted leading-none">{drop.time.split(':')[1]}</span>
+          </div>
+          <div className="w-px h-6 bg-border-muted" />
+          <div className="flex flex-col">
+            <span className="font-condensed text-[14px] font-bold text-text-primary group-hover:text-accent transition-colors">{drop.title}</span>
+            <span className="font-mono text-[9px] text-text-secondary">{drop.type}</span>
+          </div>
+        </motion.div>
+      ))}
+    </div>
+  </div>
+);
 
 const TYPE_CONFIG: Record<NotificationType, { icon: React.ElementType; color: string; bg: string }> = {
-  event_invite: { icon: Calendar, color: 'text-volt', bg: 'bg-volt/10 border-volt/20' },
-  ai_match: { icon: Brain, color: 'text-purple-400', bg: 'bg-purple-900/30 border-purple-500/20' },
-  connection_request: { icon: User2, color: 'text-blue-400', bg: 'bg-blue-900/30 border-blue-500/20' },
-  like: { icon: Heart, color: 'text-white', bg: 'bg-white/5 border-border-muted' },
-  comment: { icon: Heart, color: 'text-white', bg: 'bg-white/5 border-border-muted' },
-  match_reminder: { icon: Clock, color: 'text-hot', bg: 'bg-hot/10 border-hot/20' },
-  team_update: { icon: Brain, color: 'text-purple-400', bg: 'bg-purple-900/30 border-purple-500/20' },
-  achievement: { icon: Trophy, color: 'text-yellow-400', bg: 'bg-yellow-900/20 border-yellow-500/20' },
+  event_invite: { icon: Calendar, color: 'text-volt', bg: 'bg-volt-dim border-volt/20' },
+  ai_match: { icon: Brain, color: 'text-plasma', bg: 'bg-plasma-dim border-plasma/20' },
+  connection_request: { icon: User2, color: 'text-cyan', bg: 'bg-cyan-dim border-cyan/20' },
+  like: { icon: Heart, color: 'text-text-secondary', bg: 'bg-elevated border-border-muted' },
+  comment: { icon: Heart, color: 'text-text-secondary', bg: 'bg-elevated border-border-muted' },
+  match_reminder: { icon: Clock, color: 'text-hot', bg: 'bg-hot-dim border-hot/20' },
+  team_update: { icon: Brain, color: 'text-plasma', bg: 'bg-plasma-dim border-plasma/20' },
+  achievement: { icon: Trophy, color: 'text-warning', bg: 'bg-warning-dim border-warning/20' },
 };
 
 const timeAgo = (ts: string) => {
@@ -32,7 +63,7 @@ const isYesterday = (ts: string) => {
 
 const NotifItem: React.FC<{ notif: Notification }> = ({ notif }) => {
   const { markRead } = useNotificationStore();
-  const config = TYPE_CONFIG[notif.type];
+  const config = TYPE_CONFIG[notif.type] as any;
   const Icon = config.icon;
 
   return (
@@ -47,7 +78,7 @@ const NotifItem: React.FC<{ notif: Notification }> = ({ notif }) => {
       </div>
       <div className="flex-1 min-w-0">
         <div className="flex items-start justify-between gap-2">
-          <p className="font-label text-sm font-semibold text-white">{notif.title}</p>
+          <p className="font-label text-sm font-semibold text-text-primary">{notif.title}</p>
           <span className="font-mono text-[10px] text-text-muted flex-shrink-0">{timeAgo(notif.timestamp)}</span>
         </div>
         <p className="text-xs text-text-secondary font-label mt-0.5 leading-relaxed">{notif.message}</p>
@@ -77,7 +108,7 @@ export const NotificationCenter: React.FC = () => {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="font-display text-4xl text-white tracking-wide">BUZZ</h1>
+          <h1 className="font-display text-4xl text-text-primary tracking-wide">BUZZ</h1>
           {unreadCount > 0 && <p className="text-text-secondary font-label text-sm mt-0.5">{unreadCount} unread buzzes</p>}
         </div>
         <div className="flex gap-2">
@@ -86,9 +117,12 @@ export const NotificationCenter: React.FC = () => {
         </div>
       </div>
 
+      {/* Upcoming Drops Row */}
+      <UpcomingDropsRow />
+
       {notifications.length === 0 ? (
         <div className="glass rounded-xl p-12 text-center">
-          <p className="font-display text-3xl text-white/30 mb-2">ALL CLEAR</p>
+          <p className="font-display text-3xl text-text-muted mb-2">ALL CLEAR</p>
           <p className="text-text-muted font-label text-sm">No notifications right now</p>
         </div>
       ) : (

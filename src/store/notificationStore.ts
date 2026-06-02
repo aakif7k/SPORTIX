@@ -11,7 +11,7 @@ interface NotificationState {
   addNotification: (n: Notification) => void;
 }
 
-export const useNotificationStore = create<NotificationState>((set, get) => ({
+export const useNotificationStore = create<NotificationState>((set) => ({
   notifications: MOCK_NOTIFICATIONS,
   unreadCount: MOCK_NOTIFICATIONS.filter(n => !n.read).length,
   markRead: (id) => set(state => {

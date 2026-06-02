@@ -12,6 +12,7 @@ interface EventState {
   setIsGenerating: (val: boolean) => void;
   addEvent: (event: Event) => void;
   updateEvent: (id: string, updates: Partial<Event>) => void;
+  deleteEvent: (id: string) => void;
 }
 
 export const useEventStore = create<EventState>((set) => ({
@@ -25,5 +26,8 @@ export const useEventStore = create<EventState>((set) => ({
   addEvent: (event) => set(state => ({ events: [event, ...state.events] })),
   updateEvent: (id, updates) => set(state => ({
     events: state.events.map(e => e.id === id ? { ...e, ...updates } : e),
+  })),
+  deleteEvent: (id) => set(state => ({
+    events: state.events.filter(e => e.id !== id),
   })),
 }));

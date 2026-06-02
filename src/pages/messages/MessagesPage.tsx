@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion } from 'framer-motion';
 import { Send, Image, Smile, Search, Plus, ChevronLeft } from 'lucide-react';
-import { MOCK_CONVERSATIONS, MOCK_MESSAGES, MOCK_USERS, CURRENT_USER } from '../../services/mockData';
+import { MOCK_CONVERSATIONS, MOCK_MESSAGES, CURRENT_USER } from '../../services/mockData';
 import type { Conversation, Message } from '../../types';
 import { Avatar } from '../../components/ui/Avatar';
 import { Input } from '../../components/ui/Input';
@@ -18,11 +18,11 @@ const ConversationItem: React.FC<{ conv: Conversation; active: boolean; onClick:
   const partner = conv.participantDetails[0];
   return (
     <motion.div whileHover={{ x: 2 }} onClick={onClick}
-      className={`flex items-center gap-3 p-3 rounded-xl cursor-pointer transition-all ${active ? 'bg-volt/10 border border-volt/20' : 'hover:bg-white/3 border border-transparent'} ${conv.isEventChat ? 'border-l-2 border-l-hot/50' : ''}`}>
+      className={`flex items-center gap-3 p-3 rounded-xl cursor-pointer transition-all ${active ? 'bg-volt/10 border border-volt/20' : 'hover:bg-hover border border-transparent'} ${conv.isEventChat ? 'border-l-2 border-l-hot/50' : ''}`}>
       <Avatar src={partner.avatar} name={partner.name} isOnline={partner.isOnline} size="md" />
       <div className="flex-1 min-w-0">
         <div className="flex justify-between items-center">
-          <p className="font-label text-sm font-semibold text-white truncate">
+          <p className="font-label text-sm font-semibold text-text-primary truncate">
             {conv.isEventChat ? conv.eventName : partner.name}
           </p>
           <span className="text-[10px] font-mono text-text-muted flex-shrink-0">{conv.lastMessage ? timeAgo(conv.lastMessage.timestamp) : ''}</span>
@@ -30,7 +30,7 @@ const ConversationItem: React.FC<{ conv: Conversation; active: boolean; onClick:
         <p className="text-xs font-label text-text-secondary truncate">{conv.lastMessage?.content}</p>
       </div>
       {conv.unreadCount > 0 && (
-        <span className="flex-shrink-0 w-5 h-5 rounded-full bg-volt text-black text-[9px] font-bold flex items-center justify-center">{conv.unreadCount}</span>
+        <span className="flex-shrink-0 w-5 h-5 rounded-full bg-volt text-volt-text text-[9px] font-bold flex items-center justify-center">{conv.unreadCount}</span>
       )}
     </motion.div>
   );
@@ -44,9 +44,9 @@ const ChatBubble: React.FC<{ message: Message; isOwn: boolean }> = ({ message, i
         <img src={`https://i.pravatar.cc/28?img=${message.senderId.charCodeAt(1)}`} alt="" className="w-full h-full object-cover" />
       </div>
     )}
-    <div className={`max-w-[70%] px-4 py-2.5 rounded-2xl ${isOwn ? 'bg-volt text-black rounded-tr-sm shadow-glow-volt-sm' : 'glass border border-border-muted text-white rounded-tl-sm'}`}>
-      <p className={`text-sm font-label leading-relaxed ${isOwn ? 'text-black' : ''}`}>{message.content}</p>
-      <p className={`text-[10px] font-mono mt-1 ${isOwn ? 'text-black/60 text-right' : 'text-text-muted'}`}>{timeStr(message.timestamp)}</p>
+    <div className={`max-w-[70%] px-4 py-2.5 rounded-2xl ${isOwn ? 'bg-volt text-volt-text rounded-tr-sm shadow-glow-volt-sm' : 'glass border border-border-muted text-text-primary rounded-tl-sm'}`}>
+      <p className={`text-sm font-label leading-relaxed ${isOwn ? 'text-volt-text' : ''}`}>{message.content}</p>
+      <p className={`text-[10px] font-mono mt-1 ${isOwn ? 'text-volt-text opacity-60 text-right' : 'text-text-muted'}`}>{timeStr(message.timestamp)}</p>
     </div>
   </motion.div>
 );
@@ -89,13 +89,13 @@ export const MessagesPage: React.FC = () => {
   const partnerName = activeConv?.isEventChat ? activeConv.eventName : activeConv?.participantDetails[0].name;
 
   return (
-    <div className="h-[calc(100vh-120px)] flex rounded-2xl overflow-hidden border border-border-muted glass -mx-4 -mt-4">
+    <div className="w-full h-full flex overflow-hidden border-t border-border-muted bg-surface/30">
       {/* Left: Conversation List */}
       <div className={`w-full md:w-72 flex-shrink-0 border-r border-border-muted flex flex-col ${mobileView === 'chat' ? 'hidden md:flex' : 'flex'}`}>
         <div className="p-3 border-b border-border-muted">
           <div className="flex items-center justify-between mb-3">
-            <h2 className="font-display text-xl text-white tracking-wide">HUDDLE</h2>
-            <button className="w-8 h-8 rounded-lg bg-volt text-black flex items-center justify-center hover:shadow-glow-volt-sm transition-all"><Plus size={16} /></button>
+            <h2 className="font-display text-xl text-text-primary tracking-wide">HUDDLE</h2>
+            <button className="w-8 h-8 rounded-lg bg-volt text-volt-text flex items-center justify-center hover:shadow-glow-volt-sm transition-all"><Plus size={16} /></button>
           </div>
           <Input placeholder="Search conversations..." value={searchQ} onChange={e => setSearchQ(e.target.value)} icon={<Search size={14} />} />
         </div>
@@ -115,7 +115,7 @@ export const MessagesPage: React.FC = () => {
               <button onClick={() => setMobileView('list')} className="md:hidden text-text-secondary hover:text-volt"><ChevronLeft size={18} /></button>
               <Avatar src={activeConv.participantDetails[0].avatar} name={activeConv.participantDetails[0].name} isOnline={activeConv.participantDetails[0].isOnline} size="sm" />
               <div>
-                <p className="font-label text-sm font-semibold text-white">{partnerName}</p>
+                <p className="font-label text-sm font-semibold text-text-primary">{partnerName}</p>
                 <p className="text-[10px] font-mono text-text-secondary">{activeConv.participantDetails[0].isOnline ? '🟢 Active now' : 'Offline'}</p>
               </div>
               {activeConv.isEventChat && <span className="ml-auto text-xs px-2 py-1 rounded border border-hot/30 text-hot font-label">Event Chat</span>}
@@ -136,11 +136,11 @@ export const MessagesPage: React.FC = () => {
               <input
                 value={input} onChange={e => setInput(e.target.value)}
                 onKeyDown={e => e.key === 'Enter' && !e.shiftKey && sendMessage()}
-                placeholder="Type a message..." className="flex-1 bg-elevated border border-border-muted rounded-xl px-4 py-2 font-mono text-sm text-white placeholder-text-muted outline-none focus:border-volt/50 transition-all"
+                placeholder="Type a message..." className="flex-1 bg-elevated border border-border-muted rounded-xl px-4 py-2 font-mono text-sm text-text-primary placeholder-text-muted outline-none focus:border-volt/50 transition-all"
               />
               <motion.button whileTap={{ scale: 0.9 }} onClick={sendMessage} disabled={!input.trim()}
-                className="w-10 h-10 rounded-xl bg-volt flex items-center justify-center disabled:opacity-40 hover:shadow-glow-volt-sm transition-all">
-                <Send size={16} className="text-black" />
+                className="w-10 h-10 rounded-xl bg-volt flex items-center justify-center disabled:opacity-40 hover:shadow-glow-volt-sm transition-all text-volt-text">
+                <Send size={16} />
               </motion.button>
             </div>
           </>
@@ -150,7 +150,7 @@ export const MessagesPage: React.FC = () => {
               <div className="w-16 h-16 rounded-2xl bg-volt/10 border border-volt/20 flex items-center justify-center mx-auto mb-4">
                 <Send size={28} className="text-volt" />
               </div>
-              <h3 className="font-display text-2xl text-white mb-2">OPEN A HUDDLE</h3>
+              <h3 className="font-display text-2xl text-text-primary mb-2">OPEN A HUDDLE</h3>
               <p className="text-text-secondary font-label text-sm">Choose a conversation from the left to start huddling</p>
             </div>
           </div>

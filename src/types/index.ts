@@ -49,8 +49,36 @@ export interface User {
   openToRecruit: boolean;
   isOnline: boolean;
   isVerified: boolean;
+  level?: number;
   createdAt: string;
   performanceData: PerformanceData;
+  jersey?: string;
+  position?: string;
+  height?: string;
+  weight?: string;
+  nationality?: string;
+  phone?: string;
+  dateOfBirth?: string;
+  club?: string;
+  agent?: string;
+  preferredFoot?: string;
+  trainingSchedule?: string;
+  injuryHistory?: string;
+  socials?: {
+    instagram: string;
+    twitter: string;
+    youtube: string;
+    linkedin: string;
+    website: string;
+  };
+  privateProfile?: boolean;
+  showStats?: boolean;
+  showLocation?: boolean;
+  emailNotif?: boolean;
+  pushNotif?: boolean;
+  matchAlerts?: boolean;
+  recruitAlerts?: boolean;
+  themePref?: 'dark' | 'volt' | 'red';
 }
 
 export interface PerformanceData {
@@ -164,6 +192,7 @@ export interface Event {
   bracket?: BracketRound[];
   organizerId: string;
   bannerImage?: string;
+  bannerAlignment?: 'top' | 'center' | 'bottom';
   status: EventStatus;
   aiTeamAvailable: boolean;
   aiGenerated: boolean;

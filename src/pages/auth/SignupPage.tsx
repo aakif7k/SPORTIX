@@ -7,7 +7,7 @@ import { Button } from '../../components/ui/Button';
 import { Input } from '../../components/ui/Input';
 import type { UserRole } from '../../types';
 
-const ROLES: { id: UserRole; icon: React.ElementType; title: string; desc: string }[] = [
+const ROLES: { id: UserRole; icon: any; title: string; desc: string }[] = [
   { id: 'athlete', icon: Dumbbell, title: 'Athlete', desc: 'Compete, get discovered, build your legacy' },
   { id: 'recruiter', icon: Briefcase, title: 'Recruiter', desc: 'Scout elite talent across 20+ sports' },
   { id: 'coach', icon: Award, title: 'Coach', desc: 'Manage athletes, track performance' },
@@ -32,7 +32,7 @@ export const SignupPage: React.FC = () => {
 
   return (
     <div className="min-h-screen bg-base flex items-center justify-center px-4 bg-grid-sm relative">
-      <div className="absolute inset-0" style={{ background: 'radial-gradient(ellipse at 50% 30%, rgba(204,255,0,0.04) 0%, transparent 60%)' }} />
+      <div className="absolute inset-0 pointer-events-none" style={{ background: 'radial-gradient(ellipse at 50% 30%, rgba(204,255,0,0.04) 0%, transparent 60%)' }} />
       <div className="w-full max-w-lg">
         <motion.div initial={{ opacity: 0, y: -20 }} animate={{ opacity: 1, y: 0 }} className="text-center mb-8">
           <div className="inline-flex items-center gap-3">

@@ -3,7 +3,24 @@ import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Search, SlidersHorizontal, MessageCircle, Bookmark, BarChart2, Zap } from 'lucide-react';
 import { MOCK_USERS, MOCK_EVENTS, SPORT_CATEGORIES } from '../../services/mockData';
+import { useAISettingsStore } from '../../store/aiSettingsStore';
 import type { User } from '../../types';
+
+const MOCK_USER_DISTANCES: Record<string, number> = {
+  u1: 3.2,
+  u2: 12.5,
+  u3: 27.8,
+  u4: 54.2,
+  u5: 8.1,
+  cu1: 0,
+};
+
+const MOCK_EVENT_DISTANCES: Record<string, number> = {
+  e1: 4.8,
+  e2: 18.2,
+  e3: 35.5,
+  e4: 82.1,
+};
 import { Avatar } from '../../components/ui/Avatar';
 import { SportBadge, AIBadge } from '../../components/ui/Badge';
 import { Button } from '../../components/ui/Button';
@@ -35,8 +52,11 @@ const AthleteCard: React.FC<{ athlete: User; index: number }> = ({ athlete, inde
         <div className="flex items-end gap-3 mb-3">
           <Avatar src={athlete.avatar} name={athlete.name} sport={athlete.sport} size="lg" />
           <div className="flex-1 min-w-0 pb-1">
-            <p className="font-label text-base font-semibold text-white truncate">{athlete.name}</p>
-            <SportBadge sport={athlete.sport} size="sm" />
+            <p className="font-label text-base font-semibold text-text-primary truncate">{athlete.name}</p>
+            <div className="flex items-center gap-1.5 mt-0.5">
+              <SportBadge sport={athlete.sport} size="sm" />
+              <span className="font-mono text-[9px] text-text-secondary">({MOCK_USER_DISTANCES[athlete.id] || 10.0} KM)</span>
+            </div>
           </div>
           <div className="text-right pb-1">
             <div className="font-mono text-2xl text-volt">{athlete.stats.rating}</div>
@@ -50,7 +70,7 @@ const AthleteCard: React.FC<{ athlete: User; index: number }> = ({ athlete, inde
             { label: 'YRS EXP', val: athlete.stats.yearsExperience },
           ].map(s => (
             <div key={s.label} className="bg-elevated rounded-lg p-2 text-center border border-border-muted">
-              <div className="font-mono text-sm text-white">{s.val}</div>
+              <div className="font-mono text-sm text-text-primary">{s.val}</div>
               <div className="stat-label text-[9px]">{s.label}</div>
             </div>
           ))}
@@ -74,10 +94,13 @@ export const SearchPage: React.FC = () => {
   const [query, setQuery] = useState('');
   const [activeTab, setActiveTab] = useState('Athletes');
   const [filterOpen, setFilterOpen] = useState(false);
+  const { nearbyRadius } = useAISettingsStore();
   const navigate = useNavigate();
 
-  const athletes = query ? MOCK_USERS.filter(u => u.name.toLowerCase().includes(query.toLowerCase()) || u.sport.includes(query.toLowerCase())) : MOCK_USERS;
-  const events = query ? MOCK_EVENTS.filter(e => e.title.toLowerCase().includes(query.toLowerCase())) : MOCK_EVENTS;
+  const athletes = (query ? MOCK_USERS.filter(u => u.name.toLowerCase().includes(query.toLowerCase()) || u.sport.includes(query.toLowerCase())) : MOCK_USERS)
+    .filter(u => u.id === 'cu1' || (MOCK_USER_DISTANCES[u.id] || 10.0) <= nearbyRadius);
+  const events = (query ? MOCK_EVENTS.filter(e => e.title.toLowerCase().includes(query.toLowerCase())) : MOCK_EVENTS)
+    .filter(e => (MOCK_EVENT_DISTANCES[e.id] || 15.0) <= nearbyRadius);
 
   const sportBreakdown = SPORT_CATEGORIES.slice(0, 6).map(s => ({
     name: s.label.slice(0, 4), count: Math.floor(Math.random() * 800 + 200), emoji: s.emoji,
@@ -86,7 +109,7 @@ export const SearchPage: React.FC = () => {
   return (
     <div className="space-y-5">
       <div>
-        <h1 className="font-display text-4xl text-white tracking-wide">DISCOVER</h1>
+        <h1 className="font-display text-4xl text-text-primary tracking-wide">DISCOVER</h1>
         <p className="text-text-secondary font-label text-sm mt-0.5">Find athletes, clashes & squads</p>
       </div>
 
@@ -116,7 +139,7 @@ export const SearchPage: React.FC = () => {
       <div className="flex gap-1 bg-surface rounded-xl p-1 border border-border-muted">
         {TABS.map(tab => (
           <button key={tab} onClick={() => setActiveTab(tab)}
-            className={`flex-1 py-2 px-3 rounded-lg text-xs font-label font-medium transition-all ${activeTab === tab ? 'bg-volt text-black shadow-glow-volt-sm' : 'text-text-secondary hover:text-white'}`}>
+            className={`flex-1 py-2 px-3 rounded-lg text-xs font-label font-medium transition-all ${activeTab === tab ? 'bg-volt text-volt-text shadow-glow-volt-sm' : 'text-text-secondary hover:text-text-primary'}`}>
             {tab}
           </button>
         ))}
@@ -142,8 +165,10 @@ export const SearchPage: React.FC = () => {
                   <div className="flex items-center gap-3 mb-3">
                     <span className="text-2xl">{sport?.emoji}</span>
                     <div>
-                      <p className="font-label text-sm font-semibold text-white">{event.title}</p>
-                      <p className="text-xs text-text-secondary font-mono">{event.location} · {new Date(event.date).toLocaleDateString()}</p>
+                      <p className="font-label text-sm font-semibold text-text-primary">{event.title}</p>
+                      <p className="text-xs text-text-secondary font-mono">
+                        {event.location} ({MOCK_EVENT_DISTANCES[event.id] || 15.0} KM) · {new Date(event.date).toLocaleDateString()}
+                      </p>
                     </div>
                   </div>
                   {event.aiTeamAvailable && <AIBadge />}
@@ -155,15 +180,15 @@ export const SearchPage: React.FC = () => {
         {activeTab === 'TheArena' && (
           <motion.div key="com" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}>
             <div className="glass rounded-xl p-5">
-              <h3 className="font-display text-xl text-white mb-4 tracking-wide flex items-center gap-2">
+              <h3 className="font-display text-xl text-text-primary mb-4 tracking-wide flex items-center gap-2">
                 <BarChart2 size={16} className="text-volt" /> THE ARENA — SPORT BREAKDOWN
               </h3>
               <ResponsiveContainer width="100%" height={180}>
                 <BarChart data={sportBreakdown} barSize={20}>
                   <XAxis dataKey="name" tick={{ fill: '#888', fontSize: 10, fontFamily: 'DM Mono' }} axisLine={false} tickLine={false} />
-                  <Tooltip contentStyle={{ background: '#111', border: '1px solid #2A2A2A', borderRadius: 8, fontFamily: 'DM Mono', fontSize: 11 }} cursor={{ fill: 'rgba(204,255,0,0.04)' }} formatter={(v: number) => [`${v} athletes`, 'Count']} />
+                  <Tooltip contentStyle={{ background: 'var(--bg-elevated)', border: '1px solid var(--border)', borderRadius: 8, fontFamily: 'DM Mono', fontSize: 11, color: 'var(--text-primary)' }} cursor={{ fill: 'var(--bg-hover)' }} formatter={(v: any) => [`${v} athletes`, 'Count']} />
                   <Bar dataKey="count" radius={[4, 4, 0, 0]}>
-                    {sportBreakdown.map((_, i) => <Cell key={i} fill={`rgba(204,255,0,${0.4 + i * 0.1})`} />)}
+                    {sportBreakdown.map((_, i) => <Cell key={i} fill="var(--accent)" fillOpacity={0.4 + i * 0.1} />)}
                   </Bar>
                 </BarChart>
               </ResponsiveContainer>
@@ -187,7 +212,7 @@ export const SearchPage: React.FC = () => {
           <motion.div initial={{ x: '100%' }} animate={{ x: 0 }} exit={{ x: '100%' }} transition={{ type: 'spring', stiffness: 350, damping: 35 }}
             className="fixed right-0 top-0 bottom-0 w-72 bg-surface border-l border-border-muted z-50 p-6 overflow-y-auto">
             <div className="flex justify-between items-center mb-6">
-              <h3 className="font-display text-xl text-white tracking-wide">FILTERS</h3>
+              <h3 className="font-display text-xl text-text-primary tracking-wide">FILTERS</h3>
               <button onClick={() => setFilterOpen(false)} className="text-text-secondary hover:text-volt">✕</button>
             </div>
             <div className="space-y-5">
@@ -195,7 +220,7 @@ export const SearchPage: React.FC = () => {
                 <p className="stat-label mb-3">SPORT</p>
                 <div className="grid grid-cols-2 gap-2">
                   {SPORT_CATEGORIES.slice(0, 8).map(s => (
-                    <button key={s.id} className="flex items-center gap-2 px-3 py-2 rounded-lg border border-border-muted text-xs font-label text-text-secondary hover:border-volt/30 hover:text-white transition-all">
+                    <button key={s.id} className="flex items-center gap-2 px-3 py-2 rounded-lg border border-border-muted text-xs font-label text-text-secondary hover:border-volt/30 hover:text-text-primary transition-all">
                       <span>{s.emoji}</span>{s.label}
                     </button>
                   ))}
@@ -204,7 +229,7 @@ export const SearchPage: React.FC = () => {
               <div>
                 <p className="stat-label mb-3">EXPERIENCE LEVEL</p>
                 {['Amateur', 'Semi-Pro', 'Professional', 'Elite'].map(l => (
-                  <button key={l} className="w-full text-left px-3 py-2.5 rounded-lg border border-transparent text-sm font-label text-text-secondary hover:border-volt/30 hover:text-white transition-all mb-1">
+                  <button key={l} className="w-full text-left px-3 py-2.5 rounded-lg border border-transparent text-sm font-label text-text-secondary hover:border-volt/30 hover:text-text-primary transition-all mb-1">
                     {l}
                   </button>
                 ))}

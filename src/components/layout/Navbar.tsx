@@ -1,15 +1,11 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useNavigate, NavLink } from 'react-router-dom';
-import { motion, AnimatePresence } from 'framer-motion';
-import { Bell, Search, Zap, Home, Calendar, MessageCircle, User, Menu, X } from 'lucide-react';
-import { useAuthStore } from '../../store/authStore';
+import { motion } from 'framer-motion';
+import { Bell, Search, Zap, Home, Calendar, MessageCircle, User } from 'lucide-react';
 import { useNotificationStore } from '../../store/notificationStore';
-import { Avatar } from '../ui/Avatar';
 
 export const Navbar: React.FC = () => {
   const [scrolled, setScrolled] = useState(false);
-  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
-  const { user } = useAuthStore();
   const { unreadCount } = useNotificationStore();
   const navigate = useNavigate();
 
@@ -21,15 +17,9 @@ export const Navbar: React.FC = () => {
 
   return (
     <header
-      className="sticky top-0 z-30 transition-all duration-500"
-      style={{
-        background: scrolled ? 'rgba(8,8,14,0.85)' : 'transparent',
-        backdropFilter: scrolled ? 'blur(20px) saturate(180%)' : 'none',
-        borderBottom: scrolled ? '1px solid rgba(204,255,0,0.08)' : '1px solid transparent',
-        boxShadow: scrolled ? '0 8px 32px rgba(0,0,0,0.4), 0 0 0 1px rgba(204,255,0,0.04)' : 'none',
-      }}
+      className={`sticky top-0 z-30 transition-all duration-500 ${scrolled ? 'premium-nav' : ''}`}
     >
-      <div className="flex items-center h-14 px-4 gap-3">
+      <div className="flex items-center h-[64px] px-6 gap-4 max-w-[1440px] mx-auto">
         {/* Logo - shown on md+ when sidebar is present (sidebar handles logo there), hidden on mobile */}
         <div className="flex items-center gap-2 md:hidden">
           <div
@@ -84,12 +74,15 @@ export const Navbar: React.FC = () => {
           )}
         </motion.button>
 
-        {/* Avatar */}
-        {user && (
-          <button onClick={() => navigate('/app/profile/me')} className="flex-shrink-0">
-            <Avatar src={user.avatar} name={user.name} sport={user.sport} size="sm" isOnline />
-          </button>
-        )}
+        {/* Settings Route */}
+        <motion.button
+          whileHover={{ rotate: 90 }}
+          transition={{ type: 'spring', stiffness: 200, damping: 15 }}
+          onClick={() => navigate('/app/settings')}
+          className="p-2 rounded-xl text-text-muted hover:text-white transition-colors"
+        >
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"></path><circle cx="12" cy="12" r="3"></circle></svg>
+        </motion.button>
       </div>
     </header>
   );
@@ -105,26 +98,17 @@ const BOT_ITEMS = [
 
 export const BottomNav: React.FC = () => {
   const navigate = useNavigate();
-  const { unreadCount } = useNotificationStore();
 
   return (
-    <nav
-      className="md:hidden fixed bottom-0 left-0 right-0 z-40 safe-area-inset-bottom"
-      style={{
-        background: 'rgba(8,8,14,0.92)',
-        backdropFilter: 'blur(24px) saturate(180%)',
-        borderTop: '1px solid rgba(204,255,0,0.08)',
-        boxShadow: '0 -8px 32px rgba(0,0,0,0.5)',
-      }}
-    >
+    <nav className="md:hidden fixed bottom-0 left-0 right-0 z-40 safe-area-inset-bottom premium-nav">
       <div className="flex items-center justify-around px-2 py-2">
         {BOT_ITEMS.slice(0, 2).map(({ to, icon: Icon, label }) => (
           <NavLink key={to} to={to}>
             {({ isActive }) => (
-              <div className={`flex flex-col items-center gap-0.5 px-4 py-1.5 rounded-xl transition-all ${isActive ? 'text-volt' : 'text-text-secondary'}`}>
+              <div className={`flex flex-col items-center gap-0.5 px-4 py-1.5 rounded-xl transition-all ${isActive ? 'text-accent' : 'text-text-secondary'}`}>
                 <Icon size={20} />
-                <span className="text-[10px] font-label">{label}</span>
-                {isActive && <div className="w-4 h-0.5 bg-volt rounded-full shadow-glow-volt-sm" />}
+                <span className="text-[10px] font-condensed">{label}</span>
+                {isActive && <div className="w-4 h-0.5 bg-accent rounded-full shadow-glow-volt-sm" />}
               </div>
             )}
           </NavLink>
@@ -133,27 +117,27 @@ export const BottomNav: React.FC = () => {
         {/* AI+ center button */}
         <motion.button
           whileTap={{ scale: 0.9 }} whileHover={{ scale: 1.05 }}
-          onClick={() => navigate('/app/events')}
-          className="w-14 h-14 bg-volt rounded-full flex items-center justify-center shadow-glow-volt -mt-5 neuo"
+          onClick={() => navigate('/pulse')}
+          className="w-14 h-14 bg-accent rounded-full flex items-center justify-center shadow-glow-volt -mt-5 neuo"
         >
           <Zap size={24} className="text-black" fill="black" />
         </motion.button>
 
         <NavLink to="/app/messages">
           {({ isActive }) => (
-            <div className={`relative flex flex-col items-center gap-0.5 px-4 py-1.5 rounded-xl transition-all ${isActive ? 'text-volt' : 'text-text-secondary'}`}>
+            <div className={`relative flex flex-col items-center gap-0.5 px-4 py-1.5 rounded-xl transition-all ${isActive ? 'text-accent' : 'text-text-secondary'}`}>
               <MessageCircle size={20} />
-              <span className="text-[10px] font-label">Chat</span>
-              {isActive && <div className="w-4 h-0.5 bg-volt rounded-full shadow-glow-volt-sm" />}
+              <span className="text-[10px] font-condensed">Chat</span>
+              {isActive && <div className="w-4 h-0.5 bg-accent rounded-full shadow-glow-volt-sm" />}
             </div>
           )}
         </NavLink>
         <NavLink to="/app/profile/me">
           {({ isActive }) => (
-            <div className={`flex flex-col items-center gap-0.5 px-4 py-1.5 rounded-xl transition-all ${isActive ? 'text-volt' : 'text-text-secondary'}`}>
+            <div className={`flex flex-col items-center gap-0.5 px-4 py-1.5 rounded-xl transition-all ${isActive ? 'text-accent' : 'text-text-secondary'}`}>
               <User size={20} />
-              <span className="text-[10px] font-label">Profile</span>
-              {isActive && <div className="w-4 h-0.5 bg-volt rounded-full shadow-glow-volt-sm" />}
+              <span className="text-[10px] font-condensed">Profile</span>
+              {isActive && <div className="w-4 h-0.5 bg-accent rounded-full shadow-glow-volt-sm" />}
             </div>
           )}
         </NavLink>

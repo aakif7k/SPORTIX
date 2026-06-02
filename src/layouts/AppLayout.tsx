@@ -1,5 +1,5 @@
 import React from 'react';
-import { Outlet } from 'react-router-dom';
+import { Outlet, useLocation } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { Sidebar } from '../components/layout/Sidebar';
 import { Navbar } from '../components/layout/Navbar';
@@ -13,6 +13,9 @@ const pageVariants = {
 };
 
 export const AppLayout: React.FC = () => {
+  const location = useLocation();
+  const isMessagesPage = location.pathname.startsWith('/app/messages');
+
   return (
     <div className="flex h-screen overflow-hidden" style={{ background: 'var(--base)' }}>
 
@@ -66,19 +69,19 @@ export const AppLayout: React.FC = () => {
       <div className="flex-1 flex flex-col min-w-0 overflow-hidden relative z-10">
         <Navbar />
         <div className="flex-1 flex overflow-hidden">
-          <main className="flex-1 overflow-y-auto pb-20 md:pb-4">
+          <main className={`flex-1 overflow-hidden ${isMessagesPage ? 'pb-[72px] md:pb-0' : 'overflow-y-auto pb-20 md:pb-4'}`}>
             <motion.div
               variants={pageVariants}
               initial="initial"
               animate="animate"
               exit="exit"
               transition={{ duration: 0.3, ease: [0.23, 1, 0.32, 1] }}
-              className="max-w-4xl mx-auto px-4 py-4"
+              className={isMessagesPage ? "w-full h-full" : "max-w-4xl mx-auto px-4 py-4"}
             >
               <Outlet />
             </motion.div>
           </main>
-          <RightPanel />
+          {!isMessagesPage && <RightPanel />}
         </div>
       </div>
 
@@ -86,3 +89,4 @@ export const AppLayout: React.FC = () => {
     </div>
   );
 };
+

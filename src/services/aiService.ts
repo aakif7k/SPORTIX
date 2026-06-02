@@ -1,12 +1,29 @@
 import { GoogleGenerativeAI } from '@google/generative-ai';
-import type { AITeamResult, Team, TeamMember, SportCategory, ExperienceLevel, BracketRound, Event } from '../types';
-import { SPORT_POSITIONS, MOCK_USERS } from './mockData';
+import type { AITeamResult, Team, TeamMember, SportCategory, ExperienceLevel, BracketRound } from '../types';
+import { SPORT_POSITIONS } from './mockData';
 
 const apiKey = import.meta.env.VITE_GEMINI_API_KEY as string;
 
 function getGenAI() {
   if (!apiKey || apiKey === 'your_gemini_api_key_here') return null;
   return new GoogleGenerativeAI(apiKey);
+}
+
+// ─── CONNECTION TEST ────────────────────────────────────────────────────────
+export async function testAIConnection(): Promise<{ ok: boolean; message: string; model?: string }> {
+  const genAI = getGenAI();
+  if (!genAI) {
+    return { ok: false, message: 'API key not configured. Check your .env file.' };
+  }
+  try {
+    const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' });
+    const result = await model.generateContent('Reply with exactly: "SportiX AI online"');
+    const text = result.response.text().trim();
+    return { ok: true, message: text || 'Connected', model: 'gemini-1.5-flash' };
+  } catch (err: any) {
+    const msg = err?.message || 'Unknown error';
+    return { ok: false, message: msg };
+  }
 }
 
 // ─── SPORT STAT GENERATORS ─────────────────────────────────────────────────
@@ -50,7 +67,7 @@ function buildMockTeam(sport: SportCategory, teamName: string, id: string): Team
 
 // ─── ANALYSIS LOG GENERATOR ────────────────────────────────────────────────
 function generateAnalysisLog(sport: SportCategory, count: number): string[] {
-  const emoji = { football: '⚽', basketball: '🏀', tennis: '🎾', mma: '🥋', swimming: '🏊' }[sport] || '🏆';
+  const emoji = ({ football: '⚽', basketball: '🏀', tennis: '🎾', mma: '🥋', swimming: '🏊' } as Record<string, string>)[sport] || '🏆';
   return [
     `> Scanning ${count} registered ${sport} athletes...`,
     `> Filtering by skill compatibility matrix...`,
@@ -122,7 +139,7 @@ export async function matchOpponent(teamId: string, sport: SportCategory): Promi
   return buildMockTeam(sport, `Rival Squad`, `opp_${teamId}`);
 }
 
-export async function recommendEvents(sport: SportCategory): Promise<string[]> {
+export async function recommendEvents(_sport: SportCategory): Promise<string[]> {
   await new Promise(r => setTimeout(r, 500));
   return ['e1', 'e2', 'e3'];
 }

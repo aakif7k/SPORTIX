@@ -14,11 +14,11 @@ interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
 }
 
 const variantClasses: Record<Variant, string> = {
-  primary: 'bg-volt text-black font-semibold hover:shadow-glow-volt-sm active:shadow-glow-volt neuo',
-  ghost: 'bg-transparent border border-volt/30 text-volt hover:border-volt hover:shadow-glow-volt-sm hover:bg-volt/5',
-  danger: 'bg-hot text-white hover:shadow-glow-orange active:shadow-glow-orange',
-  orange: 'bg-hot/10 border border-hot/30 text-hot hover:border-hot hover:shadow-glow-orange hover:bg-hot/15',
-  icon: 'bg-elevated border border-border-muted text-white hover:border-volt/40 hover:text-volt neuo',
+  primary: 'btn-primary',
+  ghost: 'btn-ghost',
+  danger: 'bg-hot text-white hover:shadow-glow-hot active:shadow-glow-hot',
+  orange: 'bg-hot/10 border border-hot/30 text-hot hover:border-hot hover:shadow-glow-hot hover:bg-hot/15',
+  icon: 'bg-elevated border border-border-muted text-white hover:border-accent/40 hover:text-accent neuo',
 };
 
 const sizeClasses: Record<Size, string> = {
