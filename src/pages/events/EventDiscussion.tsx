@@ -5,6 +5,7 @@ import {
   ChevronLeft, Send, Pin, BarChart2,
   Megaphone, Trash2, Bell, X
 } from 'lucide-react';
+import { useAuthStore } from '../../store/authStore';
 
 
 // ─── Mock Discussion Data ─────────────────────────────────────────────────────
@@ -210,7 +211,10 @@ const MessageBubble: React.FC<{
 export const EventDiscussion: React.FC = () => {
   const { id } = useParams();
   const navigate = useNavigate();
-
+  const user = useAuthStore(state => state.user);
+  const currentUserId = user?.id || 'cu1';
+  const currentUserName = user?.name || 'Alex Rivera';
+  const currentUserAvatar = user?.avatar || 'https://images.pexels.com/photos/1486064/pexels-photo-1486064.jpeg?cs=srgb&dl=pexels-nkhajotia-1486064.jpg&fm=jpg';
 
   const [messages, setMessages] = useState<DiscussionMessage[]>(INITIAL_MESSAGES);
   const [input, setInput] = useState('');
@@ -229,9 +233,9 @@ export const EventDiscussion: React.FC = () => {
     if (!input.trim()) return;
     const msg: DiscussionMessage = {
       id: `m${Date.now()}`,
-      sender: 'You',
-      senderId: 'u6',
-      avatar: 'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=80',
+      sender: currentUserName,
+      senderId: currentUserId,
+      avatar: currentUserAvatar,
       type: 'text',
       content: input.trim(),
       timestamp: 'just now',
@@ -264,9 +268,9 @@ export const EventDiscussion: React.FC = () => {
     if (!pollQuestion.trim() || pollOptions.filter(o => o.trim()).length < 2) return;
     const msg: DiscussionMessage = {
       id: `poll${Date.now()}`,
-      sender: 'You',
-      senderId: 'u6',
-      avatar: 'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=80',
+      sender: currentUserName,
+      senderId: currentUserId,
+      avatar: currentUserAvatar,
       type: 'poll',
       content: '',
       pollData: {
@@ -329,7 +333,7 @@ export const EventDiscussion: React.FC = () => {
           <MessageBubble
             key={msg.id}
             msg={msg}
-            isMe={msg.senderId === 'u6'}
+            isMe={msg.senderId === currentUserId}
             isAdmin={isAdmin}
             onDelete={handleDelete}
             onPin={handlePin}

@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import type { Squad, ChatMessage, Tournament, Athlete } from '../types/pulse.types';
+import { useAuthStore } from './authStore';
 
 interface SquadStoreState {
   squads: Squad[];
@@ -40,7 +41,7 @@ const mockAthletes: Athlete[] = [
   { uid: 'u3', name: 'Priya Nair', avatar: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=150', sport: 'Football', position: 'GK', pulseScore: 721, tier: 'CONTENDER', compatibility: 85, role: 'member', readiness: 'Maybe', level: 72, distance: 6.1 },
   { uid: 'u4', name: 'Devon Clarke', avatar: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150', sport: 'Football', position: 'CB', pulseScore: 689, tier: 'CONTENDER', compatibility: 78, role: 'recruiter', readiness: 'Ready', level: 68, distance: 8.2 },
   { uid: 'u5', name: 'Aisha Mensah', avatar: 'https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?w=150', sport: 'Football', position: 'LW', pulseScore: 812, tier: 'ELITE', compatibility: 88, role: 'vice', readiness: 'Ready', level: 81, distance: 3.3 },
-  { uid: 'u6', name: 'Zack Miller (You)', avatar: 'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=150', sport: 'Football', position: 'RW', pulseScore: 721, tier: 'CONTENDER', compatibility: 100, role: 'captain', readiness: 'Ready', level: 24, distance: 0 }
+  { uid: 'cu1', name: 'Alex Rivera (You)', avatar: 'https://images.pexels.com/photos/1486064/pexels-photo-1486064.jpeg?cs=srgb&dl=pexels-nkhajotia-1486064.jpg&fm=jpg', sport: 'Football', position: 'RW', pulseScore: 721, tier: 'CONTENDER', compatibility: 100, role: 'captain', readiness: 'Ready', level: 24, distance: 0 }
 ];
 
 const mockMatchHistory: any[] = [
@@ -86,8 +87,8 @@ const mockAchievements = [
 const initialChats: Record<string, ChatMessage[]> = {
   'squad-1': [
     { msgId: 'c1', senderId: 'u2', senderName: 'Zaid Al-Hassan', senderAvatar: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=150', senderRole: 'strategist', content: 'Hey team, let\'s focus on tactical counter-attacks for tomorrow\'s match.', type: 'text', timestamp: '2026-05-19T14:30:00Z' },
-    { msgId: 'c2', senderId: 'u6', senderName: 'Zack Miller (You)', senderAvatar: 'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=150', senderRole: 'captain', content: 'Tactical Update: Switching to 4-3-3 for this weekend', type: 'tactical', tacticalData: { formation: '4-3-3', notes: 'Using overlapping wingers and low-block defense.' }, timestamp: '2026-05-19T15:00:00Z' },
-    { msgId: 'c3', senderId: 'u6', senderName: 'Zack Miller (You)', senderAvatar: 'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=150', senderRole: 'captain', content: '📅 Match vs Rapid XI — Saturday 6PM — City Ground', type: 'announcement', announcementData: { matchTime: 'Saturday 6PM', venue: 'City Ground' }, timestamp: '2026-05-19T15:05:00Z' },
+    { msgId: 'c2', senderId: 'cu1', senderName: 'Alex Rivera (You)', senderAvatar: 'https://images.pexels.com/photos/1486064/pexels-photo-1486064.jpeg?cs=srgb&dl=pexels-nkhajotia-1486064.jpg&fm=jpg', senderRole: 'captain', content: 'Tactical Update: Switching to 4-3-3 for this weekend', type: 'tactical', tacticalData: { formation: '4-3-3', notes: 'Using overlapping wingers and low-block defense.' }, timestamp: '2026-05-19T15:00:00Z' },
+    { msgId: 'c3', senderId: 'cu1', senderName: 'Alex Rivera (You)', senderAvatar: 'https://images.pexels.com/photos/1486064/pexels-photo-1486064.jpeg?cs=srgb&dl=pexels-nkhajotia-1486064.jpg&fm=jpg', senderRole: 'captain', content: '📅 Match vs Rapid XI — Saturday 6PM — City Ground', type: 'announcement', announcementData: { matchTime: 'Saturday 6PM', venue: 'City Ground' }, timestamp: '2026-05-19T15:05:00Z' },
     {
       msgId: 'c4',
       senderId: 'u2',
@@ -103,7 +104,7 @@ const initialChats: Record<string, ChatMessage[]> = {
           { text: 'Saturday 10AM', votes: 2 },
           { text: 'Sunday 2PM', votes: 0 }
         ],
-        votedUsers: ['u1', 'u2', 'u3', 'u4', 'u5', 'u6']
+        votedUsers: ['u1', 'u2', 'u3', 'u4', 'u5', 'cu1']
       },
       timestamp: '2026-05-19T16:20:00Z'
     },
@@ -188,7 +189,7 @@ export const useSquadStore = create<SquadStoreState>((set) => ({
       squadId: 'squad-1',
       name: 'Iron Pulse FC',
       sport: 'Football',
-      captainId: 'u6',
+      captainId: 'cu1',
       members: mockAthletes,
       chemistry: { overall: 87, trust: 91, coordination: 78, communication: 83, retentionScore: 89, activityScore: 78, consistencyScore: 92, approvalScore: 88 },
       pulseAvg: 779,
@@ -202,7 +203,7 @@ export const useSquadStore = create<SquadStoreState>((set) => ({
       tournamentIds: ['t-1'],
       events: [
         { eventId: 'e-1', title: 'VS Rapid XI Match', date: '2026-05-22T18:00:00Z', type: 'match', status: 'confirmed', votes: {} },
-        { eventId: 'e-2', title: 'Squad Practice Session', date: '2026-05-24T16:30:00Z', type: 'practice', status: 'pending', votes: { 'u6': 'yes' } }
+        { eventId: 'e-2', title: 'Squad Practice Session', date: '2026-05-24T16:30:00Z', type: 'practice', status: 'pending', votes: { 'cu1': 'yes' } }
       ],
       posts: [
         {
@@ -212,7 +213,7 @@ export const useSquadStore = create<SquadStoreState>((set) => ({
           authorAvatar: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=150',
           content: 'Finished today\'s tactical sprint. Feeling strong and ready for the Rapid XI showdown! Let\'s go!',
           timestamp: '2026-05-19T10:00:00Z',
-          likes: ['u6', 'u1']
+          likes: ['cu1', 'u1']
         }
       ],
       xpBoostActive: false,
@@ -330,7 +331,7 @@ export const useSquadStore = create<SquadStoreState>((set) => ({
     const acceptedSquad: Squad = {
       ...target,
       events: [
-        { eventId: `ev-${Date.now()}-1`, title: 'Inaugural Practice Session', date: new Date(Date.now() + 86400000 * 2).toISOString(), type: 'practice', status: 'pending', votes: { 'u6': 'yes' } }
+        { eventId: `ev-${Date.now()}-1`, title: 'Inaugural Practice Session', date: new Date(Date.now() + 86400000 * 2).toISOString(), type: 'practice', status: 'pending', votes: { 'cu1': 'yes' } }
       ],
       posts: [],
       xpBoostActive: false,
@@ -401,7 +402,7 @@ export const useSquadStore = create<SquadStoreState>((set) => ({
       date,
       type,
       status: 'pending' as const,
-      votes: { 'u6': 'yes' as const } // Captain auto-confirms
+      votes: { [useAuthStore.getState().user?.id || 'cu1']: 'yes' as const } // Captain auto-confirms
     };
 
     const updatedSquads = state.squads.map(s => {
@@ -416,9 +417,9 @@ export const useSquadStore = create<SquadStoreState>((set) => ({
 
     const newMessage: ChatMessage = {
       msgId: `c_${Date.now()}`,
-      senderId: 'u6',
-      senderName: 'Zack Miller (You)',
-      senderAvatar: 'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=150',
+      senderId: useAuthStore.getState().user?.id || 'cu1',
+      senderName: useAuthStore.getState().user?.name || 'Alex Rivera (You)',
+      senderAvatar: useAuthStore.getState().user?.avatar || 'https://images.pexels.com/photos/1486064/pexels-photo-1486064.jpeg?cs=srgb&dl=pexels-nkhajotia-1486064.jpg&fm=jpg',
       senderRole: 'captain',
       content: `📅 ${type === 'match' ? 'Match' : 'Practice'} Scheduled: ${title} — ${new Date(date).toLocaleString([], { dateStyle: 'short', timeStyle: 'short' })}. Please cast your votes.`,
       type: 'announcement',
@@ -514,7 +515,7 @@ export const useSquadStore = create<SquadStoreState>((set) => ({
   }),
 
   startCaptainVote: (squadId, candidateId, initiatorId) => set((state) => {
-    const initiatorName = initiatorId === 'u6' ? 'Zack Miller (You)' : (state.squads.find(s => s.squadId === squadId)?.members.find(m => m.uid === initiatorId)?.name || 'Member');
+    const initiatorName = initiatorId === (useAuthStore.getState().user?.id || 'cu1') ? (useAuthStore.getState().user?.name || 'Alex Rivera (You)') : (state.squads.find(s => s.squadId === squadId)?.members.find(m => m.uid === initiatorId)?.name || 'Member');
     const candidateName = state.squads.find(s => s.squadId === squadId)?.members.find(m => m.uid === candidateId)?.name || 'Member';
     
     const activeVote = {
@@ -652,9 +653,9 @@ export const useSquadStore = create<SquadStoreState>((set) => ({
   addSquadPost: (squadId, content, mediaUrl) => set((state) => {
     const newPost = {
       postId: `p-${Date.now()}`,
-      authorId: 'u6', // Zack (You)
-      authorName: 'Zack Miller (You)',
-      authorAvatar: 'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=150',
+      authorId: useAuthStore.getState().user?.id || 'cu1',
+      authorName: useAuthStore.getState().user?.name || 'Alex Rivera (You)',
+      authorAvatar: useAuthStore.getState().user?.avatar || 'https://images.pexels.com/photos/1486064/pexels-photo-1486064.jpeg?cs=srgb&dl=pexels-nkhajotia-1486064.jpg&fm=jpg',
       content,
       mediaUrl,
       timestamp: new Date().toISOString(),

@@ -5,6 +5,7 @@ import { ChemistryBar } from '../../components/pulse/ChemistryBar';
 import { PlayerCard } from '../../components/pulse/PlayerCard';
 import { useSquad } from '../../hooks/useSquad';
 import { useSquadStore } from '../../store/squadStore';
+import { useAuthStore } from '../../store/authStore';
 import { 
   Lock, Trophy, Calendar, Clipboard, ArrowUpRight, 
   Plus, UserCheck, MessageSquare, ThumbsUp, Send, Image, 
@@ -16,6 +17,8 @@ export const SquadOverview: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const { squad, isCaptain, updateTacticalBoard } = useSquad(id);
+  const user = useAuthStore(state => state.user);
+  const currentUserId = user?.id || 'cu1';
   const { 
     createSquadEvent, 
     votePracticeSchedule, 
@@ -74,7 +77,7 @@ export const SquadOverview: React.FC = () => {
   const handleStartVoteSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedCandidate) return;
-    startCaptainVote(squad.squadId, selectedCandidate, 'u6'); // Zack u6 is initiator
+    startCaptainVote(squad.squadId, selectedCandidate, currentUserId); // Zack u6 is initiator
     setSelectedCandidate('');
   };
 
@@ -274,7 +277,7 @@ export const SquadOverview: React.FC = () => {
                 const totalMembers = squad.members.length;
                 const allConfirmed = confirmedCount >= totalMembers;
                 
-                const userVote = ev.votes?.['u6'];
+                const userVote = ev.votes?.[currentUserId];
 
                 return (
                   <div 
@@ -321,7 +324,7 @@ export const SquadOverview: React.FC = () => {
                       <div className="flex gap-2 items-center pt-2 border-t border-border-muted/50 mt-2">
                         <span className="text-text-muted text-[9px] mr-1">Your response:</span>
                         <button
-                          onClick={() => votePracticeSchedule(squad.squadId, ev.eventId, 'u6', 'yes')}
+                          onClick={() => votePracticeSchedule(squad.squadId, ev.eventId, currentUserId, 'yes')}
                           className={`px-3 py-1 rounded font-bold text-[9px] uppercase transition-colors ${
                             userVote === 'yes'
                               ? 'bg-success text-white'
@@ -331,7 +334,7 @@ export const SquadOverview: React.FC = () => {
                           Confirm (Yes)
                         </button>
                         <button
-                          onClick={() => votePracticeSchedule(squad.squadId, ev.eventId, 'u6', 'no')}
+                          onClick={() => votePracticeSchedule(squad.squadId, ev.eventId, currentUserId, 'no')}
                           className={`px-3 py-1 rounded font-bold text-[9px] uppercase transition-colors ${
                             userVote === 'no'
                               ? 'bg-danger text-white'
@@ -396,7 +399,7 @@ export const SquadOverview: React.FC = () => {
             {/* Posts feed */}
             <div className="space-y-4 max-w-2xl">
               {(squad.posts || []).map((post) => {
-                const isLiked = post.likes.includes('u6');
+                const isLiked = post.likes.includes(currentUserId);
                 return (
                   <div key={post.postId} className="p-4 rounded-xl bg-base/20 border border-border-muted space-y-3 shadow-sm">
                     <div className="flex items-center justify-between">
@@ -426,7 +429,7 @@ export const SquadOverview: React.FC = () => {
 
                     <div className="flex justify-between items-center pt-2 border-t border-border-muted font-mono text-[10px]">
                       <button
-                        onClick={() => likeSquadPost(squad.squadId, post.postId, 'u6')}
+                        onClick={() => likeSquadPost(squad.squadId, post.postId, currentUserId)}
                         className={`flex items-center gap-1.5 px-2.5 py-1 rounded hover:bg-surface transition-colors ${
                           isLiked ? 'text-volt' : 'text-text-secondary'
                         }`}
@@ -582,13 +585,13 @@ export const SquadOverview: React.FC = () => {
                           {/* Action Buttons */}
                           <div className="flex gap-2 pt-2 border-t border-border-muted/40 mt-2">
                             <button
-                              onClick={() => castCaptainVote(squad.squadId, 'u6', squad.activeCaptainVote!.candidateId)}
+                              onClick={() => castCaptainVote(squad.squadId, currentUserId, squad.activeCaptainVote!.candidateId)}
                               className="px-4 py-1.5 bg-volt text-volt-text font-bold text-[10px] uppercase rounded"
                             >
                               Approve Candidate
                             </button>
                             <button
-                              onClick={() => castCaptainVote(squad.squadId, 'u6', 'no')}
+                              onClick={() => castCaptainVote(squad.squadId, currentUserId, 'no')}
                               className="px-4 py-1.5 bg-surface border border-border-muted text-text-primary font-bold text-[10px] uppercase rounded hover:bg-hover"
                             >
                               Reject Vote

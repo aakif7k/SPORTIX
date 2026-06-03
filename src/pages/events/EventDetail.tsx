@@ -845,7 +845,7 @@ export const EventDetail: React.FC = () => {
         initial={{ opacity: 0, y: 30 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ delay: 0.5, type: 'spring', stiffness: 180 }}
-        className="fixed bottom-24 right-4 md:right-6 flex flex-col gap-3 z-40">
+        className="fixed bottom-24 right-4 md:right-6 flex flex-col gap-3 z-40 md:hidden">
         {/* Discussion FAB */}
         <motion.button whileHover={{ scale: 1.12 }} whileTap={{ scale: 0.92 }}
           onClick={() => navigate(`/app/events/${event.id}/discussion`)}

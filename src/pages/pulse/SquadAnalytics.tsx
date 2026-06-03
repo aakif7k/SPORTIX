@@ -35,10 +35,10 @@ export const SquadAnalytics: React.FC = () => {
 
   // 1. Pulse Score Over Time Data
   const pulseOverTimeData = [
-    { name: 'Match 1', Marcus: 830, Zaid: 780, Aisha: 800, Zack: 710 },
-    { name: 'Match 2', Marcus: 835, Zaid: 782, Aisha: 805, Zack: 715 },
-    { name: 'Match 3', Marcus: 842, Zaid: 790, Aisha: 809, Zack: 721 },
-    { name: 'Match 4', Marcus: 847, Zaid: 793, Aisha: 812, Zack: 721 },
+    { name: 'Match 1', Marcus: 830, Zaid: 780, Aisha: 800, Alex: 710 },
+    { name: 'Match 2', Marcus: 835, Zaid: 782, Aisha: 805, Alex: 715 },
+    { name: 'Match 3', Marcus: 842, Zaid: 790, Aisha: 809, Alex: 721 },
+    { name: 'Match 4', Marcus: 847, Zaid: 793, Aisha: 812, Alex: 721 },
   ];
 
   // 2. Chemistry Evolution Data
@@ -69,7 +69,7 @@ export const SquadAnalytics: React.FC = () => {
     { name: 'Marcus', value: 34 },
     { name: 'Aisha', value: 22 },
     { name: 'Zaid', value: 18 },
-    { name: 'Zack (You)', value: 15 },
+    { name: 'Alex (You)', value: 15 },
     { name: 'Devon', value: 7 },
     { name: 'Priya', value: 4 },
   ];
@@ -172,7 +172,7 @@ export const SquadAnalytics: React.FC = () => {
                 <Line type="monotone" dataKey="Marcus" stroke="var(--accent)" strokeWidth={2} dot={{ r: 3 }} name="Marcus" />
                 <Line type="monotone" dataKey="Zaid" stroke="var(--info)" strokeWidth={2} dot={{ r: 3 }} name="Zaid" />
                 <Line type="monotone" dataKey="Aisha" stroke="var(--plasma)" strokeWidth={2} dot={{ r: 3 }} name="Aisha" />
-                <Line type="monotone" dataKey="Zack" stroke="var(--success)" strokeWidth={2} dot={{ r: 3 }} name="Zack" />
+                <Line type="monotone" dataKey="Alex" stroke="var(--success)" strokeWidth={2} dot={{ r: 3 }} name="Alex" />
               </LineChart>
             </ResponsiveContainer>
           </div>

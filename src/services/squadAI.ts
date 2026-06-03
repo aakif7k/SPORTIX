@@ -149,7 +149,7 @@ export const generateAIPulseSquad = async (
   
   // Add the user as captain (role: 'captain')
   const userAthlete: Athlete = {
-    uid: 'u6', // Zack (You)
+    uid: 'cu1', // Alex Rivera (You)
     name: userProfile.name,
     avatar: userProfile.avatar,
     sport,
@@ -173,9 +173,9 @@ export const generateAIPulseSquad = async (
   
   // 2. Query Google Gemini AI for team parameters if available, otherwise simulate
   let squadName = MOCK_TEAM_NAMES[Math.floor(Math.random() * MOCK_TEAM_NAMES.length)];
-  let reasoning = `Combines the veteran coordination of Zaid and Aisha's pace with the technical defense of Devon, creating a balanced setup around Zack's positioning.`;
+  let reasoning = `Combines the veteran coordination of Zaid and Aisha's pace with the technical defense of Devon, creating a balanced setup around Alex's positioning.`;
   let formation = sport === 'Basketball' ? 'Motion' : '4-3-3';
-  let tacticalNotes = `Use chemistry-based wing transitions. Zack and Aisha overlap on the wings, supported by Zaid's central distribution.`;
+  let tacticalNotes = `Use chemistry-based wing transitions. Alex and Aisha overlap on the wings, supported by Zaid's central distribution.`;
   let chemistry = {
     overall: 88,
     trust: 90,
@@ -268,7 +268,7 @@ Format your response as a strict JSON object (ensure it's valid JSON and contain
     squadId,
     name: squadName,
     sport,
-    captainId: 'u6',
+    captainId: 'cu1',
     members: allMembers,
     chemistry,
     pulseAvg,

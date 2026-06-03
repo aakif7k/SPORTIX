@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useSquad } from '../../hooks/useSquad';
+import { useAuthStore } from '../../store/authStore';
 import { RoleBadge } from '../../components/pulse/RoleBadge';
 import { Send, Plus, Paperclip, MoreVertical, Award, Info, HelpCircle } from 'lucide-react';
 import { BadgeIcon } from '../../components/gamification/BadgeIcon';
@@ -9,6 +10,10 @@ export const SquadChat: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const { squad, squadChats, isCaptain, sendChatMessage } = useSquad(id);
+  const user = useAuthStore(state => state.user);
+  const currentUserId = user?.id || 'cu1';
+  const currentUserName = user?.name || 'Alex Rivera (You)';
+  const currentUserAvatar = user?.avatar || 'https://images.pexels.com/photos/1486064/pexels-photo-1486064.jpeg?cs=srgb&dl=pexels-nkhajotia-1486064.jpg&fm=jpg';
 
   const [text, setText] = useState('');
   const [showSpecialMenu, setShowSpecialMenu] = useState(false);
@@ -26,10 +31,10 @@ export const SquadChat: React.FC = () => {
     if (!text.trim()) return;
 
     sendChatMessage(squad.squadId, {
-      senderId: 'u6', // Zack (You)
-      senderName: 'Zack Miller (You)',
-      senderAvatar: 'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=150',
-      senderRole: 'captain',
+      senderId: currentUserId,
+      senderName: currentUserName,
+      senderAvatar: currentUserAvatar,
+      senderRole: isCaptain ? 'captain' : 'member',
       content: text,
       type: 'text'
     });
@@ -41,9 +46,9 @@ export const SquadChat: React.FC = () => {
     
     if (type === 'announcement') {
       sendChatMessage(squad.squadId, {
-        senderId: 'u6',
-        senderName: 'Zack Miller (You)',
-        senderAvatar: 'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=150',
+        senderId: currentUserId,
+        senderName: currentUserName,
+        senderAvatar: currentUserAvatar,
         senderRole: 'captain',
         content: '📅 Match vs Rapid XI — Saturday 6PM — City Ground',
         type: 'announcement',
@@ -54,9 +59,9 @@ export const SquadChat: React.FC = () => {
       });
     } else if (type === 'tactical') {
       sendChatMessage(squad.squadId, {
-        senderId: 'u6',
-        senderName: 'Zack Miller (You)',
-        senderAvatar: 'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=150',
+        senderId: currentUserId,
+        senderName: currentUserName,
+        senderAvatar: currentUserAvatar,
         senderRole: 'captain',
         content: 'Tactical Update: Switching to 4-3-3 for this weekend',
         type: 'tactical',
@@ -67,9 +72,9 @@ export const SquadChat: React.FC = () => {
       });
     } else if (type === 'poll') {
       sendChatMessage(squad.squadId, {
-        senderId: 'u6',
-        senderName: 'Zack Miller (You)',
-        senderAvatar: 'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=150',
+        senderId: currentUserId,
+        senderName: currentUserName,
+        senderAvatar: currentUserAvatar,
         senderRole: 'captain',
         content: 'Best time for practice?',
         type: 'poll',
@@ -167,7 +172,7 @@ export const SquadChat: React.FC = () => {
           {/* Messages list */}
           <div className="flex-1 overflow-y-auto p-5 space-y-4">
             {squadChats.map((msg) => {
-              const isMe = msg.senderId === 'u6';
+              const isMe = msg.senderId === currentUserId;
               const senderMember = squad.members.find(m => m.uid === msg.senderId);
 
               if (msg.type === 'announcement') {
@@ -197,7 +202,7 @@ export const SquadChat: React.FC = () => {
                       {msg.tacticalData?.formation}
                     </span>
                     <p className="text-text-secondary leading-snug">{msg.tacticalData?.notes}</p>
-                    <span className="block text-[8px] text-text-secondary text-right">— Captain Zack Miller</span>
+                    <span className="block text-[8px] text-text-secondary text-right">— Captain {senderMember?.name || msg.senderName || 'Zack Miller'}</span>
                   </div>
                 );
               }

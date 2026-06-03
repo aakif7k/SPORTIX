@@ -7,10 +7,11 @@ import {
   UserMinus, Edit2, LogOut, Trash2, Lock
 } from 'lucide-react';
 import { useEventStore } from '../../store/eventStore';
+import { useAuthStore } from '../../store/authStore';
 
 // ─── Mock Crew Data ───────────────────────────────────────────────────────────
 const MOCK_CREW = [
-  { id: 'u6', name: 'Zack Miller (You)', avatar: 'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=150', role: 'admin',   sport: 'Football', status: 'Ready',   pulseScore: 721, level: 24  },
+  { id: 'cu1', name: 'Alex Rivera (You)', avatar: 'https://images.pexels.com/photos/1486064/pexels-photo-1486064.jpeg?cs=srgb&dl=pexels-nkhajotia-1486064.jpg&fm=jpg', role: 'admin',   sport: 'Football', status: 'Ready',   pulseScore: 721, level: 24  },
   { id: 'u1', name: 'Marcus Reid',       avatar: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=150', role: 'member',  sport: 'Football', status: 'Ready',   pulseScore: 847, level: 84  },
   { id: 'u2', name: 'Zaid Al-Hassan',    avatar: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=150', role: 'member',  sport: 'Football', status: 'Maybe',   pulseScore: 793, level: 79  },
   { id: 'u5', name: 'Aisha Mensah',      avatar: 'https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?w=150', role: 'member',  sport: 'Football', status: 'Ready',   pulseScore: 812, level: 81  },
@@ -114,7 +115,7 @@ const CrewSettingsModal: React.FC<{ onClose: () => void; crewName: string; onRen
           {view === 'changeAdmin' && (
             <div className="space-y-2">
               <p className="font-mono text-[10px] text-text-muted mb-3">Select a new crew admin:</p>
-              {MOCK_CREW.filter(m => m.id !== 'u6').map(m => (
+              {MOCK_CREW.filter(m => m.id !== (useAuthStore.getState().user?.id || 'cu1')).map(m => (
                 <button key={m.id} className="w-full flex items-center gap-3 p-3 rounded-[12px] border border-border bg-elevated hover:border-accent/30 transition-all">
                   <img src={m.avatar} alt={m.name} className="w-8 h-8 rounded-full object-cover flex-shrink-0" />
                   <div className="flex-1 text-left">
@@ -158,6 +159,8 @@ export const EventCrewPage: React.FC = () => {
   const { id } = useParams();
   const navigate = useNavigate();
   const { events } = useEventStore();
+  const user = useAuthStore(state => state.user);
+  const currentUserId = user?.id || 'cu1';
 
   const event = events.find(e => e.id === id) || events[0];
   const [crew, setCrew] = useState(MOCK_CREW);
@@ -257,7 +260,7 @@ export const EventCrewPage: React.FC = () => {
 
         {crew.map((member, i) => (
           <motion.div key={member.id} initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: i * 0.04 }}
-            className={`flex items-center gap-3 rounded-[16px] p-4 border border-border ${member.id === 'u6' ? 'bg-accent-surface' : 'bg-elevated'}`}>
+            className={`flex items-center gap-3 rounded-[16px] p-4 border border-border ${member.id === currentUserId ? 'bg-accent-surface' : 'bg-elevated'}`}>
 
             {/* Avatar */}
             <div className="relative flex-shrink-0">
@@ -281,7 +284,7 @@ export const EventCrewPage: React.FC = () => {
             </div>
 
             {/* Admin actions (not for self) */}
-            {member.id !== 'u6' && (
+            {member.id !== currentUserId && (
               <div className="relative flex-shrink-0">
                 <button onClick={() => setMemberMenu(memberMenu === member.id ? null : member.id)}
                   className="w-7 h-7 rounded-full bg-elevated flex items-center justify-center text-text-muted hover:text-text-primary transition-all">

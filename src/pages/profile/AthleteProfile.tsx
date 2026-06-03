@@ -29,9 +29,11 @@ const TABS = ['Overview', 'PlayerDNA', 'PeakStats', 'Highlights', 'ClashHub', 'P
 const SquadProfileWidget: React.FC = () => {
   const navigate = useNavigate();
   const { squads } = useSquadStore();
+  const user = useAuthStore(state => state.user);
+  const currentUserId = user?.id || 'cu1';
   const squad = squads[0] || null;
-  const myRole = squad?.members.find(m => m.uid === 'u6')?.role || 'member';
-  const isCaptain = squad?.captainId === 'u6';
+  const myRole = squad?.members.find(m => m.uid === currentUserId)?.role || 'member';
+  const isCaptain = squad?.captainId === currentUserId;
   const chemistry = squad?.chemistry.overall || 0;
 
   if (!squad) {
