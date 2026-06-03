@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Zap, Dumbbell, Briefcase, Award, CalendarDays } from 'lucide-react';
+import { Zap, Dumbbell, Briefcase, Award, CalendarDays, Globe } from 'lucide-react';
 import { useAuthStore } from '../../store/authStore';
 import { Button } from '../../components/ui/Button';
 import { Input } from '../../components/ui/Input';
@@ -20,14 +20,29 @@ export const SignupPage: React.FC = () => {
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const { signup, isLoading } = useAuthStore();
+  const [error, setError] = useState('');
+  const { signup, login, isLoading } = useAuthStore();
   const navigate = useNavigate();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedRole) return;
-    await signup(email, password, name, selectedRole);
-    navigate('/onboarding');
+    setError('');
+    try {
+      await signup(email, password, name, selectedRole);
+      navigate('/onboarding');
+    } catch (err: any) {
+      console.error("Signup error details:", err);
+      if (err && (err.code === 'auth/email-already-in-use' || err.message?.includes('email-already-in-use'))) {
+        setError('This email is already in use. Try signing in instead.');
+      } else if (err && (err.code === 'auth/weak-password' || err.message?.includes('weak-password'))) {
+        setError('Password must be at least 6 characters.');
+      } else if (err && (err.code === 'auth/invalid-email' || err.message?.includes('invalid-email'))) {
+        setError('Please enter a valid email address.');
+      } else {
+        setError(err.message || 'Failed to create account. Please try again.');
+      }
+    }
   };
 
   return (
@@ -80,8 +95,20 @@ export const SignupPage: React.FC = () => {
                   <Input label="Full Name" type="text" value={name} onChange={e => setName(e.target.value)} placeholder="Marcus Thielemann" required />
                   <Input label="Email Address" type="email" value={email} onChange={e => setEmail(e.target.value)} placeholder="athlete@example.com" required />
                   <Input label="Password" type="password" value={password} onChange={e => setPassword(e.target.value)} placeholder="Min 8 characters" required />
+                  {error && <p className="text-xs text-hot font-label bg-hot/10 border border-hot/20 rounded-lg px-3 py-2">{error}</p>}
                   <Button type="submit" fullWidth loading={isLoading} size="lg" icon={<Zap size={16} fill="black" />}>
                     {isLoading ? 'Creating Account...' : 'Create Account'}
+                  </Button>
+                  <div className="relative flex items-center gap-3 py-2">
+                    <div className="flex-1 h-px bg-border-muted" />
+                    <span className="text-xs text-text-muted font-mono">OR</span>
+                    <div className="flex-1 h-px bg-border-muted" />
+                  </div>
+                  <Button
+                    type="button" variant="ghost" fullWidth size="md" icon={<Globe size={16} />}
+                    onClick={() => { login('demo@sportix.io', 'demo'); navigate('/app/feed'); }}
+                  >
+                    Continue with Google (Demo)
                   </Button>
                 </form>
               </motion.div>
