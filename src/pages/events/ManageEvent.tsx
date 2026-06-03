@@ -229,19 +229,23 @@ export const ManageEvent: React.FC = () => {
                     <h3 className="font-display text-base tracking-wider uppercase mb-4 flex items-center gap-2">
                       <Activity size={14} className="text-volt" /> Registration Velocity
                     </h3>
-                    <ResponsiveContainer width="100%" height={160}>
-                      <AreaChart data={MOCK_ANALYTICS_DATA}>
-                        <defs>
-                          <linearGradient id="colorSignups" x1="0" y1="0" x2="0" y2="1">
-                            <stop offset="5%" stopColor="var(--accent)" stopOpacity={0.3}/>
-                            <stop offset="95%" stopColor="var(--accent)" stopOpacity={0}/>
-                          </linearGradient>
-                        </defs>
-                        <XAxis dataKey="name" tick={{ fill: '#666', fontSize: 9, fontFamily: 'DM Mono' }} axisLine={false} tickLine={false} />
-                        <Tooltip contentStyle={{ background: 'var(--bg-elevated)', border: '1px solid var(--border)', borderRadius: 8, fontFamily: 'DM Mono', fontSize: 10, color: 'var(--text-primary)' }} cursor={false} />
-                        <Area type="monotone" dataKey="signups" stroke="var(--accent)" strokeWidth={2} fillOpacity={1} fill="url(#colorSignups)" />
-                      </AreaChart>
-                    </ResponsiveContainer>
+                    <div className="h-40 w-full relative">
+                      <div className="absolute inset-0">
+                        <ResponsiveContainer width="100%" height="100%">
+                          <AreaChart data={MOCK_ANALYTICS_DATA}>
+                            <defs>
+                              <linearGradient id="colorSignups" x1="0" y1="0" x2="0" y2="1">
+                                <stop offset="5%" stopColor="var(--accent)" stopOpacity={0.3}/>
+                                <stop offset="95%" stopColor="var(--accent)" stopOpacity={0}/>
+                              </linearGradient>
+                            </defs>
+                            <XAxis dataKey="name" tick={{ fill: '#666', fontSize: 9, fontFamily: 'DM Mono' }} axisLine={false} tickLine={false} />
+                            <Tooltip contentStyle={{ background: 'var(--bg-elevated)', border: '1px solid var(--border)', borderRadius: 8, fontFamily: 'DM Mono', fontSize: 10, color: 'var(--text-primary)' }} cursor={false} />
+                            <Area type="monotone" dataKey="signups" stroke="var(--accent)" strokeWidth={2} fillOpacity={1} fill="url(#colorSignups)" />
+                          </AreaChart>
+                        </ResponsiveContainer>
+                      </div>
+                    </div>
                   </div>
 
                   {/* Team Readiness and Squad Participation */}
