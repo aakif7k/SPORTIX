@@ -75,7 +75,7 @@ export const LoginPage: React.FC = () => {
 
             <Button
               type="button" variant="ghost" fullWidth size="md" icon={<Globe size={16} />}
-              onClick={() => { login('demo@sportix.io', 'demo'); navigate('/app/feed'); }}
+              onClick={async () => { await login('demo@sportix.io', 'demo'); navigate('/app/feed'); }}
             >
               Continue with Google
             </Button>
