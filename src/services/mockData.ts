@@ -207,7 +207,7 @@ export const MOCK_USERS: User[] = [
 
 export const CURRENT_USER: User = {
   id: 'cu1', uid: 'cu1', name: 'Alex Rivera', username: 'alex_rivera',
-  email: 'alex@sportix.io', avatar: 'https://i.pravatar.cc/150?img=33',
+  email: 'alex@sportix.io', avatar: 'https://images.pexels.com/photos/1486064/pexels-photo-1486064.jpeg?cs=srgb&dl=pexels-nkhajotia-1486064.jpg&fm=jpg',
   coverImage: 'https://images.unsplash.com/photo-1431324155629-1a6deb1dec8d?w=1200&q=80',
   role: 'athlete', sport: 'athletics', sports: ['athletics', 'cycling'],
   location: 'Madrid, Spain', bio: '400m specialist | National champion | Fueled by data.',
