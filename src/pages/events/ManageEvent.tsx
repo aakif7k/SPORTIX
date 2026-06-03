@@ -205,7 +205,7 @@ export const ManageEvent: React.FC = () => {
               <motion.div key="dashboard" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }} transition={{ duration: 0.18 }} className="space-y-4">
                 
                 {/* Analytics Grid */}
-                <div className="grid grid-cols-3 gap-3">
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                   {[
                     { label: 'ATTENDEES', value: `${event.participants.length}/${event.maxParticipants}`, icon: <Users size={16} />, color: 'var(--accent)' },
                     { label: 'TEAM READINESS', value: '88%', icon: <Activity size={16} />, color: '#06b6d4' },
@@ -309,18 +309,18 @@ export const ManageEvent: React.FC = () => {
                   
                   <Textarea label="Event Description" value={description} onChange={e => setDescription(e.target.value)} placeholder="Describe the tournament rules, check-in time..." rows={4} />
 
-                  <div className="grid grid-cols-2 gap-4">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <Input label="Date" type="date" value={date} onChange={e => setDate(e.target.value)} />
                     <Select label="Format" value={format} onChange={e => setFormat(e.target.value as EventFormat)}
                       options={[{ value: 'tournament', label: 'Tournament' }, { value: 'league', label: 'League' }, { value: 'solo', label: 'Solo' }, { value: 'team', label: 'Team' }]} />
                   </div>
 
-                  <div className="grid grid-cols-2 gap-4">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <Input label="Venue" value={venue} onChange={e => setVenue(e.target.value)} placeholder="Berlin Indoor Arena" />
                     <Input label="Location" value={location} onChange={e => setLocation(e.target.value)} placeholder="Berlin, Germany" />
                   </div>
 
-                  <div className="grid grid-cols-3 gap-3">
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                     <Input label="Max Players" type="number" value={maxParticipants} onChange={e => setMaxParticipants(e.target.value)} />
                     <Input label="Prize Pool" value={prizePool} onChange={e => setPrizePool(e.target.value)} placeholder="€25,000" />
                     <Input label="Entry Fee" value={entryFee} onChange={e => setEntryFee(e.target.value)} placeholder="€150" />
@@ -355,7 +355,7 @@ export const ManageEvent: React.FC = () => {
                       <p className="font-mono text-[10px] text-text-muted">No pending request queues.</p>
                     ) : (
                       pendingRequests.map(req => (
-                        <div key={req.id} className="flex items-center justify-between p-3 rounded-xl bg-elevated border border-border-muted font-mono text-xs">
+                        <div key={req.id} className="flex flex-col sm:flex-row sm:items-center sm:justify-between p-3 gap-3 sm:gap-2 rounded-xl bg-elevated border border-border-muted font-mono text-xs">
                           <div className="flex items-center gap-2">
                             <img src={req.avatar} alt={req.name} className="w-8 h-8 rounded-full object-cover" />
                             <div>
@@ -363,7 +363,7 @@ export const ManageEvent: React.FC = () => {
                               <span className="text-[9px] text-text-secondary mt-0.5 block">{req.position} · Level {req.level} · {req.distance} KM</span>
                             </div>
                           </div>
-                          <div className="flex gap-1.5">
+                          <div className="flex gap-1.5 justify-end self-end sm:self-auto">
                             <button onClick={() => handleApprove(req.id)} className="w-7 h-7 rounded-lg flex items-center justify-center bg-volt/20 text-volt hover:bg-volt/30 border border-volt/25">
                               <Check size={14} />
                             </button>
@@ -387,7 +387,7 @@ export const ManageEvent: React.FC = () => {
                       <p className="font-mono text-[10px] text-text-muted">No athletes registered yet.</p>
                     ) : (
                       resolvedParticipants.map(participant => (
-                        <div key={participant.id} className="flex items-center justify-between p-3 rounded-xl bg-elevated border border-border-muted font-mono text-xs">
+                        <div key={participant.id} className="flex flex-col sm:flex-row sm:items-center sm:justify-between p-3 gap-3 sm:gap-2 rounded-xl bg-elevated border border-border-muted font-mono text-xs">
                           <div className="flex items-center gap-2">
                             <Avatar src={participant.avatar} name={participant.name} size="sm" />
                             <div>
@@ -395,7 +395,7 @@ export const ManageEvent: React.FC = () => {
                               <span className="text-[9px] text-text-secondary uppercase mt-0.5 block">{participant.sport} · {participant.experienceLevel}</span>
                             </div>
                           </div>
-                          <div className="flex items-center gap-2">
+                          <div className="flex items-center justify-end gap-3 self-end sm:self-auto">
                             {participant.id === selectedAdminId ? (
                               <span className="text-[9px] font-bold text-volt px-2 py-0.5 bg-volt/15 border border-volt/20 rounded-md">
                                 ADMIN
