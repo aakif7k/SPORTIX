@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Check, MapPin, Users, Zap, Upload, Trash2 } from 'lucide-react';
+import { Check, MapPin, Users, Zap, Upload, Trash2, ArrowLeft } from 'lucide-react';
 import { useEventStore } from '../../store/eventStore';
 import { SPORT_CATEGORIES } from '../../services/mockData';
 import type { Event, SportCategory, EventFormat, ExperienceLevel } from '../../types';
@@ -81,9 +81,19 @@ export const CreateEvent: React.FC = () => {
   return (
     <div className="max-w-2xl mx-auto space-y-5" style={{ color: 'var(--text-primary)' }}>
       {/* Header */}
-      <div>
-        <h1 className="font-display text-4xl text-text-primary tracking-wide uppercase">HOST A CLASH</h1>
-        <p className="text-text-secondary font-label text-sm mt-0.5">Set up your tournament in ClashHub</p>
+      <div className="flex items-center gap-4">
+        <button
+          type="button"
+          onClick={() => navigate('/app/events')}
+          className="p-3 rounded-xl border border-border bg-surface hover:border-volt/40 hover:bg-elevated transition-all text-text-secondary hover:text-text-primary flex items-center justify-center cursor-pointer"
+          title="Back to ClashHub"
+        >
+          <ArrowLeft size={16} />
+        </button>
+        <div>
+          <h1 className="font-display text-4xl text-text-primary tracking-wide uppercase">HOST A CLASH</h1>
+          <p className="text-text-secondary font-label text-sm mt-0.5">Set up your tournament in ClashHub</p>
+        </div>
       </div>
 
       {/* Step Indicator */}

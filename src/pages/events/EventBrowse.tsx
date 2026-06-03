@@ -3,7 +3,8 @@ import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   Calendar, MapPin, Zap, SlidersHorizontal, Settings,
-  Search, TrendingUp, Trophy, ArrowRight, Flame, Plus
+  Search, TrendingUp, Trophy, ArrowRight, Flame, Plus,
+  ChevronDown, Activity
 } from 'lucide-react';
 import { useEventStore } from '../../store/eventStore';
 import { useAISettingsStore } from '../../store/aiSettingsStore';
@@ -32,6 +33,14 @@ const MOCK_EVENT_DISTANCES: Record<string, number> = {
   e18: 1.2,
   e19: 19.5,
   e20: 34.2,
+  e21: 15.6,
+  e22: 45.2,
+  e23: 25.1,
+  e24: 62.3,
+  e25: 12.8,
+  e26: 8.9,
+  e27: 34.2,
+  e28: 19.5,
 };
 
 // ─── Animation helpers ───────────────────────────────────────────────────────
@@ -177,9 +186,25 @@ export const EventBrowse: React.FC = () => {
   const [visibleCount, setVisibleCount] = useState(5);
   const searchRef = useRef<HTMLInputElement>(null);
 
+  const [showClashMenu, setShowClashMenu] = useState(false);
+  const mobileMenuRef = useRef<HTMLDivElement>(null);
+  const desktopMenuRef = useRef<HTMLDivElement>(null);
+
   React.useEffect(() => {
     setVisibleCount(5);
   }, [sportFilter, searchQuery, nearbyRadius]);
+
+  React.useEffect(() => {
+    const handleOutsideClick = (e: MouseEvent) => {
+      const clickedMobile = mobileMenuRef.current?.contains(e.target as Node);
+      const clickedDesktop = desktopMenuRef.current?.contains(e.target as Node);
+      if (!clickedMobile && !clickedDesktop) {
+        setShowClashMenu(false);
+      }
+    };
+    document.addEventListener('mousedown', handleOutsideClick);
+    return () => document.removeEventListener('mousedown', handleOutsideClick);
+  }, []);
 
   const filtered = events.filter(e => {
     const matchesSport = sportFilter === 'all' || e.sport === sportFilter;
@@ -197,21 +222,103 @@ export const EventBrowse: React.FC = () => {
       {/* ── HEADER ──────────────────────────────────────────── */}
       <motion.div initial={{ opacity: 0, y: -12 }} animate={{ opacity: 1, y: 0 }}
         className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-        <div>
-          <h1 className="font-display text-[42px] tracking-wide leading-none text-text-primary">
-            CLASHHUB
-          </h1>
-          <p className="font-mono text-[11px] mt-1.5 flex items-center gap-2 text-text-secondary">
-            <TrendingUp size={11} className="text-volt" />
-            {events.length} upcoming clashes worldwide
-          </p>
+        <div className="flex items-center justify-between w-full sm:w-auto">
+          <div>
+            <h1 className="font-display text-[42px] tracking-wide leading-none text-text-primary">
+              CLASHHUB
+            </h1>
+            <p className="font-mono text-[11px] mt-1.5 flex items-center gap-2 text-text-secondary">
+              <TrendingUp size={11} className="text-volt" />
+              {events.length} upcoming clashes worldwide
+            </p>
+          </div>
+
+          {/* Clash Menu dropdown on mobile view: in the empty space beside title */}
+          <div className="sm:hidden relative" ref={mobileMenuRef}>
+            <motion.button whileHover={{ scale: 1.04 }} whileTap={{ scale: 0.97 }}
+              onClick={() => setShowClashMenu(!showClashMenu)}
+              className="flex items-center justify-center gap-1.5 px-3 py-2.5 rounded-[12px] font-mono text-[10px] font-bold bg-elevated border border-border-muted text-text-primary hover:text-volt hover:border-volt/30 transition-all whitespace-nowrap">
+              <SlidersHorizontal size={12} /> Clash Menu <ChevronDown size={10} />
+            </motion.button>
+
+            <AnimatePresence>
+              {showClashMenu && (
+                <motion.div
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: 10 }}
+                  className="absolute right-0 top-full mt-2 w-48 bg-[#101010] border border-border-muted rounded-[16px] overflow-hidden shadow-lg z-50 py-1"
+                >
+                  <button
+                    onClick={() => { navigate('/app/clashhub/performance'); setShowClashMenu(false); }}
+                    className="w-full text-left px-4 py-2.5 font-mono text-[11px] flex items-center gap-2 hover:bg-volt-dim hover:text-volt text-text-secondary transition-colors"
+                  >
+                    <Activity size={14} /> Your Performance
+                  </button>
+                  <button
+                    onClick={() => { navigate('/app/clashhub/history'); setShowClashMenu(false); }}
+                    className="w-full text-left px-4 py-2.5 font-mono text-[11px] flex items-center gap-2 hover:bg-volt-dim hover:text-volt text-text-secondary transition-colors"
+                  >
+                    <Trophy size={14} /> Previous Matches
+                  </button>
+                  <div className="border-t border-border-muted my-1" />
+                  <button
+                    onClick={() => { navigate('/app/events/manage'); setShowClashMenu(false); }}
+                    className="w-full text-left px-4 py-2.5 font-mono text-[11px] flex items-center gap-2 hover:bg-volt-dim hover:text-volt text-text-secondary transition-colors"
+                  >
+                    <Settings size={14} /> Manage Events
+                  </button>
+                  <button
+                    onClick={() => { navigate('/app/events/create'); setShowClashMenu(false); }}
+                    className="w-full text-left px-4 py-2.5 font-mono text-[11px] flex items-center gap-2 hover:bg-volt-dim hover:text-volt text-text-secondary transition-colors"
+                  >
+                    <Plus size={14} /> Create Event
+                  </button>
+                </motion.div>
+              )}
+            </AnimatePresence>
+          </div>
         </div>
+
         <div className="flex items-center gap-3 w-full sm:w-auto overflow-x-auto pb-2 sm:pb-0 scrollbar-none">
+          <div ref={desktopMenuRef} className="relative hidden sm:block">
+            <motion.button whileHover={{ scale: 1.04 }} whileTap={{ scale: 0.97 }}
+              onClick={() => setShowClashMenu(!showClashMenu)}
+              className="flex items-center justify-center gap-2 px-4 py-2.5 rounded-[14px] font-mono text-[11px] font-bold w-full bg-elevated border border-border-muted text-text-primary hover:text-volt hover:border-volt/30 transition-all whitespace-nowrap">
+              <SlidersHorizontal size={14} /> Clash Menu <ChevronDown size={12} />
+            </motion.button>
+
+            <AnimatePresence>
+              {showClashMenu && (
+                <motion.div
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: 10 }}
+                  className="absolute right-0 top-full mt-2 w-48 bg-[#101010] border border-border-muted rounded-[16px] overflow-hidden shadow-lg z-50 py-1"
+                >
+                  <button
+                    onClick={() => { navigate('/app/clashhub/performance'); setShowClashMenu(false); }}
+                    className="w-full text-left px-4 py-2.5 font-mono text-[11px] flex items-center gap-2 hover:bg-volt-dim hover:text-volt text-text-secondary transition-colors"
+                  >
+                    <Activity size={14} /> Your Performance
+                  </button>
+                  <button
+                    onClick={() => { navigate('/app/clashhub/history'); setShowClashMenu(false); }}
+                    className="w-full text-left px-4 py-2.5 font-mono text-[11px] flex items-center gap-2 hover:bg-volt-dim hover:text-volt text-text-secondary transition-colors"
+                  >
+                    <Trophy size={14} /> Previous Matches
+                  </button>
+                </motion.div>
+              )}
+            </AnimatePresence>
+          </div>
+
           <motion.button whileHover={{ scale: 1.04 }} whileTap={{ scale: 0.97 }}
             onClick={() => navigate('/app/events/manage')}
-            className="flex items-center justify-center gap-2 px-4 py-2.5 rounded-[14px] font-mono text-[11px] font-bold flex-1 sm:flex-initial bg-elevated border border-border-muted text-text-primary hover:text-volt hover:border-volt/30 transition-all whitespace-nowrap">
+            className="hidden sm:flex items-center justify-center gap-2 px-4 py-2.5 rounded-[14px] font-mono text-[11px] font-bold bg-elevated border border-border-muted text-text-primary hover:text-volt hover:border-volt/30 transition-all whitespace-nowrap">
             <Settings size={14} /> Manage Events
           </motion.button>
+
           <motion.button whileHover={{ scale: 1.04 }} whileTap={{ scale: 0.97 }}
             onClick={() => navigate('/app/events/create')}
             className="flex items-center justify-center gap-2 px-4 py-2.5 rounded-[14px] font-mono text-[11px] font-bold flex-1 sm:flex-initial bg-volt text-volt-text hover:opacity-90 transition-opacity whitespace-nowrap shadow-[0_0_15px_rgba(204,255,0,0.2)]">
@@ -232,6 +339,8 @@ export const EventBrowse: React.FC = () => {
 
       {/* ── PENDING REPORT BANNER ────────────────────────────── */}
       <PendingReportBanner />
+
+
 
       {/* ── SPORT FILTER CHIPS ──────────────────────────────── */}
       <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }}>
@@ -321,7 +430,7 @@ export const EventBrowse: React.FC = () => {
                   onClick={() => setVisibleCount(prev => prev + 10)}
                   className="flex items-center gap-2 px-6 py-3 rounded-[16px] font-mono text-[11px] font-bold bg-surface border border-border-muted text-text-primary hover:text-volt hover:border-volt/35 transition-all shadow-md"
                 >
-                  More clashes fr fr ⚡ <ArrowRight size={14} className="text-volt" />
+                  More clashes⚡ <ArrowRight size={14} className="text-volt" />
                 </motion.button>
               </div>
             )}

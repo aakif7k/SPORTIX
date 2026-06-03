@@ -118,7 +118,7 @@ const defaults: Pick<
   badgeOnFeed:         true,
   badgeOnEvents:       true,
   badgeOnSquads:       true,
-  nearbyRadius:        10,
+  nearbyRadius:        100,
   isCustomRadius:      false,
 };
 

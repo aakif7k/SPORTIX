@@ -32,8 +32,8 @@ export const LoginPage: React.FC = () => {
         {/* Logo */}
         <motion.div initial={{ opacity: 0, y: -20 }} animate={{ opacity: 1, y: 0 }} className="text-center mb-8">
           <div className="inline-flex items-center gap-3">
-            <motion.div whileHover={{ rotate: 10, scale: 1.05 }} className="w-10 h-10 bg-volt rounded-xl flex items-center justify-center shadow-glow-volt">
-              <Zap size={22} className="text-black" fill="black" />
+            <motion.div whileHover={{ rotate: 5, scale: 1.05 }} className="w-10 h-10 rounded-xl overflow-hidden shadow-glow-volt">
+              <img src="/logo.png" alt="SportiX" className="w-full h-full object-cover" />
             </motion.div>
             <span className="font-display text-3xl text-volt tracking-widest">SPORTIX</span>
           </div>

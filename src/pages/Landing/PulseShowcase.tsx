@@ -39,7 +39,7 @@ export const PulseShowcase: React.FC = () => (
           <motion.p {...fadeUp(0)} className="font-mono text-[11px] text-[#CCFF00] uppercase tracking-[4px] mb-4">
             The Progression System
           </motion.p>
-          <motion.h2 {...fadeUp(0.1)} className="font-['Bebas_Neue'] text-white mb-4" style={{ fontSize: 'clamp(48px,6vw,90px)', lineHeight: 1 }}>
+          <motion.h2 {...fadeUp(0.1)} className="font-['Bebas_Neue'] text-[ffffff] mb-4" style={{ fontSize: 'clamp(48px,6vw,90px)', lineHeight: 1 }}>
             YOUR PULSE.<br />
             <span style={{ color: '#CCFF00', textShadow: '0 0 40px rgba(204,255,0,0.4)' }}>YOUR LEGACY.</span>
           </motion.h2>
@@ -98,10 +98,12 @@ export const PulseShowcase: React.FC = () => (
                 style={{ filter: 'drop-shadow(0 0 10px #CCFF00)' }}
               />
               {/* Center text */}
-              <text x="160" y="115" textAnchor="middle" fontFamily="Bebas Neue" fontSize="13" fill="#666" letterSpacing="2">LEVEL 41</text>
-              <text x="160" y="148" textAnchor="middle" fontFamily="Bebas Neue" fontSize="68" fill="#CCFF00">634</text>
-              <text x="220" y="148" textAnchor="middle" fontFamily="Bebas Neue" fontSize="26" fill="#333">/ 700</text>
-              <text x="160" y="168" textAnchor="middle" fontFamily="DM Mono" fontSize="10" fill="#888">ELITE PHANTOM</text>
+              <text x="160" y="90" textAnchor="middle" fontFamily="Bebas Neue" fontSize="14" fill="#666" letterSpacing="2">LEVEL 41</text>
+              <text x="160" y="142" textAnchor="middle">
+                <tspan fontFamily="Bebas Neue" fontSize="64" fill="#CCFF00">634</tspan>
+                <tspan fontFamily="Bebas Neue" fontSize="24" fill="#444" dx="6">/ 700</tspan>
+              </text>
+              <text x="160" y="168" textAnchor="middle" fontFamily="DM Mono" fontSize="10" fill="#888" letterSpacing="1">ELITE PHANTOM</text>
             </svg>
           </motion.div>
 

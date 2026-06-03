@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { MapPin, MessageCircle, UserPlus, UserCheck, TrendingUp, Edit3, Zap } from 'lucide-react';
+import { MapPin, MessageCircle, UserPlus, UserCheck, TrendingUp, Edit3, Zap, LogOut } from 'lucide-react';
 import { RadarChart, PolarGrid, PolarAngleAxis, Radar, ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, Cell } from 'recharts';
 import { useAuthStore } from '../../store/authStore';
 import { useSquadStore } from '../../store/squadStore';
@@ -143,7 +143,7 @@ const StatItem: React.FC<{ label: string; value: number; idx: number }> = ({ lab
 export const AthleteProfile: React.FC = () => {
   const { uid } = useParams();
   const navigate = useNavigate();
-  const { user: authUser } = useAuthStore();
+  const { user: authUser, setShowLogoutConfirm } = useAuthStore();
   const { currentPulse, currentLevel, streakDays } = useGamificationStore();
   const careerStats = useCareerStats();
   const { matchHistory } = useMatchReportStore();
@@ -204,6 +204,17 @@ export const AthleteProfile: React.FC = () => {
               <span className="font-mono text-sm font-bold text-volt">{overallDNA}</span>
               <span className="font-label text-[9px] text-text-secondary uppercase tracking-widest">DNA</span>
             </div>
+
+            {/* Mobile/Header Logout Button (Fix 9 - Loc 2) */}
+            {isMe && (
+              <button
+                onClick={() => setShowLogoutConfirm(true)}
+                className="absolute top-4 left-4 w-10 h-10 flex items-center justify-center rounded-xl bg-base/80 hover:bg-red-500/20 hover:text-red-500 text-text-primary border border-border-muted backdrop-blur transition-all"
+                title="Log Out"
+              >
+                <LogOut size={18} />
+              </button>
+            )}
           </div>
 
           {/* Profile info overlap section */}

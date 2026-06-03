@@ -12,97 +12,113 @@ import { useThemeStore } from '../../store/themeStore';
 import { useAISettingsStore } from '../../store/aiSettingsStore';
 import { testAIConnection } from '../../services/aiService';
 
+const resolveColor = (color: string) => {
+  if (color === '#CCFF00') {
+    return document.documentElement.classList.contains('light') ? '#2D7A1F' : '#CCFF00';
+  }
+  return color;
+};
+
 // ─── FUTURISTIC TOGGLE ────────────────────────────────────────────────────────
 const NeonToggle: React.FC<{
   active: boolean;
   onChange: () => void;
   color?: string;
   disabled?: boolean;
-}> = ({ active, onChange, color = '#CCFF00', disabled = false }) => (
-  <button
-    onClick={disabled ? undefined : onChange}
-    aria-pressed={active}
-    disabled={disabled}
-    className="relative flex-shrink-0 focus:outline-none"
-    style={{ width: 52, height: 28, opacity: disabled ? 0.4 : 1, cursor: disabled ? 'not-allowed' : 'pointer' }}
-  >
-    <div
-      className="absolute inset-0 rounded-full transition-all duration-300 overflow-hidden"
-      style={{
-        background: active ? `linear-gradient(135deg, ${color}22, ${color}44)` : 'var(--bg-elevated)',
-        border: `1px solid ${active ? color : 'var(--border-muted)'}`,
-        boxShadow: active ? `0 0 12px ${color}55, inset 0 0 8px ${color}11` : 'none',
-      }}
+}> = ({ active, onChange, color = '#CCFF00', disabled = false }) => {
+  const resolvedColor = resolveColor(color);
+  return (
+    <button
+      onClick={disabled ? undefined : onChange}
+      aria-pressed={active}
+      disabled={disabled}
+      className="relative flex-shrink-0 focus:outline-none"
+      style={{ width: 52, height: 28, opacity: disabled ? 0.4 : 1, cursor: disabled ? 'not-allowed' : 'pointer' }}
     >
-      {active && (
-        <motion.div
-          className="absolute inset-0 opacity-30"
-          style={{ background: `repeating-linear-gradient(0deg, transparent, transparent 2px, ${color}20 2px, ${color}20 4px)` }}
-          animate={{ y: [0, -8] }}
-          transition={{ duration: 1.2, repeat: Infinity, ease: 'linear' }}
-        />
-      )}
-    </div>
-    <motion.div
-      animate={{ x: active ? 26 : 4 }}
-      transition={{ type: 'spring', stiffness: 600, damping: 35 }}
-      className="absolute top-[4px] w-5 h-5 rounded-full flex items-center justify-center"
-      style={{
-        background: active ? `linear-gradient(135deg, ${color}, ${color}cc)` : 'var(--text-muted)',
-        boxShadow: active ? `0 0 10px ${color}88, 0 2px 6px rgba(0,0,0,0.4)` : '0 2px 4px rgba(0,0,0,0.3)',
-      }}
-    >
-      {active && <motion.div initial={{ scale: 0 }} animate={{ scale: 1 }} className="w-1.5 h-1.5 rounded-full bg-black/60" />}
-    </motion.div>
-  </button>
-);
+      <div
+        className="absolute inset-0 rounded-full transition-all duration-300 overflow-hidden"
+        style={{
+          background: active ? `linear-gradient(135deg, ${resolvedColor}22, ${resolvedColor}44)` : 'var(--bg-elevated)',
+          border: `1px solid ${active ? resolvedColor : 'var(--border-muted)'}`,
+          boxShadow: active ? `0 0 12px ${resolvedColor}55, inset 0 0 8px ${resolvedColor}11` : 'none',
+        }}
+      >
+        {active && (
+          <motion.div
+            className="absolute inset-0 opacity-30"
+            style={{ background: `repeating-linear-gradient(0deg, transparent, transparent 2px, ${resolvedColor}20 2px, ${resolvedColor}20 4px)` }}
+            animate={{ y: [0, -8] }}
+            transition={{ duration: 1.2, repeat: Infinity, ease: 'linear' }}
+          />
+        )}
+      </div>
+      <motion.div
+        animate={{ x: active ? 26 : 4 }}
+        transition={{ type: 'spring', stiffness: 600, damping: 35 }}
+        className="absolute top-[4px] w-5 h-5 rounded-full flex items-center justify-center"
+        style={{
+          background: active ? `linear-gradient(135deg, ${resolvedColor}, ${resolvedColor}cc)` : 'var(--text-muted)',
+          boxShadow: active ? `0 0 10px ${resolvedColor}88, 0 2px 6px rgba(0,0,0,0.4)` : '0 2px 4px rgba(0,0,0,0.3)',
+        }}
+      >
+        {active && <motion.div initial={{ scale: 0 }} animate={{ scale: 1 }} className="w-1.5 h-1.5 rounded-full bg-black/60" />}
+      </motion.div>
+    </button>
+  );
+};
 
 // ─── SETTING ROW ─────────────────────────────────────────────────────────────
 const SettingRow: React.FC<{
   label: string; desc: string; active: boolean; onChange: () => void;
   color?: string; icon?: React.ReactNode; badge?: string; disabled?: boolean;
-}> = ({ label, desc, active, onChange, color = '#CCFF00', icon, badge, disabled }) => (
-  <motion.div
-    whileTap={disabled ? {} : { scale: 0.99 }}
-    onClick={disabled ? undefined : onChange}
-    className="flex items-center gap-4 p-4 rounded-2xl transition-all duration-200 relative overflow-hidden"
-    style={{
-      background: active ? `${color}06` : 'var(--bg-elevated)',
-      border: `1px solid ${active ? `${color}25` : 'var(--border-muted)'}`,
-      cursor: disabled ? 'not-allowed' : 'pointer',
-      opacity: disabled ? 0.6 : 1,
-    }}
-  >
-    {active && <div className="absolute left-0 top-0 bottom-0 w-[3px] rounded-l-2xl" style={{ background: `linear-gradient(180deg, ${color}00, ${color}, ${color}00)` }} />}
-    {icon && (
-      <div className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0"
-        style={{ background: active ? `${color}18` : 'var(--bg-surface)', border: `1px solid ${active ? `${color}30` : 'var(--border-muted)'}`, color: active ? color : 'var(--text-muted)' }}>
-        {icon}
+}> = ({ label, desc, active, onChange, color = '#CCFF00', icon, badge, disabled }) => {
+  const resolvedColor = resolveColor(color);
+  return (
+    <motion.div
+      whileTap={disabled ? {} : { scale: 0.99 }}
+      onClick={disabled ? undefined : onChange}
+      className="flex items-center gap-4 p-4 rounded-2xl transition-all duration-200 relative overflow-hidden"
+      style={{
+        background: active ? `${resolvedColor}06` : 'var(--bg-elevated)',
+        border: `1px solid ${active ? `${resolvedColor}25` : 'var(--border-muted)'}`,
+        cursor: disabled ? 'not-allowed' : 'pointer',
+        opacity: disabled ? 0.6 : 1,
+      }}
+    >
+      {active && <div className="absolute left-0 top-0 bottom-0 w-[3px] rounded-l-2xl" style={{ background: `linear-gradient(180deg, ${resolvedColor}00, ${resolvedColor}, ${resolvedColor}00)` }} />}
+      {icon && (
+        <div className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0"
+          style={{ background: active ? `${resolvedColor}18` : 'var(--bg-surface)', border: `1px solid ${active ? `${resolvedColor}30` : 'var(--border-muted)'}`, color: active ? resolvedColor : 'var(--text-muted)' }}>
+          {icon}
+        </div>
+      )}
+      <div className="flex-1 min-w-0">
+        <div className="flex items-center gap-2 flex-wrap">
+          <p className="font-condensed text-[15px] font-bold text-text-primary leading-tight">{label}</p>
+          {badge && <span className="font-mono text-[9px] px-1.5 py-0.5 rounded-md" style={{ background: `${resolvedColor}20`, color: resolvedColor, border: `1px solid ${resolvedColor}40` }}>{badge}</span>}
+        </div>
+        <p className="font-mono text-[10px] text-text-secondary mt-0.5 leading-relaxed">{desc}</p>
       </div>
-    )}
-    <div className="flex-1 min-w-0">
-      <div className="flex items-center gap-2 flex-wrap">
-        <p className="font-condensed text-[15px] font-bold text-text-primary leading-tight">{label}</p>
-        {badge && <span className="font-mono text-[9px] px-1.5 py-0.5 rounded-md" style={{ background: `${color}20`, color, border: `1px solid ${color}40` }}>{badge}</span>}
-      </div>
-      <p className="font-mono text-[10px] text-text-secondary mt-0.5 leading-relaxed">{desc}</p>
-    </div>
-    <NeonToggle active={active} onChange={onChange} color={color} disabled={disabled} />
-  </motion.div>
-);
+      <NeonToggle active={active} onChange={onChange} color={resolvedColor} disabled={disabled} />
+    </motion.div>
+  );
+};
 
 // ─── SECTION CARD ─────────────────────────────────────────────────────────────
-const SectionCard: React.FC<{ title: string; icon: React.ReactNode; color?: string; children: React.ReactNode; }> = ({ title, icon, color = '#CCFF00', children }) => (
-  <div className="rounded-2xl overflow-hidden" style={{ background: 'linear-gradient(135deg, var(--bg-surface) 0%, var(--bg-elevated) 100%)', border: '1px solid var(--border-muted)' }}>
-    <div className="flex items-center gap-3 px-5 py-4" style={{ borderBottom: '1px solid var(--border-muted)', background: `linear-gradient(90deg, ${color}08, transparent)` }}>
-      <div className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0" style={{ background: `${color}18`, border: `1px solid ${color}30`, color }}>{icon}</div>
-      <span className="font-display text-[15px] tracking-wider text-text-primary uppercase">{title}</span>
-      <div className="flex-1" />
-      <div className="flex gap-1">{[0,1,2].map(i => <div key={i} className="w-1 h-1 rounded-full" style={{ background: `${color}${40 + i * 20}` }} />)}</div>
+const SectionCard: React.FC<{ title: string; icon: React.ReactNode; color?: string; children: React.ReactNode; }> = ({ title, icon, color = '#CCFF00', children }) => {
+  const resolvedColor = resolveColor(color);
+  return (
+    <div className="rounded-2xl overflow-hidden" style={{ background: 'linear-gradient(135deg, var(--bg-surface) 0%, var(--bg-elevated) 100%)', border: '1px solid var(--border-muted)' }}>
+      <div className="flex items-center gap-3 px-5 py-4" style={{ borderBottom: '1px solid var(--border-muted)', background: `linear-gradient(90deg, ${resolvedColor}08, transparent)` }}>
+        <div className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0" style={{ background: `${resolvedColor}18`, border: `1px solid ${resolvedColor}30`, color: resolvedColor }}>{icon}</div>
+        <span className="font-display text-[15px] tracking-wider text-text-primary uppercase">{title}</span>
+        <div className="flex-1" />
+        <div className="flex gap-1">{[0,1,2].map(i => <div key={i} className="w-1 h-1 rounded-full" style={{ background: `${resolvedColor}${40 + i * 20}` }} />)}</div>
+      </div>
+      <div className="p-4 space-y-3">{children}</div>
     </div>
-    <div className="p-4 space-y-3">{children}</div>
-  </div>
-);
+  );
+};
 
 // ─── AI CONNECTION STATUS PANEL ───────────────────────────────────────────────
 type ConnStatus = 'idle' | 'testing' | 'ok' | 'error';
@@ -208,6 +224,9 @@ export const SettingsPage: React.FC = () => {
   const { theme, setTheme } = useThemeStore();
   const aiSettings = useAISettingsStore();
 
+  const isLight = theme === 'light' || (theme === 'system' && !window.matchMedia('(prefers-color-scheme: dark)').matches);
+  const voltColor = isLight ? '#2D7A1F' : '#CCFF00';
+
   const [activeTab, setActiveTab] = useState('general');
 
   // Non-AI local state
@@ -227,7 +246,7 @@ export const SettingsPage: React.FC = () => {
   };
 
   const TABS = [
-    { id: 'general',       label: 'General',     icon: SettingsIcon, color: '#CCFF00' },
+    { id: 'general',       label: 'General',     icon: SettingsIcon, color: voltColor },
     { id: 'account',       label: 'Account',      icon: User,         color: '#06b6d4' },
     { id: 'privacy',       label: 'Privacy',       icon: Shield,       color: '#f97316' },
     { id: 'notifications', label: 'Notifs',        icon: Bell,         color: '#a855f7' },
@@ -250,8 +269,8 @@ export const SettingsPage: React.FC = () => {
 
         <div className="flex-1 flex items-center gap-3 px-4 py-3 rounded-2xl relative overflow-hidden"
           style={{ background: 'linear-gradient(135deg, var(--bg-surface), var(--bg-elevated))', border: '1px solid var(--border-muted)' }}>
-          <div className="absolute top-0 right-0 w-16 h-16 opacity-20" style={{ background: 'radial-gradient(circle at top right, #CCFF00, transparent)' }} />
-          <div className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0" style={{ background: '#CCFF0018', border: '1px solid #CCFF0030' }}>
+          <div className="absolute top-0 right-0 w-16 h-16 opacity-20" style={{ background: `radial-gradient(circle at top right, ${voltColor}, transparent)` }} />
+          <div className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0" style={{ background: `${voltColor}18`, border: `1px solid ${voltColor}30` }}>
             <SettingsIcon size={18} className="text-volt" />
           </div>
           <div>
@@ -327,7 +346,7 @@ export const SettingsPage: React.FC = () => {
             {/* ── GENERAL ── */}
             {activeTab === 'general' && (
               <motion.div key="general" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }} transition={{ duration: 0.18 }} className="space-y-4">
-                <SectionCard title="Appearance" icon={<Sun size={15} />} color="#CCFF00">
+                <SectionCard title="Appearance" icon={<Sun size={15} />} color={voltColor}>
                   <div className="space-y-3">
                     <p className="font-mono text-[10px] text-text-muted uppercase tracking-widest">THEME MODE</p>
                     <div className="grid grid-cols-3 gap-2">
@@ -337,8 +356,8 @@ export const SettingsPage: React.FC = () => {
                           <motion.button key={t.id} whileTap={{ scale: 0.95 }}
                             onClick={e => setTheme(t.id as any, { x: e.clientX, y: e.clientY })}
                             className="flex flex-col items-center gap-2 py-3 px-2 rounded-xl transition-all duration-200 relative overflow-hidden"
-                            style={{ background: isSel ? '#CCFF0014' : 'var(--bg-surface)', border: `1px solid ${isSel ? '#CCFF0050' : 'var(--border-muted)'}`, color: isSel ? '#CCFF00' : 'var(--text-secondary)', boxShadow: isSel ? '0 0 16px #CCFF0025' : 'none' }}>
-                            {isSel && <div className="absolute top-0 left-0 right-0 h-[2px]" style={{ background: 'linear-gradient(90deg, transparent, #CCFF00, transparent)' }} />}
+                            style={{ background: isSel ? `${voltColor}14` : 'var(--bg-surface)', border: `1px solid ${isSel ? voltColor + '50' : 'var(--border-muted)'}`, color: isSel ? voltColor : 'var(--text-secondary)', boxShadow: isSel ? `0 0 16px ${voltColor}25` : 'none' }}>
+                            {isSel && <div className="absolute top-0 left-0 right-0 h-[2px]" style={{ background: `linear-gradient(90deg, transparent, ${voltColor}, transparent)` }} />}
                             <Icon size={18} />
                             <span className="font-mono text-[11px] font-bold">{t.label}</span>
                           </motion.button>
@@ -348,7 +367,7 @@ export const SettingsPage: React.FC = () => {
                   </div>
                 </SectionCard>
 
-                <SectionCard title="Nearby Search Radius" icon={<MapPin size={15} />} color="#CCFF00">
+                <SectionCard title="Nearby Search Radius" icon={<MapPin size={15} />} color={voltColor}>
                   <div className="space-y-4">
                     <p className="font-mono text-[10px] text-text-muted uppercase tracking-widest">PROXIMITY THRESHOLD</p>
                     <div className="grid grid-cols-5 gap-2">
@@ -362,12 +381,12 @@ export const SettingsPage: React.FC = () => {
                             }}
                             className="flex flex-col items-center justify-center py-2.5 rounded-xl transition-all duration-200 relative overflow-hidden"
                             style={{
-                              background: isSel ? '#CCFF0014' : 'var(--bg-surface)',
-                              border: `1px solid ${isSel ? '#CCFF0050' : 'var(--border-muted)'}`,
-                              color: isSel ? '#CCFF00' : 'var(--text-secondary)',
-                              boxShadow: isSel ? '0 0 16px #CCFF0025' : 'none'
+                              background: isSel ? `${voltColor}14` : 'var(--bg-surface)',
+                              border: `1px solid ${isSel ? voltColor + '50' : 'var(--border-muted)'}`,
+                              color: isSel ? voltColor : 'var(--text-secondary)',
+                              boxShadow: isSel ? `0 0 16px ${voltColor}25` : 'none'
                             }}>
-                            {isSel && <div className="absolute top-0 left-0 right-0 h-[2px]" style={{ background: 'linear-gradient(90deg, transparent, #CCFF00, transparent)' }} />}
+                            {isSel && <div className="absolute top-0 left-0 right-0 h-[2px]" style={{ background: `linear-gradient(90deg, transparent, ${voltColor}, transparent)` }} />}
                             <span className="font-display text-[15px] font-bold">{r}</span>
                             <span className="font-mono text-[8px] text-text-muted">KM</span>
                           </motion.button>
@@ -380,12 +399,12 @@ export const SettingsPage: React.FC = () => {
                             onClick={() => aiSettings.setIsCustomRadius(true)}
                             className="flex flex-col items-center justify-center py-2.5 rounded-xl transition-all duration-200 relative overflow-hidden"
                             style={{
-                              background: isSel ? '#CCFF0014' : 'var(--bg-surface)',
-                              border: `1px solid ${isSel ? '#CCFF0050' : 'var(--border-muted)'}`,
-                              color: isSel ? '#CCFF00' : 'var(--text-secondary)',
-                              boxShadow: isSel ? '0 0 16px #CCFF0025' : 'none'
+                              background: isSel ? `${voltColor}14` : 'var(--bg-surface)',
+                              border: `1px solid ${isSel ? voltColor + '50' : 'var(--border-muted)'}`,
+                              color: isSel ? voltColor : 'var(--text-secondary)',
+                              boxShadow: isSel ? `0 0 16px ${voltColor}25` : 'none'
                             }}>
-                            {isSel && <div className="absolute top-0 left-0 right-0 h-[2px]" style={{ background: 'linear-gradient(90deg, transparent, #CCFF00, transparent)' }} />}
+                            {isSel && <div className="absolute top-0 left-0 right-0 h-[2px]" style={{ background: `linear-gradient(90deg, transparent, ${voltColor}, transparent)` }} />}
                             <span className="font-display text-[13px] sm:text-[14px] font-bold">CUSTOM</span>
                             <span className="font-mono text-[8px] text-text-muted">RADIUS</span>
                           </motion.button>

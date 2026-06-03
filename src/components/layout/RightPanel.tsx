@@ -107,7 +107,7 @@ const DailyRewardsPanel: React.FC = () => {
   );
 };
 
-const EventsPanel: React.FC = () => {
+export const EventsPanel: React.FC = () => {
   const navigate = useNavigate();
   const careerStats = useCareerStats();
   const { matchHistory } = useMatchReportStore();

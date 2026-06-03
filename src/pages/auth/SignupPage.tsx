@@ -36,7 +36,7 @@ export const SignupPage: React.FC = () => {
       <div className="w-full max-w-lg">
         <motion.div initial={{ opacity: 0, y: -20 }} animate={{ opacity: 1, y: 0 }} className="text-center mb-8">
           <div className="inline-flex items-center gap-3">
-            <div className="w-10 h-10 bg-volt rounded-xl flex items-center justify-center shadow-glow-volt"><Zap size={22} className="text-black" fill="black" /></div>
+            <div className="w-10 h-10 rounded-xl overflow-hidden shadow-glow-volt"><img src="/logo.png" alt="SportiX" className="w-full h-full object-cover" /></div>
             <span className="font-display text-3xl text-volt tracking-widest">SPORTIX</span>
           </div>
         </motion.div>

@@ -2,9 +2,9 @@ import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
-  User, Users, ChevronRight,
+  ChevronRight,
   Trophy, Zap, Gift, Target, Crown, Lock, ClipboardList,
-  Calendar, History, Shield, ArrowRight, Activity, Clock, ArrowLeft
+  History, Shield, ArrowRight, Activity, Clock, ArrowLeft
 } from 'lucide-react';
 
 import { useGamificationStore, getLevelProgress, LEVELS } from '../../store/gamificationStore';
@@ -12,7 +12,6 @@ import { SemiCircleProgress, LevelBadge } from '../../components/gamification/Pr
 import { RewardCard, StreakBanner, MissionCard, BadgeCard } from '../../components/gamification/GamificationCards';
 import { BadgeIcon } from '../../components/gamification/BadgeIcon';
 import { useSquadStore } from '../../store/squadStore';
-import { useEventStore } from '../../store/eventStore';
 import { useAISettingsStore } from '../../store/aiSettingsStore';
 
 // ─── SECTION HEADER ──────────────────────────────────────────────────────────
@@ -271,15 +270,17 @@ const MissionsSection: React.FC = () => {
       />
 
       {/* Tab switcher */}
-      <div className="flex gap-2 mb-4">
-        {(['daily', 'weekly'] as const).map(t => (
-          <button key={t} onClick={() => setTab(t)}
-            className={`px-4 py-1.5 rounded-lg font-mono text-xs uppercase tracking-widest transition-all ${tab === t ? 'bg-volt text-volt-text font-bold' : 'border border-border-muted text-text-secondary hover:text-text-primary hover:border-volt/30'}`}>
-            {t}
-          </button>
-        ))}
+      <div className="flex flex-col sm:flex-row gap-3 mb-4 sm:items-center">
+        <div className="flex gap-2">
+          {(['daily', 'weekly'] as const).map(t => (
+            <button key={t} onClick={() => setTab(t)}
+              className={`px-4 py-1.5 rounded-lg font-mono text-xs uppercase tracking-widest transition-all ${tab === t ? 'bg-volt text-volt-text font-bold' : 'border border-border-muted text-text-secondary hover:text-text-primary hover:border-volt/30'}`}>
+              {t}
+            </button>
+          ))}
+        </div>
         {/* Summary pill */}
-        <div className="ml-auto flex items-center gap-2 px-3 py-1.5 rounded-lg bg-elevated border border-border-muted font-mono text-[10px] text-text-secondary">
+        <div className="sm:ml-auto flex items-center gap-2 px-3 py-1.5 rounded-lg bg-elevated border border-border-muted font-mono text-[10px] text-text-secondary self-start sm:self-auto">
           <Zap size={10} className="text-volt" />
           <span className="text-volt font-bold">+{totalReward}</span> available
         </div>
@@ -338,7 +339,7 @@ const AchievementsSection: React.FC = () => {
       />
 
       {/* Filter tabs */}
-      <div className="flex gap-2 mb-5">
+      <div className="flex flex-wrap gap-2 mb-5">
         {(['all', 'unlocked', 'locked'] as const).map(f => (
           <button key={f} onClick={() => setFilter(f)}
             className={`px-3 py-1.5 rounded-lg font-mono text-[10px] uppercase tracking-widest transition-all capitalize ${filter === f ? 'bg-amber-500/20 text-amber-400 border border-amber-500/40' : 'border border-border-muted text-text-secondary hover:text-text-primary hover:border-volt/30'}`}>
@@ -374,28 +375,14 @@ interface GeneratedHistoryItem {
   xpEarned?: number;
 }
 
-interface JoinedEventHistoryItem {
-  id: string;
-  title: string;
-  sport: string;
-  date: string;
-  venue: string;
-  location: string;
-  status: 'ready' | 'pending' | 'active' | 'completed';
-  joinedAs: string;
-  teamName?: string;
-  countdown: string;
-  xpAwarded?: number;
-}
+
 
 const RegisteredSection: React.FC = () => {
   const navigate = useNavigate();
   const { squads } = useSquadStore();
-  const { events } = useEventStore();
   const { nearbyRadius } = useAISettingsStore();
   const [selectedSquadId, setSelectedSquadId] = useState<string | null>(null);
-  const [selectedEventId, setSelectedEventId] = useState<string | null>(null);
-  const [archiveMode, setArchiveMode] = useState<'dashboard' | 'squads' | 'events'>('dashboard');
+  const [archiveMode, setArchiveMode] = useState<'dashboard' | 'squads'>('dashboard');
   const [selectedMonthFilter, setSelectedMonthFilter] = useState<string>('all');
 
   // Combine store squads (active) and mock archived squads for a complete history
@@ -505,110 +492,6 @@ const RegisteredSection: React.FC = () => {
     }
   ];
 
-  // Load actual events from useEventStore where current user is registered
-  const joinedStoreEvents = events.filter(e => e.participants.includes('cu1')).map(e => ({
-    id: e.id,
-    title: e.title,
-    sport: e.sport,
-    date: e.date,
-    venue: e.venue,
-    location: e.location,
-    status: e.status === 'upcoming' ? 'ready' as const : 'active' as const,
-    joinedAs: e.aiGenerated ? 'AI AutoSquad' : 'Solo Agent',
-    teamName: e.aiGenerated ? 'Iron Pulse FC' : undefined,
-    countdown: e.status === 'upcoming' ? '23d 15h 31m' : 'EVENT ACTIVE'
-  }));
-
-  const mockJoinedEventsHistory: JoinedEventHistoryItem[] = [
-    ...joinedStoreEvents,
-    {
-      id: 'evt-hist-3',
-      title: 'Asia Pacific Basketball Open',
-      sport: 'Basketball',
-      date: '2026-06-28',
-      venue: 'Yoyogi National Gymnasium',
-      location: 'Tokyo, Japan',
-      status: 'pending',
-      joinedAs: 'Solo Agent',
-      countdown: '36d 13h 02m'
-    },
-    {
-      id: 'evt-hist-6',
-      title: 'Euro Tennis Clash',
-      sport: 'Tennis',
-      date: '2026-06-05',
-      venue: 'Court-8 / Arena',
-      location: 'Paris, France',
-      status: 'ready',
-      joinedAs: 'Double Partner',
-      teamName: 'Spin Masters',
-      countdown: '13d 08h 12m'
-    },
-    {
-      id: 'evt-hist-2',
-      title: 'Metropolitan Cup 2026',
-      sport: 'Football',
-      date: '2026-05-20',
-      venue: 'Munich City Stadium',
-      location: 'Munich, Germany',
-      status: 'active',
-      joinedAs: 'Captain',
-      teamName: 'Iron Pulse FC',
-      countdown: 'EVENT IN PROGRESS'
-    },
-    {
-      id: 'evt-hist-4',
-      title: 'Alps Climbing Exhibition',
-      sport: 'Athletics',
-      date: '2026-05-10',
-      venue: 'Virtual Node-12 / Alps',
-      location: 'Online / Virtual',
-      status: 'completed',
-      joinedAs: 'Solo Athlete',
-      xpAwarded: 500,
-      countdown: 'COMPLETED'
-    },
-    {
-      id: 'evt-hist-5',
-      title: 'Berlin Marathon 2026',
-      sport: 'Athletics',
-      date: '2026-04-18',
-      venue: 'Brandenburg Gate',
-      location: 'Berlin, Germany',
-      status: 'completed',
-      joinedAs: 'Solo Runner',
-      xpAwarded: 400,
-      countdown: 'COMPLETED'
-    },
-    {
-      id: 'evt-hist-7',
-      title: 'Cyber Strike League',
-      sport: 'Valorant',
-      date: '2026-03-24',
-      venue: 'Cloud Arena Node-7',
-      location: 'Virtual',
-      status: 'completed',
-      joinedAs: 'Tactician',
-      teamName: 'Code Hackers',
-      xpAwarded: 1200,
-      countdown: 'COMPLETED'
-    },
-    {
-      id: 'evt-hist-8',
-      title: 'Urban Streetball Showdown',
-      sport: 'Basketball',
-      date: '2026-03-05',
-      venue: 'Kreuzberg Courts',
-      location: 'Berlin, Germany',
-      status: 'completed',
-      joinedAs: 'Point Guard',
-      teamName: 'Volt Ballers',
-      xpAwarded: 750,
-      countdown: 'COMPLETED'
-    }
-  ];
-
-  // Helper to group by month
   interface GroupedItems<T> {
     monthKey: string;
     items: T[];
@@ -645,10 +528,7 @@ const RegisteredSection: React.FC = () => {
   };
 
   const sortedSquads = [...mockGeneratedHistory].sort((a, b) => b.date.localeCompare(a.date));
-  const sortedEvents = [...mockJoinedEventsHistory].sort((a, b) => b.date.localeCompare(a.date));
-
   const dashboardSquads = sortedSquads.slice(0, 3);
-  const dashboardEvents = sortedEvents.slice(0, 3);
 
   const renderSquadCard = (squad: GeneratedHistoryItem) => {
     const isSelected = selectedSquadId === squad.id;
@@ -660,7 +540,7 @@ const RegisteredSection: React.FC = () => {
           boxShadow: isSelected ? 'var(--shadow-hover)' : 'var(--shadow-card)',
           borderColor: isSelected ? 'var(--accent)' : 'var(--border)'
         }}
-        className={`p-5 rounded-[22px] bg-surface border transition-all duration-300 relative group cursor-pointer hover:shadow-hover hover:border-accent/30 flex flex-col justify-between ${isSelected ? 'min-h-[175px]' : 'h-[175px]'}`}
+        className={`p-5 rounded-[22px] bg-surface border transition-all duration-300 relative group cursor-pointer hover:shadow-hover hover:border-accent/30 flex flex-col justify-between min-h-[175px] h-auto`}
       >
         {/* Futuristic glowing indicator node */}
         {isSelected && (
@@ -804,243 +684,28 @@ const RegisteredSection: React.FC = () => {
     );
   };
 
-  const renderEventCard = (event: JoinedEventHistoryItem) => {
-    const isSelected = selectedEventId === event.id;
-    return (
-      <div
-        key={event.id}
-        onClick={() => setSelectedEventId(isSelected ? null : event.id)}
-        style={{ 
-          boxShadow: isSelected ? 'var(--shadow-hover)' : 'var(--shadow-card)',
-          borderColor: isSelected ? 'var(--cyan)' : 'var(--border)'
-        }}
-        className={`p-5 rounded-[22px] bg-surface border transition-all duration-300 relative group cursor-pointer hover:shadow-hover hover:border-cyan/30 flex flex-col justify-between ${isSelected ? 'min-h-[175px]' : 'h-[175px]'}`}
-      >
-        {/* Futuristic glowing indicator node */}
-        {isSelected && (
-          <div className="absolute top-3 right-3 w-1.5 h-1.5 rounded-full bg-cyan shadow-[0_0_8px_var(--cyan)] animate-pulse" />
-        )}
-
-        <div className="space-y-3 flex-1 flex flex-col justify-between">
-          {/* Card Top: Title and Badges */}
-          <div className="flex justify-between items-start gap-3">
-            <div className="space-y-1 flex-1 min-w-0">
-              <div className="flex items-center gap-2 flex-wrap">
-                <span className="font-condensed font-bold text-sm uppercase tracking-wider text-text-primary leading-none truncate block max-w-[160px]">{event.title}</span>
-                <span className="px-2 py-0.5 rounded-md font-mono text-[8px] font-semibold bg-elevated border border-border-muted text-text-secondary uppercase">
-                  {event.sport}
-                </span>
-              </div>
-              <p className="font-mono text-[9px] text-text-muted truncate">{event.venue} · {event.location}</p>
-            </div>
-            
-            <div className="text-right flex-shrink-0 flex flex-col items-end gap-1">
-              <span className={`px-2 py-0.5 rounded-md font-mono text-[8px] font-bold uppercase border ${
-                event.status === 'ready' ? 'bg-volt-dim text-volt border-volt/20' :
-                event.status === 'active' ? 'bg-danger-dim text-danger border-danger/20 animate-pulse' :
-                event.status === 'completed' ? 'bg-neutral-500/10 text-text-secondary border-neutral-500/20' :
-                'bg-warning-dim text-warning border-warning/20'
-              }`}>
-                {event.status === 'ready' ? 'READY' : event.status === 'active' ? 'LIVE' : event.status}
-              </span>
-            </div>
-          </div>
-        </div>
-
-        {/* Card Bottom: Metadata and Action Button */}
-        <div className="mt-4 pt-3 border-t border-border-muted flex items-center justify-between h-8">
-          <div className="flex items-center gap-1.5 text-text-secondary font-mono text-[10px]">
-            <Calendar size={12} className="text-cyan" />
-            <span>{event.date}</span>
-          </div>
-          
-          <div className="flex items-center gap-1 font-mono text-[10px] text-text-secondary group-hover:text-text-primary transition-colors">
-            <span>Crew: <strong className="text-text-primary font-bold">{event.joinedAs}</strong></span>
-            <ChevronRight size={12} className={`text-text-muted transition-transform duration-300 ${isSelected ? 'rotate-90 text-cyan' : ''}`} />
-          </div>
-        </div>
-
-        {/* Expandable holographic details panel */}
-        <AnimatePresence>
-          {isSelected && (
-            <motion.div
-              initial={{ height: 0, opacity: 0 }}
-              animate={{ height: 'auto', opacity: 1 }}
-              exit={{ height: 0, opacity: 0 }}
-              transition={{ duration: 0.25 }}
-              className="overflow-hidden mt-4 pt-4 border-t border-border-muted space-y-3 w-full"
-              onClick={(e) => e.stopPropagation()}
-            >
-              {/* Matched squad or registration type */}
-              {event.teamName ? (
-                <div className="p-2.5 rounded-xl bg-elevated border border-border-muted flex items-center justify-between font-mono text-[10px]">
-                  <div className="flex items-center gap-2">
-                    <Users size={12} className="text-cyan" />
-                    <div>
-                      <span className="text-text-muted block text-[8px] uppercase">DEPLOYED SQUAD</span>
-                      <span className="text-text-primary font-bold">{event.teamName}</span>
-                    </div>
-                  </div>
-                  <span className="px-1.5 py-0.5 rounded bg-volt-dim text-volt border border-volt/20 text-[8px] font-bold uppercase">
-                    Balanced
-                  </span>
-                </div>
-              ) : (
-                <div className="p-2.5 rounded-xl bg-elevated border border-border-muted flex items-center justify-between font-mono text-[10px]">
-                  <div className="flex items-center gap-2">
-                    <User size={12} className="text-warning" />
-                    <div>
-                      <span className="text-text-muted block text-[8px] uppercase">DEPLOYED SQUAD</span>
-                      <span className="text-text-primary font-bold">Solo Entry Roster</span>
-                    </div>
-                  </div>
-                  <span className="px-1.5 py-0.5 rounded bg-warning-dim text-warning border border-warning/20 text-[8px] font-bold uppercase">
-                    Pending Sync
-                  </span>
-                </div>
-              )}
-
-              {/* Countdown element */}
-              <div className="p-3 rounded-xl bg-elevated border border-border-muted flex items-center justify-between font-mono">
-                <div className="flex items-center gap-2">
-                  <Clock size={12} className="text-cyan flex-shrink-0" />
-                  <span className="text-[9px] text-text-secondary uppercase">Battle Countdown</span>
-                </div>
-                <span className="text-xs font-bold tracking-widest text-cyan font-mono" style={{ color: event.status === 'active' ? 'var(--danger)' : 'var(--cyan)' }}>
-                  {event.countdown}
-                </span>
-              </div>
-
-              {/* Event description */}
-              <div className="font-mono text-[9px] text-text-secondary leading-relaxed bg-elevated p-2.5 rounded-xl border border-border-muted">
-                <p className="text-text-muted text-[8px] uppercase tracking-wider mb-1 font-bold">REGISTRATION METRICS</p>
-                Battle lobby secure. Matches will start automatically. Tactical squad chats are synced inside the Event discussion group tab. Bring standard gear.
-              </div>
-
-              {/* Action to launch lobby */}
-              {event.status !== 'completed' && (
-                <button
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    navigate(`/events/${event.id}`);
-                  }}
-                  className="w-full py-2 bg-cyan text-cyan-text rounded-xl font-condensed font-bold text-xs uppercase tracking-wider hover:opacity-90 transition-all flex items-center justify-center gap-1.5 mt-1 shadow-sm"
-                >
-                  <span>Launch Battle Dashboard</span>
-                  <ArrowRight size={12} />
-                </button>
-              )}
-            </motion.div>
-          )}
-        </AnimatePresence>
-      </div>
-    );
-  };
-
   return (
     <div className="space-y-6">
       {archiveMode === 'dashboard' && (
-        <>
-          {/* ── Top Futuristic Telemetry Stats Grid ── */}
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
-            <div className="p-4 rounded-[20px] bg-elevated/40 border border-border-muted relative overflow-hidden group">
-              <div className="absolute top-0 right-0 w-24 h-24 bg-volt/5 blur-[30px] rounded-full pointer-events-none group-hover:bg-volt/10 transition-all" />
-              <div className="font-mono text-[9px] text-text-muted uppercase tracking-widest">System Status</div>
-              <div className="font-display text-lg text-text-primary mt-1 flex items-center gap-1.5 font-bold">
-                <span className="w-2.5 h-2.5 rounded-full bg-volt animate-ping" />
-                <span className="text-volt">OVERDRIVE</span>
-              </div>
-              <div className="font-mono text-[9px] text-text-secondary mt-1.5">AI Pulse Sync: 98.4%</div>
-            </div>
-
-            <div className="p-4 rounded-[20px] bg-elevated/40 border border-border-muted relative overflow-hidden group">
-              <div className="absolute top-0 right-0 w-24 h-24 bg-cyan/5 blur-[30px] rounded-full pointer-events-none group-hover:bg-cyan/10 transition-all" />
-              <div className="font-mono text-[9px] text-text-muted uppercase tracking-widest font-bold">Squads Balanced</div>
-              <div className="font-display text-2xl text-text-primary mt-1 font-bold">
-                <span className="text-cyan dark:text-[#00D4FF] light:text-[#008ba3]">{mockGeneratedHistory.length}</span> <span className="font-mono text-xs text-text-secondary">Tactical Units</span>
-              </div>
-              <div className="font-mono text-[9px] text-text-secondary mt-1.5">{squads.length} Active in Huddles</div>
-            </div>
-
-            <div className="p-4 rounded-[20px] bg-elevated/40 border border-border-muted relative overflow-hidden group">
-              <div className="absolute top-0 right-0 w-24 h-24 bg-amber-500/5 blur-[30px] rounded-full pointer-events-none group-hover:bg-amber-500/10 transition-all" />
-              <div className="font-mono text-[9px] text-text-muted uppercase tracking-widest font-bold">Combat Nodes</div>
-              <div className="font-display text-2xl text-text-primary mt-1 font-bold">
-                <span className="text-amber-400">{mockJoinedEventsHistory.filter(e => e.status !== 'completed').length}</span> <span className="font-mono text-xs text-text-secondary">Active Battles</span>
-              </div>
-              <div className="font-mono text-[9px] text-text-secondary mt-1.5">Next match in 23 days</div>
-            </div>
-
-            <div className="p-4 rounded-[20px] bg-elevated/40 border border-border-muted relative overflow-hidden group">
-              <div className="absolute top-0 right-0 w-24 h-24 bg-purple-500/5 blur-[30px] rounded-full pointer-events-none group-hover:bg-purple-500/10 transition-all" />
-              <div className="font-mono text-[9px] text-text-muted uppercase tracking-widest font-bold">Combat win rate</div>
-              <div className="font-display text-2xl text-text-primary mt-1 font-bold">
-                <span className="text-purple-400">74%</span> <span className="font-mono text-xs text-text-secondary">Ratio</span>
-              </div>
-              <div className="font-mono text-[9px] text-text-secondary mt-1.5">Rank: Contender II</div>
-            </div>
+        <div className="max-w-3xl mx-auto space-y-6">
+          <div className="flex items-center gap-2 mb-3">
+            <History size={16} className="text-volt" />
+            <h2 className="font-display text-base tracking-[2px] uppercase text-text-primary leading-none">AI Squad Generation Logs</h2>
           </div>
 
-          {/* ── Main Dashboard Columns ── */}
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-12 relative">
-            
-            {/* Center Separation Line */}
-            <div className="hidden lg:flex absolute left-1/2 top-0 bottom-0 -translate-x-1/2 flex-col items-center justify-between pointer-events-none py-4">
-              <div className="w-[1px] h-full bg-gradient-to-b from-transparent via-border-muted to-transparent relative">
-                <div className="absolute top-1/4 left-1/2 -translate-x-1/2 -translate-y-1/2 w-2 h-2 rounded-full bg-volt/40 border border-volt/80 animate-pulse-volt" />
-                <div className="absolute top-3/4 left-1/2 -translate-x-1/2 -translate-y-1/2 w-2 h-2 rounded-full bg-cyan/40 border border-cyan/80 animate-pulse-cyan" />
-              </div>
-            </div>
-
-            {/* Left Column: Squad Generation Logs */}
-            <div className="space-y-4 pr-0 lg:pr-6">
-              <div className="flex items-center gap-2 mb-3">
-                <History size={16} className="text-volt" />
-                <h2 className="font-display text-base tracking-[2px] uppercase text-text-primary leading-none">AI Squad Generation Logs</h2>
-              </div>
-
-              <div className="space-y-4">
-                {dashboardSquads.map(squad => renderSquadCard(squad))}
-                
-                {/* View Full History Button */}
-                <button
-                  onClick={() => { setArchiveMode('squads'); setSelectedMonthFilter('all'); }}
-                  className="w-full py-3 px-4 rounded-[16px] border border-volt/20 hover:border-volt/50 bg-volt/5 hover:bg-volt/10 transition-all duration-300 font-mono text-[11px] font-bold text-volt uppercase tracking-widest flex items-center justify-center gap-2 group hover:shadow-[0_0_15px_rgba(204,255,0,0.12)]"
-                >
-                  <span>View Full Squad Generation History</span>
-                  <ArrowRight size={14} className="group-hover:translate-x-0.5 transition-transform" />
-                </button>
-              </div>
-            </div>
-
-            {/* Right Column: Joined Event Registrations */}
-            <div className="space-y-4 pl-0 lg:pl-6 relative">
-              {/* Mobile separating line */}
-              <div className="block lg:hidden my-8 relative">
-                <div className="h-[1px] w-full bg-gradient-to-r from-transparent via-border-muted to-transparent" />
-                <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-2 h-2 rounded-full bg-cyan/40 border border-cyan/80" />
-              </div>
-
-              <div className="flex items-center gap-2 mb-3">
-                <Calendar size={16} className="text-cyan" />
-                <h2 className="font-display text-base tracking-[2px] uppercase text-text-primary leading-none">Joined Battle Logs</h2>
-              </div>
-
-              <div className="space-y-4">
-                {dashboardEvents.map(event => renderEventCard(event))}
-
-                {/* View Full History Button */}
-                <button
-                  onClick={() => { setArchiveMode('events'); setSelectedMonthFilter('all'); }}
-                  className="w-full py-3 px-4 rounded-[16px] border border-cyan/20 hover:border-cyan/50 bg-cyan/5 hover:bg-cyan/10 transition-all duration-300 font-mono text-[11px] font-bold text-cyan uppercase tracking-widest flex items-center justify-center gap-2 group hover:shadow-[0_0_15px_rgba(0,212,255,0.12)]"
-                >
-                  <span>View Full Joined Battle History</span>
-                  <ArrowRight size={14} className="group-hover:translate-x-0.5 transition-transform" />
-                </button>
-              </div>
-            </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            {dashboardSquads.map(squad => renderSquadCard(squad))}
           </div>
-        </>
+          
+          {/* View Full History Button */}
+          <button
+            onClick={() => { setArchiveMode('squads'); setSelectedMonthFilter('all'); }}
+            className="w-full py-3 px-4 rounded-[16px] border border-volt/20 hover:border-volt/50 bg-volt/5 hover:bg-volt/10 transition-all duration-300 font-mono text-[11px] font-bold text-volt uppercase tracking-widest flex items-center justify-center gap-2 group hover:shadow-[0_0_15px_rgba(204,255,0,0.12)]"
+          >
+            <span>View Full Squad Generation History</span>
+            <ArrowRight size={14} className="group-hover:translate-x-0.5 transition-transform" />
+          </button>
+        </div>
       )}
 
       {archiveMode === 'squads' && (
@@ -1075,16 +740,16 @@ const RegisteredSection: React.FC = () => {
                 <span className="text-sm font-bold text-text-primary mt-0.5 block">{mockGeneratedHistory.length}</span>
               </div>
               <div className="px-4 py-2 bg-surface border border-border-muted/50 rounded-xl text-center min-w-[80px] shadow-sm">
-                <span className="text-text-muted block uppercase text-[8px] font-bold">AVG FIT</span>
                 <span className="text-sm font-bold text-volt mt-0.5 block">
                   {Math.round(mockGeneratedHistory.reduce((acc, cur) => acc + cur.compatibility, 0) / mockGeneratedHistory.length)}%
                 </span>
+                <span className="text-text-muted block uppercase text-[8px] font-bold">AVG FIT</span>
               </div>
               <div className="px-4 py-2 bg-surface border border-border-muted/50 rounded-xl text-center min-w-[80px] shadow-sm">
-                <span className="text-text-muted block uppercase text-[8px] font-bold">SUCCESS</span>
                 <span className="text-sm font-bold text-cyan mt-0.5 block">
                   {mockGeneratedHistory.filter(s => s.status === 'completed' || s.status === 'active').length}
                 </span>
+                <span className="text-text-muted block uppercase text-[8px] font-bold">SUCCESS</span>
               </div>
             </div>
           </div>
@@ -1094,12 +759,12 @@ const RegisteredSection: React.FC = () => {
             
             {/* Left Column: Month Filter Navigation */}
             <div className="lg:col-span-3">
-              <div className="sticky top-24 space-y-3">
+              <div className="lg:sticky lg:top-24 space-y-3">
                 <div className="font-mono text-[9px] text-text-muted uppercase tracking-widest font-bold px-1">Filter Timeline</div>
                 <div className="flex flex-row lg:flex-col gap-2 overflow-x-auto pb-2 lg:pb-0 scrollbar-none" style={{ scrollbarWidth: 'none' }}>
                   <button
                     onClick={() => setSelectedMonthFilter('all')}
-                    className={`px-3 py-2.5 rounded-xl text-left font-mono text-[10px] font-bold uppercase tracking-wider transition-all flex items-center justify-between w-full flex-shrink-0 lg:flex-shrink-1 border ${
+                    className={`px-3 py-2.5 rounded-xl text-left font-mono text-[10px] font-bold uppercase tracking-wider transition-all flex items-center justify-between w-auto lg:w-full min-w-[110px] lg:min-w-0 flex-shrink-0 lg:flex-shrink-1 border ${
                       selectedMonthFilter === 'all'
                         ? 'bg-volt border-volt text-volt-text shadow-sm'
                         : 'border-border-muted bg-surface text-text-secondary hover:text-text-primary hover:border-volt/30'
@@ -1115,7 +780,7 @@ const RegisteredSection: React.FC = () => {
                     <button
                       key={group.monthKey}
                       onClick={() => setSelectedMonthFilter(group.monthKey)}
-                      className={`px-3 py-2.5 rounded-xl text-left font-mono text-[10px] font-bold uppercase tracking-wider transition-all flex items-center justify-between w-full flex-shrink-0 lg:flex-shrink-1 border ${
+                      className={`px-3 py-2.5 rounded-xl text-left font-mono text-[10px] font-bold uppercase tracking-wider transition-all flex items-center justify-between w-auto lg:w-full min-w-[110px] lg:min-w-0 flex-shrink-0 lg:flex-shrink-1 border ${
                         selectedMonthFilter === group.monthKey
                           ? 'bg-volt border-volt text-volt-text shadow-sm'
                           : 'border-border-muted bg-surface text-text-secondary hover:text-text-primary hover:border-volt/30'
@@ -1162,135 +827,6 @@ const RegisteredSection: React.FC = () => {
                           
                           {/* Card */}
                           {renderSquadCard(squad)}
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                ))}
-            </div>
-          </div>
-        </div>
-      )}
-
-      {archiveMode === 'events' && (
-        <div className="space-y-6 animate-rise">
-          {/* Header */}
-          <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4 p-6 rounded-[24px] border border-border-muted bg-surface/60 backdrop-blur-md relative overflow-hidden shadow-card">
-            <div className="absolute top-0 right-0 w-64 h-64 bg-cyan/5 blur-[50px] rounded-full pointer-events-none" />
-            
-            <div className="flex items-center gap-4">
-              <button
-                onClick={() => setArchiveMode('dashboard')}
-                className="p-3 rounded-xl border border-border-muted bg-surface hover:border-cyan/40 hover:bg-elevated transition-all text-text-secondary hover:text-text-primary flex items-center justify-center"
-                title="Back to Dashboard"
-              >
-                <ArrowLeft size={16} />
-              </button>
-              <div>
-                <div className="flex items-center gap-2">
-                  <h2 className="font-display text-2xl text-text-primary tracking-[2px] uppercase leading-none">Joined Battle History</h2>
-                  <span className="px-2 py-0.5 rounded-full font-mono text-[9px] font-bold bg-cyan/10 text-cyan border border-cyan/20 uppercase">
-                    Engagement Record
-                  </span>
-                </div>
-                <p className="font-mono text-[10px] text-text-secondary mt-1">Detailed history logs of all registered events and battles</p>
-              </div>
-            </div>
-
-            {/* Archive stats */}
-            <div className="flex gap-3 font-mono text-[10px]">
-              <div className="px-4 py-2 bg-surface border border-border-muted/50 rounded-xl text-center min-w-[80px] shadow-sm">
-                <span className="text-text-muted block uppercase text-[8px] font-bold">TOTAL</span>
-                <span className="text-sm font-bold text-text-primary mt-0.5 block">{mockJoinedEventsHistory.length}</span>
-              </div>
-              <div className="px-4 py-2 bg-surface border border-border-muted/50 rounded-xl text-center min-w-[80px] shadow-sm">
-                <span className="text-text-muted block uppercase text-[8px] font-bold">LIVE BATTLES</span>
-                <span className="text-sm font-bold text-red-500 mt-0.5 block">
-                  {mockJoinedEventsHistory.filter(e => e.status === 'active').length}
-                </span>
-              </div>
-              <div className="px-4 py-2 bg-surface border border-border-muted/50 rounded-xl text-center min-w-[80px] shadow-sm">
-                <span className="text-text-muted block uppercase text-[8px] font-bold">COMPLETED</span>
-                <span className="text-sm font-bold text-cyan mt-0.5 block">
-                  {mockJoinedEventsHistory.filter(e => e.status === 'completed').length}
-                </span>
-              </div>
-            </div>
-          </div>
-
-          {/* Interactive Layout with Month Filter Sidebar */}
-          <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 mt-6">
-            
-            {/* Left Column: Month Filter Navigation */}
-            <div className="lg:col-span-3">
-              <div className="sticky top-24 space-y-3">
-                <div className="font-mono text-[9px] text-text-muted uppercase tracking-widest font-bold px-1">Filter Timeline</div>
-                <div className="flex flex-row lg:flex-col gap-2 overflow-x-auto pb-2 lg:pb-0 scrollbar-none" style={{ scrollbarWidth: 'none' }}>
-                  <button
-                    onClick={() => setSelectedMonthFilter('all')}
-                    className={`px-3 py-2.5 rounded-xl text-left font-mono text-[10px] font-bold uppercase tracking-wider transition-all flex items-center justify-between w-full flex-shrink-0 lg:flex-shrink-1 border ${
-                      selectedMonthFilter === 'all'
-                        ? 'bg-cyan border-cyan text-cyan-text shadow-sm'
-                        : 'border-border-muted bg-surface text-text-secondary hover:text-text-primary hover:border-cyan/30'
-                    }`}
-                  >
-                    <span>ALL TIMELINE</span>
-                    <span className={`px-2 py-0.5 rounded text-[8px] font-mono ${selectedMonthFilter === 'all' ? 'bg-cyan-text/10 text-cyan-text' : 'bg-base text-text-muted border border-border-muted/30'}`}>
-                      {mockJoinedEventsHistory.length}
-                    </span>
-                  </button>
-
-                  {getSortedMonthGroups(mockJoinedEventsHistory).map(group => (
-                    <button
-                      key={group.monthKey}
-                      onClick={() => setSelectedMonthFilter(group.monthKey)}
-                      className={`px-3 py-2.5 rounded-xl text-left font-mono text-[10px] font-bold uppercase tracking-wider transition-all flex items-center justify-between w-full flex-shrink-0 lg:flex-shrink-1 border ${
-                        selectedMonthFilter === group.monthKey
-                          ? 'bg-cyan border-cyan text-cyan-text shadow-sm'
-                          : 'border-border-muted bg-surface text-text-secondary hover:text-text-primary hover:border-cyan/30'
-                      }`}
-                    >
-                      <span>{group.monthKey}</span>
-                      <span className={`px-2 py-0.5 rounded text-[8px] font-mono ${selectedMonthFilter === group.monthKey ? 'bg-cyan-text/10 text-cyan-text' : 'bg-base text-text-muted border border-border-muted/30'}`}>
-                        {group.items.length}
-                      </span>
-                    </button>
-                  ))}
-                </div>
-              </div>
-            </div>
-
-            {/* Right Column: Month Timeline list */}
-            <div className="lg:col-span-9 space-y-8">
-              {getSortedMonthGroups(mockJoinedEventsHistory)
-                .filter(group => selectedMonthFilter === 'all' || group.monthKey === selectedMonthFilter)
-                .map(group => (
-                  <div key={group.monthKey} className="space-y-4">
-                    {/* Month Header Banner */}
-                    <div className="flex items-center gap-3">
-                      <span className="font-mono text-xs font-black tracking-widest text-cyan uppercase bg-cyan/10 px-3 py-1.5 rounded-lg border border-cyan/20">
-                        {group.monthKey}
-                      </span>
-                      <div className="h-[1px] flex-1 bg-gradient-to-r from-cyan/20 via-cyan/5 to-transparent" />
-                      <span className="font-mono text-[9px] text-text-muted uppercase tracking-wider">
-                        {group.items.length} {group.items.length === 1 ? 'Event' : 'Events'}
-                      </span>
-                    </div>
-                    
-                    {/* Interactive Vertical Timeline list */}
-                    <div className="relative border-l border-border-muted/40 ml-4 pl-8 space-y-6 py-2">
-                      {group.items.map((event, idx) => (
-                        <div key={event.id} className="relative">
-                          {/* Chrono timeline node */}
-                          <div className="absolute -left-10 top-6 w-4 h-4 rounded-full border border-cyan bg-surface flex items-center justify-center shadow-sm">
-                            <div className="w-1.5 h-1.5 rounded-full bg-cyan" />
-                            {idx === 0 && selectedMonthFilter === 'all' && (
-                              <div className="absolute inset-0 rounded-full animate-ping-slow bg-cyan opacity-25" />
-                            )}
-                          </div>
-                          
-                          {/* Card */}
-                          {renderEventCard(event)}
                         </div>
                       ))}
                     </div>

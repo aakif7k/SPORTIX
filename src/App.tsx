@@ -2,6 +2,7 @@ import React from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { AnimatePresence } from 'framer-motion';
 import { useAuthStore } from './store/authStore';
+import { AppLoadingScreen } from './components/layout/AppLoadingScreen';
 
 // Layouts
 import { AppLayout } from './layouts/AppLayout';
@@ -48,7 +49,8 @@ import { TournamentHub } from './pages/pulse/TournamentHub';
 
 // Auth Guard
 const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const { isAuthenticated } = useAuthStore();
+  const { isAuthenticated, authLoading } = useAuthStore();
+  if (authLoading) return <AppLoadingScreen />;
   return isAuthenticated ? <>{children}</> : <Navigate to="/login" replace />;
 };
 
