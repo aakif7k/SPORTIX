@@ -1,8 +1,6 @@
 import React from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { AnimatePresence } from 'framer-motion';
-import { useAuthStore } from './store/authStore';
-import { AppLoadingScreen } from './components/layout/AppLoadingScreen';
 
 // Layouts
 import { AppLayout } from './layouts/AppLayout';
@@ -12,6 +10,7 @@ import { LandingPage } from './pages/auth/LandingPage';
 import { LoginPage } from './pages/auth/LoginPage';
 import { SignupPage } from './pages/auth/SignupPage';
 import { OnboardingPage } from './pages/auth/OnboardingPage';
+import { ForgotPasswordPage } from './pages/auth/ForgotPasswordPage';
 
 // App Pages
 import { HomeFeed } from './pages/feed/HomeFeed';
@@ -47,12 +46,8 @@ import { PostMatchReview } from './pages/pulse/PostMatchReview';
 import { ChemistryDashboard } from './pages/pulse/ChemistryDashboard';
 import { TournamentHub } from './pages/pulse/TournamentHub';
 
-// Auth Guard
-const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const { isAuthenticated, authLoading } = useAuthStore();
-  if (authLoading) return <AppLoadingScreen />;
-  return isAuthenticated ? <>{children}</> : <Navigate to="/login" replace />;
-};
+// Auth Guards
+import { ProtectedRoute, PublicRoute } from './components/ProtectedRoute';
 
 const App: React.FC = () => {
   return (
@@ -61,9 +56,10 @@ const App: React.FC = () => {
         <Routes>
           {/* Public */}
           <Route path="/" element={<LandingPage />} />
-          <Route path="/login" element={<LoginPage />} />
-          <Route path="/signup" element={<SignupPage />} />
-          <Route path="/onboarding" element={<OnboardingPage />} />
+          <Route path="/login" element={<PublicRoute><LoginPage /></PublicRoute>} />
+          <Route path="/signup" element={<PublicRoute><SignupPage /></PublicRoute>} />
+          <Route path="/onboarding" element={<PublicRoute><OnboardingPage /></PublicRoute>} />
+          <Route path="/forgot-password" element={<PublicRoute><ForgotPasswordPage /></PublicRoute>} />
 
           {/* Protected App */}
           <Route path="/app" element={<ProtectedRoute><AppLayout /></ProtectedRoute>}>
@@ -104,6 +100,14 @@ const App: React.FC = () => {
             <Route path="tournaments" element={<TournamentHub />} />
           </Route>
 
+          {/* Short redirect routes */}
+          <Route path="/home" element={<ProtectedRoute><Navigate to="/app/feed" replace /></ProtectedRoute>} />
+          <Route path="/profile" element={<ProtectedRoute><Navigate to="/app/profile/me" replace /></ProtectedRoute>} />
+          <Route path="/clashhub" element={<ProtectedRoute><Navigate to="/app/events" replace /></ProtectedRoute>} />
+          <Route path="/autosquad" element={<ProtectedRoute><Navigate to="/pulse/matchmaking" replace /></ProtectedRoute>} />
+          <Route path="/messages" element={<ProtectedRoute><Navigate to="/app/messages" replace /></ProtectedRoute>} />
+          <Route path="/settings" element={<ProtectedRoute><Navigate to="/app/settings" replace /></ProtectedRoute>} />
+
           {/* Fallback */}
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
@@ -113,3 +117,4 @@ const App: React.FC = () => {
 };
 
 export default App;
+

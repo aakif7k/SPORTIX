@@ -52,6 +52,7 @@ export interface User {
   level?: number;
   createdAt: string;
   performanceData: PerformanceData;
+  isOnboardingComplete?: boolean;
   jersey?: string;
   position?: string;
   height?: string;

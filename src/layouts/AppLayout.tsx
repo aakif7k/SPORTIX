@@ -7,6 +7,8 @@ import { BottomNav } from '../components/layout/Navbar';
 import { RightPanel } from '../components/layout/RightPanel';
 import { useAuthStore } from '../store/authStore';
 import { LogOut } from 'lucide-react';
+import { useAuth } from '@/context/AuthContext';
+import toast from 'react-hot-toast';
 
 const pageVariants = {
   initial: { opacity: 0, y: 12 },
@@ -19,12 +21,19 @@ export const AppLayout: React.FC = () => {
   const navigate = useNavigate();
   const isMessagesPage = location.pathname.startsWith('/app/messages');
   
-  const { showLogoutConfirm, setShowLogoutConfirm, logout } = useAuthStore();
+  const { showLogoutConfirm, setShowLogoutConfirm } = useAuthStore();
+  const { logout } = useAuth();
 
   const handleConfirmLogout = async () => {
-    await logout();
-    navigate('/login');
+    try {
+      await logout();
+      toast.success("Logged out successfully.");
+      navigate('/login');
+    } catch (err) {
+      toast.error("Failed to log out. Try again.");
+    }
   };
+
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
