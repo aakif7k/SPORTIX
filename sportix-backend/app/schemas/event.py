@@ -1,45 +1,53 @@
 from pydantic import BaseModel
-from typing import Optional, List
-from datetime import datetime
-import uuid
-from app.schemas.user import UserResponse
+from typing import Optional
+from enum import Enum
 
-class EventBase(BaseModel):
+
+class EventType(str, Enum):
+    tournament = "tournament"
+    training = "training"
+    practice = "practice"
+    community = "community"
+    friendly = "friendly"
+    league = "league"
+
+
+class EventFormat(str, Enum):
+    solo = "solo"
+    duo = "duo"
+    squad = "squad"
+    team = "team"
+    open = "open"
+
+
+class EventCreate(BaseModel):
     title: str
-    description: str
+    description: Optional[str] = None
     sport: str
-    event_type: str = "community"  # tournament | training | practice | community
-    format: str = "open"  # solo | duo | squad | open
-    date: datetime
-    venue: str
+    event_type: EventType
+    format: EventFormat = EventFormat.open
+    skill_level: str = "casual"
+    venue: Optional[str] = None
     city: str
-    max_participants: int
+    event_date: str
+    end_date: Optional[str] = None
+    registration_deadline: Optional[str] = None
+    max_participants: int = 100
+    min_participants: int = 2
+    entry_fee: float = 0.0
+    prize_pool: float = 0.0
+    rules: Optional[str] = None
+    is_ai_managed: bool = False
 
-class EventCreate(EventBase):
-    pass
 
-class EventParticipantResponse(BaseModel):
-    id: uuid.UUID
-    event_id: uuid.UUID
-    user_id: uuid.UUID
-    entry_type: str
-    squad_id: Optional[uuid.UUID] = None
-    status: str
-    joined_at: datetime
-    user: Optional[UserResponse] = None
-
-    class Config:
-        from_attributes = True
-
-class EventResponse(EventBase):
-    id: uuid.UUID
-    organizer_id: uuid.UUID
-    current_count: int
-    status: str
-    is_ai_managed: bool
-    created_at: datetime
-    organizer: Optional[UserResponse] = None
-    participants: List[EventParticipantResponse] = []
-
-    class Config:
-        from_attributes = True
+class EventUpdate(BaseModel):
+    title: Optional[str] = None
+    description: Optional[str] = None
+    venue: Optional[str] = None
+    city: Optional[str] = None
+    event_date: Optional[str] = None
+    max_participants: Optional[int] = None
+    entry_fee: Optional[float] = None
+    prize_pool: Optional[float] = None
+    rules: Optional[str] = None
+    status: Optional[str] = None

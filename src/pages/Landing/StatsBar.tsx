@@ -92,8 +92,9 @@ const StatCell: React.FC<StatCellProps> = ({ stat, triggered, index }) => {
       {/* Number */}
       <div
         style={{
-          fontFamily: "'Bebas Neue', sans-serif",
-          fontSize: 'clamp(44px, 6vw, 64px)',
+          fontFamily: "'Urbanist', sans-serif",
+          fontSize: 'clamp(36px, 5vw, 56px)',
+          fontWeight: 800,
           lineHeight: 1,
           color: '#CCFF00',
           letterSpacing: '0.02em',
@@ -107,9 +108,10 @@ const StatCell: React.FC<StatCellProps> = ({ stat, triggered, index }) => {
       {/* Label */}
       <div
         style={{
-          fontFamily: "'DM Mono', monospace",
-          fontSize: '12px',
-          color: '#666666',
+          fontFamily: "'Urbanist', sans-serif",
+          fontSize: '11px',
+          fontWeight: 600,
+          color: '#888888',
           letterSpacing: '0.14em',
           textTransform: 'uppercase',
           textAlign: 'center',

@@ -1,190 +1,168 @@
-import uuid
-from datetime import datetime
-from fastapi import HTTPException, status
-from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.future import select
-from sqlalchemy.orm import selectinload
+from appwrite.query import Query as Q
+from appwrite.id import ID
+from app.core.appwrite import db, DB_ID
+from app.core.config import settings
+from app.schemas.squad import SquadCreate, SquadUpdate, MemberAdd
+from typing import Optional
 
-from app.models.squad import Squad, SquadMember
-from app.services.chemistry_service import recalculate_squad_chemistry
-from app.services.mission_service import update_mission_progress
 
-async def create_squad_profile(
-    db: AsyncSession,
-    creator_id: uuid.UUID,
-    squad_in
-) -> Squad:
-    squad = Squad(
-        id=uuid.uuid4(),
-        name=squad_in.name,
-        sport=squad_in.sport,
-        captain_id=creator_id,
-        formation=squad_in.formation,
-        tactical_notes=squad_in.tactical_notes,
-        chemistry_score=50.0,  # Starting baseline
-        trust_index=50.0,
-        communication_score=50.0,
-        coordination_score=50.0,
-        win_count=0,
-        draw_count=0,
-        loss_count=0,
-        is_ai_generated=False,
-        created_at=datetime.utcnow(),
-        updated_at=datetime.utcnow()
+async def get_user_squads(user_id: str) -> dict:
+    # Squads where user is captain
+    owned = db.list_documents(
+        DB_ID, settings.collection_squads,
+        queries=[Q.equal("captainId", user_id), Q.order_desc("$createdAt")],
     )
-    db.add(squad)
-    await db.flush()
-    
+    # Squads where user is a member
+    memberships = db.list_documents(
+        DB_ID, settings.collection_squad_members,
+        queries=[Q.equal("userId", user_id), Q.limit(50)],
+    )
+    return {"owned": owned, "memberships": memberships}
+
+
+async def create(user_id: str, payload: SquadCreate) -> dict:
+    squad = db.create_document(
+        DB_ID, settings.collection_squads, ID.unique(),
+        data={
+            "name": payload.name,
+            "sport": payload.sport,
+            "captainId": user_id,
+            "formation": payload.formation,
+            "tacticalNotes": payload.tactical_notes,
+            "maxMembers": payload.max_members,
+            "membersCount": 1,
+            "winRate": 0.0,
+            "chemistryScore": 0.0,
+        },
+    )
     # Add creator as captain member
-    captain = SquadMember(
-        id=uuid.uuid4(),
-        squad_id=squad.id,
-        user_id=creator_id,
-        role="captain",
-        position="Any",
-        joined_at=datetime.utcnow(),
-        is_active=True
-    )
-    db.add(captain)
-    await db.flush()
-    
-    await recalculate_squad_chemistry(db, squad.id)
+    db.create_document(DB_ID, settings.collection_squad_members, ID.unique(), {
+        "squadId": squad["$id"],
+        "userId": user_id,
+        "role": "captain",
+        "position": None,
+    })
     return squad
 
-async def join_squad_group(
-    db: AsyncSession,
-    user_id: uuid.UUID,
-    squad_id: uuid.UUID,
-    position: str = "Any"
-) -> dict:
-    squad = await db.get(Squad, squad_id)
-    if not squad:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Squad not found")
-        
-    # Check if already a member
-    result = await db.execute(
-        select(SquadMember).where(
-            SquadMember.squad_id == squad_id,
-            SquadMember.user_id == user_id
-        )
-    )
-    member = result.scalar_one_or_none()
-    if member:
-        if not member.is_active:
-            member.is_active = True
-            await db.flush()
-            await recalculate_squad_chemistry(db, squad_id)
-        return {"success": True, "message": "Joined squad successfully"}
-        
-    new_member = SquadMember(
-        id=uuid.uuid4(),
-        squad_id=squad_id,
-        user_id=user_id,
-        role="member",
-        position=position,
-        joined_at=datetime.utcnow(),
-        is_active=True
-    )
-    db.add(new_member)
-    await db.flush()
-    
-    # Recalculate squad chemistry
-    await recalculate_squad_chemistry(db, squad_id)
-    
-    # Update Daily Mission Progress for joining a squad
-    await update_mission_progress(db, user_id, "join_autosquad")
-    
-    return {"success": True, "message": "Joined squad successfully"}
 
-async def leave_squad_group(db: AsyncSession, user_id: uuid.UUID, squad_id: uuid.UUID) -> dict:
-    result = await db.execute(
-        select(SquadMember).where(
-            SquadMember.squad_id == squad_id,
-            SquadMember.user_id == user_id
-        )
-    )
-    member = result.scalar_one_or_none()
-    if not member:
-        return {"success": True, "message": "Not a squad member"}
-        
-    await db.delete(member)
-    await db.flush()
-    
-    # Recalculate chemistry after departure
-    await recalculate_squad_chemistry(db, squad_id)
-    return {"success": True, "message": "Left squad successfully"}
+async def get_by_id(squad_id: str) -> dict:
+    return db.get_document(DB_ID, settings.collection_squads, squad_id)
 
-async def update_tactics(
-    db: AsyncSession,
-    user_id: uuid.UUID,
-    squad_id: uuid.UUID,
-    formation: str,
-    tactical_notes: str = None
-) -> Squad:
-    squad = await db.get(Squad, squad_id)
-    if not squad:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Squad not found")
-        
-    # Check authorization (only captain or vice-captain)
-    if squad.captain_id != user_id and squad.vice_captain_id != user_id:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Only captain or vice-captain can update tactics"
-        )
-        
-    squad.formation = formation
-    if tactical_notes is not None:
-        squad.tactical_notes = tactical_notes
-        
-    squad.updated_at = datetime.utcnow()
-    await db.flush()
-    return squad
 
-async def assign_member_role(
-    db: AsyncSession,
-    captain_id: uuid.UUID,
-    squad_id: uuid.UUID,
-    target_user_id: uuid.UUID,
-    role: str
-) -> dict:
-    squad = await db.get(Squad, squad_id)
-    if not squad:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Squad not found")
-        
-    if squad.captain_id != captain_id:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Only the squad captain can assign roles"
-        )
-        
-    result = await db.execute(
-        select(SquadMember).where(
-            SquadMember.squad_id == squad_id,
-            SquadMember.user_id == target_user_id
-        )
+async def update(squad_id: str, user_id: str, payload: SquadUpdate) -> dict:
+    doc = db.get_document(DB_ID, settings.collection_squads, squad_id)
+    if doc.get("captainId") != user_id:
+        raise PermissionError("Only the captain can update squad settings")
+    data = payload.model_dump(exclude_none=True)
+    return db.update_document(DB_ID, settings.collection_squads, squad_id, data)
+
+
+async def disband(squad_id: str, user_id: str):
+    doc = db.get_document(DB_ID, settings.collection_squads, squad_id)
+    if doc.get("captainId") != user_id:
+        raise PermissionError("Only the captain can disband the squad")
+    db.delete_document(DB_ID, settings.collection_squads, squad_id)
+
+
+async def get_members(squad_id: str) -> dict:
+    return db.list_documents(
+        DB_ID, settings.collection_squad_members,
+        queries=[Q.equal("squadId", squad_id), Q.limit(50)],
     )
-    member = result.scalar_one_or_none()
-    if not member:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Squad member not found")
-        
-    member.role = role
-    
-    # Sync with captain or vice captain properties on the Squad table
-    if role == "captain":
-        squad.captain_id = target_user_id
-        member.role = "captain"
-        # The previous captain gets demoted to member or stays
-        prev_cap_res = await db.execute(
-            select(SquadMember).where(
-                SquadMember.squad_id == squad_id,
-                SquadMember.user_id == captain_id
+
+
+async def add_member(squad_id: str, requester_id: str, payload: MemberAdd) -> dict:
+    doc = db.get_document(DB_ID, settings.collection_squads, squad_id)
+    if doc.get("captainId") != requester_id:
+        raise PermissionError("Only the captain can add members")
+    # Check not already a member
+    existing = db.list_documents(
+        DB_ID, settings.collection_squad_members,
+        queries=[Q.equal("squadId", squad_id), Q.equal("userId", payload.user_id), Q.limit(1)],
+    )
+    if existing.get("documents"):
+        raise ValueError("User is already a squad member")
+    member = db.create_document(
+        DB_ID, settings.collection_squad_members, ID.unique(),
+        data={"squadId": squad_id, "userId": payload.user_id, "role": payload.role.value, "position": payload.position},
+    )
+    db.update_document(DB_ID, settings.collection_squads, squad_id,
+                       {"membersCount": doc.get("membersCount", 0) + 1})
+    return member
+
+
+async def remove_member(squad_id: str, target_user_id: str, requester_id: str):
+    squad = db.get_document(DB_ID, settings.collection_squads, squad_id)
+    if squad.get("captainId") != requester_id and target_user_id != requester_id:
+        raise PermissionError("Only the captain can remove other members")
+    res = db.list_documents(
+        DB_ID, settings.collection_squad_members,
+        queries=[Q.equal("squadId", squad_id), Q.equal("userId", target_user_id), Q.limit(1)],
+    )
+    for doc in res.get("documents", []):
+        db.delete_document(DB_ID, settings.collection_squad_members, doc["$id"])
+    db.update_document(DB_ID, settings.collection_squads, squad_id,
+                       {"membersCount": max(0, squad.get("membersCount", 1) - 1)})
+
+
+async def update_role(squad_id: str, target_user_id: str, role: str, requester_id: str):
+    squad = db.get_document(DB_ID, settings.collection_squads, squad_id)
+    if squad.get("captainId") != requester_id:
+        raise PermissionError("Only the captain can change roles")
+    res = db.list_documents(
+        DB_ID, settings.collection_squad_members,
+        queries=[Q.equal("squadId", squad_id), Q.equal("userId", target_user_id), Q.limit(1)],
+    )
+    for doc in res.get("documents", []):
+        db.update_document(DB_ID, settings.collection_squad_members, doc["$id"], {"role": role})
+
+
+async def get_chemistry(squad_id: str) -> dict:
+    """Calculate chemistry score based on member pulse scores."""
+    members = db.list_documents(
+        DB_ID, settings.collection_squad_members,
+        queries=[Q.equal("squadId", squad_id), Q.limit(50)],
+    )
+    member_ids = [m["userId"] for m in members.get("documents", [])]
+    pulses = []
+    for uid in member_ids:
+        try:
+            res = db.list_documents(
+                DB_ID, settings.collection_pulse_scores,
+                queries=[Q.equal("userId", uid), Q.limit(1)],
             )
-        )
-        prev_cap = prev_cap_res.scalar_one_or_none()
-        if prev_cap:
-            prev_cap.role = "member"
-    elif role == "vice_captain":
-        squad.vice_captain_id = target_user_id
-        
-    await db.flush()
-    return {"success": True, "message": f"Successfully assigned role {role}"}
+            if res.get("documents"):
+                pulses.append(res["documents"][0].get("totalPulse", 100))
+        except Exception:
+            pulses.append(100.0)
+    avg_pulse = sum(pulses) / len(pulses) if pulses else 0
+    chemistry = round(min(100, avg_pulse * 0.8 + len(pulses) * 2), 1)
+    return {"chemistry_score": chemistry, "member_count": len(pulses), "avg_pulse": round(avg_pulse, 1)}
+
+
+async def get_analytics(squad_id: str) -> dict:
+    squad = db.get_document(DB_ID, settings.collection_squads, squad_id)
+    return {
+        "squad_id": squad_id,
+        "name": squad.get("name"),
+        "members_count": squad.get("membersCount", 0),
+        "win_rate": squad.get("winRate", 0),
+        "chemistry_score": squad.get("chemistryScore", 0),
+        "formation": squad.get("formation"),
+    }
+
+
+async def update_tactics(squad_id: str, user_id: str, formation: str, tactical_notes: Optional[str]) -> dict:
+    squad = db.get_document(DB_ID, settings.collection_squads, squad_id)
+    if squad.get("captainId") != user_id:
+        raise PermissionError("Only the captain can change tactics")
+    return db.update_document(DB_ID, settings.collection_squads, squad_id,
+                               {"formation": formation, "tacticalNotes": tactical_notes})
+
+
+async def vote_leadership(squad_id: str, candidate_id: str, voter_id: str, vote: str) -> dict:
+    doc = db.create_document(
+        DB_ID, settings.collection_squad_members, ID.unique(),
+        data={"squadId": squad_id, "candidateId": candidate_id, "voterId": voter_id, "vote": vote},
+    )
+    return doc

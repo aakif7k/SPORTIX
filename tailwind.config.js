@@ -51,10 +51,12 @@ export default {
         'volt-text':      'var(--volt-text)',
       },
       fontFamily: {
-        display: ['"Bebas Neue"', 'sans-serif'],
-        mono:    ['"DM Mono"', 'monospace'],
-        body:    ['"Inter"', 'sans-serif'], // Inter is the new body text
-        condensed: ['"Barlow Condensed"', 'sans-serif'], // subheadings, cards, nav
+        sans:      ['"Urbanist"', 'sans-serif'],
+        label:     ['"Urbanist"', 'sans-serif'],
+        condensed: ['"Urbanist"', 'sans-serif'],
+        body:      ['"Urbanist"', 'sans-serif'],
+        display:   ['"Urbanist"', 'sans-serif'],
+        mono:      ['"Urbanist"', 'sans-serif'],
       },
       boxShadow: {
         // Strip green glows -> map to neutral elevation system

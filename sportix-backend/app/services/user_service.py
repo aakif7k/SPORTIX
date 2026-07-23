@@ -1,109 +1,162 @@
-import uuid
-from datetime import datetime
-from fastapi import HTTPException, status
-from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.future import select
+from appwrite.query import Query as Q
+from appwrite.id import ID
+from app.core.appwrite import db, DB_ID
+from app.core.config import settings
+from app.schemas.user import UserUpdate
+from typing import Optional
 
-from app.models.user import User, Follower
-from app.models.badge import UserBadge
-from app.services.mission_service import update_mission_progress
 
-async def get_user_by_username(db: AsyncSession, username: str) -> User:
-    result = await db.execute(select(User).where(User.username == username))
-    return result.scalar_one_or_none()
+async def get_full_profile(user_id: str) -> dict:
+    try:
+        return db.get_document(DB_ID, settings.collection_users, user_id)
+    except Exception:
+        raise FileNotFoundError(f"Profile not found: {user_id}")
 
-async def get_user_profile_data(db: AsyncSession, user_id: uuid.UUID) -> dict:
-    user = await db.get(User, user_id)
-    if not user:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
-        
-    # Get level, coins, pulse score
-    await db.refresh(user, ["level", "coins", "streak", "pulse_score"])
-    
-    # Get featured badges
-    badges_result = await db.execute(
-        select(UserBadge)
-        .where(UserBadge.user_id == user_id, UserBadge.is_featured == True)
+
+async def get_by_username(username: str, viewer_id: str) -> dict:
+    res = db.list_documents(
+        DB_ID, settings.collection_users,
+        queries=[Q.equal("username", username), Q.limit(1)],
     )
-    featured_badges = badges_result.scalars().all()
-    
-    # Get follower counts
-    followers_count_res = await db.execute(
-        select(Follower).where(Follower.following_id == user_id)
-    )
-    followers_count = len(followers_count_res.scalars().all())
-    
-    following_count_res = await db.execute(
-        select(Follower).where(Follower.follower_id == user_id)
-    )
-    following_count = len(following_count_res.scalars().all())
-    
+    docs = res.get("documents", [])
+    if not docs:
+        raise FileNotFoundError(f"User @{username} not found")
+    profile = docs[0]
+    # Attach follow status
+    profile["is_following"] = _check_following(viewer_id, profile["$id"])
+    return profile
+
+
+async def update_profile(user_id: str, payload: UserUpdate) -> dict:
+    data = payload.model_dump(exclude_none=True)
+    return db.update_document(DB_ID, settings.collection_users, user_id, data)
+
+
+async def get_profile_stats(user_id: str) -> dict:
+    profile = await get_full_profile(user_id)
     return {
-        "user": user,
-        "followers_count": followers_count,
-        "following_count": following_count,
-        "featured_badges": featured_badges
+        "followers_count": profile.get("followersCount", 0),
+        "following_count": profile.get("followingCount", 0),
+        "posts_count": profile.get("postsCount", 0),
     }
 
-async def update_profile(db: AsyncSession, user_id: uuid.UUID, user_update) -> User:
-    user = await db.get(User, user_id)
-    if not user:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
-        
-    update_data = user_update.model_dump(exclude_unset=True)
-    for key, val in update_data.items():
-        setattr(user, key, val)
-        
-    user.updated_at = datetime.utcnow()
-    await db.flush()
-    return user
 
-async def follow_user(db: AsyncSession, follower_id: uuid.UUID, following_id: uuid.UUID) -> dict:
-    if follower_id == following_id:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="You cannot follow yourself")
-        
-    # Check if target user exists
-    target = await db.get(User, following_id)
-    if not target:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User to follow not found")
-        
-    # Check if already following
-    result = await db.execute(
-        select(Follower).where(
-            Follower.follower_id == follower_id,
-            Follower.following_id == following_id
-        )
-    )
-    existing = result.scalar_one_or_none()
-    if existing:
-        return {"success": True, "message": "Already following"}
-        
-    follower_rel = Follower(
-        id=uuid.uuid4(),
-        follower_id=follower_id,
-        following_id=following_id,
-        created_at=datetime.utcnow()
-    )
-    db.add(follower_rel)
-    await db.flush()
-    
-    # Update Daily Mission Progress
-    await update_mission_progress(db, follower_id, "follow_athlete")
-    
-    return {"success": True, "message": "Successfully followed athlete"}
+async def get_complete_profile(user_id: str) -> dict:
+    from app.services import pulse_service
+    profile = await get_full_profile(user_id)
+    try:
+        pulse = await pulse_service.get_pulse(user_id)
+    except Exception:
+        pulse = {}
+    try:
+        level = await pulse_service.get_level(user_id)
+    except Exception:
+        level = {}
+    profile["pulse"] = pulse
+    profile["level_data"] = level
+    return profile
 
-async def unfollow_user(db: AsyncSession, follower_id: uuid.UUID, following_id: uuid.UUID) -> dict:
-    result = await db.execute(
-        select(Follower).where(
-            Follower.follower_id == follower_id,
-            Follower.following_id == following_id
-        )
+
+async def search_users(
+    q: Optional[str] = None,
+    sport: Optional[str] = None,
+    role: Optional[str] = None,
+    experience_level: Optional[str] = None,
+    city: Optional[str] = None,
+    is_open_to_recruit: Optional[bool] = None,
+    page: int = 0,
+    limit: int = 20,
+) -> dict:
+    queries = [Q.limit(limit), Q.offset(page * limit)]
+    if q:
+        queries.append(Q.search("username", q))
+    if sport:
+        queries.append(Q.equal("sport", sport))
+    if role:
+        queries.append(Q.equal("role", role))
+    if experience_level:
+        queries.append(Q.equal("experienceLevel", experience_level))
+    if city:
+        queries.append(Q.equal("city", city))
+    if is_open_to_recruit is not None:
+        queries.append(Q.equal("isOpenToRecruit", is_open_to_recruit))
+    return db.list_documents(DB_ID, settings.collection_users, queries=queries)
+
+
+async def get_suggested(user_id: str, limit: int = 10) -> dict:
+    """Suggest users with similar sport/role that are not yet followed."""
+    return db.list_documents(
+        DB_ID, settings.collection_users,
+        queries=[Q.not_equal("$id", user_id), Q.limit(limit), Q.order_desc("followersCount")],
     )
-    follower_rel = result.scalar_one_or_none()
-    if not follower_rel:
-        return {"success": True, "message": "Not following"}
-        
-    await db.delete(follower_rel)
-    await db.flush()
-    
-    return {"success": True, "message": "Successfully unfollowed athlete"}
+
+
+async def follow(follower_id: str, target_id: str):
+    if follower_id == target_id:
+        raise ValueError("Cannot follow yourself")
+    # Create follower document
+    db.create_document(DB_ID, settings.collection_followers, ID.unique(), {
+        "followerId": follower_id,
+        "followingId": target_id,
+    })
+    # Increment counters
+    _increment_count(follower_id, "followingCount", 1)
+    _increment_count(target_id, "followersCount", 1)
+
+
+async def unfollow(follower_id: str, target_id: str):
+    res = db.list_documents(
+        DB_ID, settings.collection_followers,
+        queries=[Q.equal("followerId", follower_id), Q.equal("followingId", target_id), Q.limit(1)],
+    )
+    for doc in res.get("documents", []):
+        db.delete_document(DB_ID, settings.collection_followers, doc["$id"])
+    _increment_count(follower_id, "followingCount", -1)
+    _increment_count(target_id, "followersCount", -1)
+
+
+async def get_followers(user_id: str, page: int = 0) -> dict:
+    return db.list_documents(
+        DB_ID, settings.collection_followers,
+        queries=[Q.equal("followingId", user_id), Q.limit(20), Q.offset(page * 20)],
+    )
+
+
+async def get_following(user_id: str, page: int = 0) -> dict:
+    return db.list_documents(
+        DB_ID, settings.collection_followers,
+        queries=[Q.equal("followerId", user_id), Q.limit(20), Q.offset(page * 20)],
+    )
+
+
+async def get_settings(user_id: str) -> dict:
+    profile = await get_full_profile(user_id)
+    return {
+        "notification_prefs": profile.get("notificationPrefs", {}),
+        "privacy": profile.get("privacy", {}),
+        "sport_preferences": profile.get("sportPreferences", {}),
+    }
+
+
+async def update_settings(user_id: str, data: dict) -> dict:
+    return db.update_document(DB_ID, settings.collection_users, user_id, data)
+
+
+def _check_following(follower_id: str, target_id: str) -> bool:
+    try:
+        res = db.list_documents(
+            DB_ID, settings.collection_followers,
+            queries=[Q.equal("followerId", follower_id), Q.equal("followingId", target_id), Q.limit(1)],
+        )
+        return len(res.get("documents", [])) > 0
+    except Exception:
+        return False
+
+
+def _increment_count(user_id: str, field: str, delta: int):
+    try:
+        doc = db.get_document(DB_ID, settings.collection_users, user_id)
+        current = doc.get(field, 0)
+        db.update_document(DB_ID, settings.collection_users, user_id, {field: max(0, current + delta)})
+    except Exception:
+        pass

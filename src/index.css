@@ -142,16 +142,42 @@ html.light .text-white\/10:not(.btn-primary *, .btn-neon-volt *, [class*="bg-bla
 
 html { scroll-behavior: smooth; }
 
+/* ─── TYPOGRAPHY SYSTEM ─────────────────────────────────────────────────────
+   Urbanist → UI chrome: nav, buttons, labels, headings, badges, inputs
+   Inter    → body copy: paragraphs, descriptions, bios, long text
+   Bebas Neue → display: wordmarks, hero titles (font-display class)
+   DM Mono    → monospace: code, timestamps, stat tickers
+─────────────────────────────────────────────────────────────────────────── */
+:root {
+  --font-ui:      'Urbanist', sans-serif;
+  --font-body:    'Urbanist', sans-serif;
+  --font-display: 'Urbanist', sans-serif;
+  --font-mono:    'Urbanist', sans-serif;
+}
+
+/* ─── GLOBAL STRICT URBANIST ENFORCEMENT ─── */
+html, body, *, *::before, *::after {
+  font-family: 'Urbanist', sans-serif !important;
+}
+
 /* ─── BODY ─── */
 body {
   background-color: var(--bg-base);
   color: var(--text-primary);
-  font-family: 'Inter', sans-serif;
+  font-family: var(--font-ui) !important;
   font-size: 14px;
   line-height: 1.6;
   -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
   overflow-x: hidden;
   position: relative;
+}
+
+/* ─── BODY COPY ─── */
+p, .font-body,
+article, .description, .bio-text,
+.prose, .content-text {
+  font-family: var(--font-body) !important;
 }
 
 /* Deep space multi-layer background (dark mode only) */
@@ -373,7 +399,7 @@ html:not(.light) body::after {
     background: var(--accent);
     color: #000000;
     font-weight: 700;
-    font-family: 'Barlow Condensed', sans-serif;
+    font-family: 'Urbanist', sans-serif !important;
     letter-spacing: 0.5px;
     border: none;
     border-radius: 14px;
@@ -395,7 +421,7 @@ html:not(.light) body::after {
     background: transparent;
     color: var(--accent);
     font-weight: 700;
-    font-family: 'Barlow Condensed', sans-serif;
+    font-family: 'Urbanist', sans-serif !important;
     letter-spacing: 0.5px;
     border-radius: 14px;
     height: 48px;
@@ -446,12 +472,12 @@ html:not(.light) body::after {
   /* ══════════════════════════════════════════
      TYPOGRAPHY UTILITIES
   ══════════════════════════════════════════ */
-  .font-display { font-family: 'Bebas Neue', sans-serif; }
-  .font-mono    { font-family: 'DM Mono', monospace; }
-  .font-condensed { font-family: 'Barlow Condensed', sans-serif; }
+  .font-display { font-family: 'Urbanist', sans-serif !important; }
+  .font-mono    { font-family: 'Urbanist', sans-serif !important; }
+  .font-condensed { font-family: 'Urbanist', sans-serif !important; }
 
   .stat-label {
-    font-family: 'DM Mono', monospace;
+    font-family: 'Urbanist', sans-serif !important;
     font-size: 0.65rem;
     font-weight: 500;
     text-transform: uppercase;
@@ -460,7 +486,7 @@ html:not(.light) body::after {
   }
 
   .section-header {
-    font-family: 'Bebas Neue', sans-serif;
+    font-family: 'Urbanist', sans-serif !important;
     font-size: 13px;
     text-transform: uppercase;
     letter-spacing: 3px;
@@ -510,7 +536,7 @@ html:not(.light) body::after {
     letter-spacing: 0.08em;
     padding: 2px 8px;
     border-radius: 999px;
-    font-family: 'Space Grotesk', sans-serif;
+    font-family: 'Urbanist', sans-serif !important;
   }
   .chip-cyan {
     background: rgba(0,212,255,0.1);
@@ -521,7 +547,7 @@ html:not(.light) body::after {
     letter-spacing: 0.08em;
     padding: 2px 8px;
     border-radius: 999px;
-    font-family: 'Space Grotesk', sans-serif;
+    font-family: 'Urbanist', sans-serif !important;
   }
   .chip-plasma {
     background: rgba(191,95,255,0.1);
@@ -532,7 +558,7 @@ html:not(.light) body::after {
     letter-spacing: 0.08em;
     padding: 2px 8px;
     border-radius: 999px;
-    font-family: 'Space Grotesk', sans-serif;
+    font-family: 'Urbanist', sans-serif !important;
   }
   .chip-hot {
     background: rgba(255,59,0,0.1);
@@ -543,7 +569,7 @@ html:not(.light) body::after {
     letter-spacing: 0.08em;
     padding: 2px 8px;
     border-radius: 999px;
-    font-family: 'Space Grotesk', sans-serif;
+    font-family: 'Urbanist', sans-serif !important;
   }
 }
 
@@ -581,7 +607,7 @@ html:not(.light) body::after {
 
 /* ─── RECHARTS OVERRIDES ─── */
 .recharts-surface        { overflow: visible; }
-.recharts-legend-wrapper { font-family: 'Space Grotesk', sans-serif !important; }
+.recharts-legend-wrapper { font-family: 'Urbanist', sans-serif !important; }
 .recharts-tooltip-wrapper { z-index: 100; }
 .recharts-cartesian-grid-horizontal line,
 .recharts-cartesian-grid-vertical line { stroke: rgba(204,255,0,0.05) !important; }

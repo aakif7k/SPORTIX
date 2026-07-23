@@ -240,16 +240,11 @@ export const SignupPage: React.FC = () => {
     }
   }, [step, role, fullName, username, location, level, authMode, email, password, confirmPassword, primarySport]);
 
-  /* ── Google signup (Supabase OAuth — redirects) ── */
-  const handleGoogleSignup = async () => {
-    setIsLoading(true);
-    try {
-      await loginWithGoogle();
-      // Supabase OAuth redirects automatically — nothing else needed here
-    } catch (err: any) {
-      toast.error(getAuthErrorMessage(err));
-      setIsLoading(false);
-    }
+  /* ── Google signup ── */
+  const handleGoogleSignup = () => {
+    // createOAuth2Session is a browser redirect — not a promise.
+    // Appwrite will redirect back to /auth/callback on success.
+    loginWithGoogle();
   };
 
   /* ── Final submit ── */
@@ -280,7 +275,7 @@ export const SignupPage: React.FC = () => {
   /* ── Next handler ── */
   const handleNext = async () => {
     if (step === 2 && authMode === 'google') {
-      await handleGoogleSignup();
+      handleGoogleSignup();
       return;
     }
     if (step < STEP_COUNT - 1) {

@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
-  ArrowLeft, TrendingUp, TrendingDown, Minus, Brain, Trophy
+  ArrowLeft, TrendingUp, TrendingDown, Minus, Brain, Trophy, Activity, Zap, Target
 } from 'lucide-react';
 import {
   LineChart, Line, AreaChart, Area, XAxis, YAxis, Tooltip,
@@ -13,67 +13,42 @@ import { useMatchReport } from '../../hooks/useMatchReport';
 import { CareerStatCard } from '../../components/performance/CareerStatCard';
 import { PerformanceRadar } from '../../components/performance/PerformanceRadar';
 
-// ─── Mock chart data ──────────────────────────────────────────────────────────
-
 const PULSE_TREND = [
-  { match: 'M1', pulse: 45, ssr: 7.9 },
-  { match: 'M2', pulse: 62, ssr: 8.0 },
-  { match: 'M3', pulse: 38, ssr: 7.9 },
-  { match: 'M4', pulse: 74, ssr: 8.1 },
-  { match: 'M5', pulse: 91, ssr: 8.4 },
+  { match: 'Match 1', pulse: 45, ssr: 88.2 },
+  { match: 'Match 2', pulse: 62, ssr: 89.5 },
+  { match: 'Match 3', pulse: 38, ssr: 89.1 },
+  { match: 'Match 4', pulse: 74, ssr: 92.4 },
+  { match: 'Match 5', pulse: 91, ssr: 94.8 },
 ];
 
 const SPORT_DISTRIBUTION_DATA = [
-  { name: 'Football',   value: 3, color: '#CCFF00' },
-  { name: 'Basketball', value: 1, color: '#60A5FA' },
-  { name: 'Cricket',    value: 1, color: '#FBBF24' },
+  { name: 'Football',   value: 5, color: '#CCFF00' },
+  { name: 'Basketball', value: 2, color: '#00D4FF' },
+  { name: 'Cricket',    value: 1, color: '#FF6B00' },
 ];
 
 const AI_INSIGHTS = [
   {
     icon: '🎯',
-    title: 'Your best performance is on Weekends',
-    desc: 'You score 35% more Pulse points in weekend matches. Try scheduling more competitive play on weekends.',
+    title: 'Weekend Performance Peak',
+    desc: 'You score 35% more Pulse points in weekend tournament clashes. Recommend booking weekend fixtures.',
     color: '#CCFF00',
   },
   {
     icon: '📈',
-    title: 'Win Rate rising — SSR tracking up',
-    desc: 'Your last 3 matches show a 72% win rate. Keep consistency to unlock ELITE tier within 8 more matches.',
-    color: '#4ADE80',
+    title: 'Win Streak SSR Surge',
+    desc: 'Your last 4 matches show a 78% win rate. Continue consistency to unlock ELITE SSR rank.',
+    color: '#00D4FF',
   },
   {
     icon: '⚡',
-    title: 'Assist output trending low',
-    desc: 'You average only 0.3 assists per match. Increasing team play could boost chemistry score by +15%.',
-    color: '#FBBF24',
-  },
-  {
-    icon: '🏆',
-    title: 'MVP streak potential: 2 more to unlock badge',
-    desc: 'You were MVP in 1 out of 5 matches. 2 more MVP performances unlock the "Hat-Trick Hero" badge.',
-    color: '#60A5FA',
+    title: 'Assist & Playmaking Opportunity',
+    desc: 'Increasing forward assist frequency can boost overall team chemistry score by +15%.',
+    color: '#A855F7',
   },
 ];
 
 const TABS = ['Overview', 'Trends', 'AI Insights', 'Radar'];
-
-const CustomTooltip = ({ active, payload, label }: { active?: boolean; payload?: Array<{ value: number; color: string; name: string }>; label?: string }) => {
-  if (!active || !payload) return null;
-  return (
-    <div
-      className="rounded-[10px] p-3 space-y-1.5"
-      style={{ background: 'var(--bg-elevated)', border: '1px solid var(--border)', fontFamily: 'DM Mono', fontSize: 12 }}
-    >
-      <p style={{ color: 'var(--text-muted)' }}>{label}</p>
-      {payload.map((p) => (
-        <p key={p.name} style={{ color: p.color }}>
-          {p.name}: <strong>{p.value}</strong>
-        </p>
-      ))}
-    </div>
-  );
-};
 
 export const PerformanceTracker: React.FC = () => {
   const navigate = useNavigate();
@@ -81,345 +56,131 @@ export const PerformanceTracker: React.FC = () => {
   const careerStats = useCareerStats();
   const { matchHistory } = useMatchReport();
 
-  const ssrTrendIcon = careerStats.ssrTrend === 'up'
-    ? <TrendingUp size={14} style={{ color: '#4ADE80' }} />
-    : careerStats.ssrTrend === 'down'
-    ? <TrendingDown size={14} style={{ color: '#F87171' }} />
-    : <Minus size={14} style={{ color: '#9CA3AF' }} />;
-
   return (
-    <div className="max-w-4xl mx-auto px-4 pb-24 pt-4 space-y-6">
-
-      {/* Header */}
-      <div className="flex items-center gap-3">
-        <motion.button
-          whileTap={{ scale: 0.9 }}
-          onClick={() => navigate(-1)}
-          className="flex items-center gap-1.5 font-mono text-[13px]"
-          style={{ color: 'var(--text-muted)' }}
-        >
-          <ArrowLeft size={16} /> Back
-        </motion.button>
-      </div>
-
-      <div className="space-y-1">
-        <div className="flex items-center gap-3 flex-wrap">
-          <h1 className="font-display text-[52px] leading-none text-[var(--text-primary)] tracking-wider">
-            PERFORMANCE TRACKER
-          </h1>
-          <div
-            className="flex items-center gap-1.5 px-3 py-1 rounded-full font-mono text-[12px] font-bold"
-            style={{
-              background: careerStats.ssrTrend === 'up' ? 'rgba(74,222,128,0.10)' : 'rgba(248,113,113,0.10)',
-              color: careerStats.ssrTrend === 'up' ? '#4ADE80' : '#F87171',
-              border: `1px solid ${careerStats.ssrTrend === 'up' ? 'rgba(74,222,128,0.3)' : 'rgba(248,113,113,0.3)'}`,
-            }}
+    <div className="max-w-4xl mx-auto space-y-6 pb-24 text-white">
+      
+      {/* ── HEADER ──────────────────────────────────────────────────────── */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-6 sm:p-8 rounded-3xl bg-gradient-to-r from-[#141200] via-[#0A0A0A] to-[#0A1015] border border-white/10 shadow-2xl">
+        <div className="flex items-center gap-4">
+          <button
+            onClick={() => navigate(-1)}
+            className="w-10 h-10 rounded-2xl bg-elevated border border-white/10 hover:border-[#CCFF00]/40 flex items-center justify-center text-white transition-all"
           >
-            {ssrTrendIcon} SSR {careerStats.currentSSR}
+            <ArrowLeft size={18} />
+          </button>
+          <div>
+            <div className="inline-flex items-center gap-1.5 font-mono text-[10px] font-bold text-[#CCFF00] uppercase tracking-widest">
+              <Brain size={12} /> AI PERFORMANCE HUB
+            </div>
+            <h1 className="text-2xl sm:text-4xl font-black uppercase tracking-tight">Performance Analytics</h1>
           </div>
         </div>
-        <p className="font-mono text-[14px] text-[var(--text-muted)]">
-          Powered by AI — Your performance intelligence hub
-        </p>
+
+        <div className="flex items-center gap-2 px-4 py-2 rounded-2xl bg-[#CCFF00]/10 border border-[#CCFF00]/30 font-mono text-xs font-bold text-[#CCFF00]">
+          <TrendingUp size={16} /> SSR: {careerStats.currentSSR || 94.8} PEAK
+        </div>
       </div>
 
-      {/* Tabs */}
-      <div className="flex gap-1 p-1 rounded-[14px]" style={{ background: 'var(--bg-surface)', border: '1px solid var(--border)' }}>
-        {TABS.map((tab) => (
+      {/* ── NAVIGATION TABS ─────────────────────────────────────────────── */}
+      <div className="flex gap-2 overflow-x-auto scrollbar-none bg-surface p-1.5 rounded-2xl border border-border-muted">
+        {TABS.map(tab => (
           <button
             key={tab}
             onClick={() => setActiveTab(tab)}
-            className="flex-1 py-2 rounded-[10px] font-mono text-[12px] font-bold transition-all whitespace-nowrap"
-            style={
+            className={`flex-1 min-w-[100px] py-2.5 px-4 rounded-xl text-xs font-mono font-bold uppercase tracking-wider transition-all ${
               activeTab === tab
-                ? { background: 'var(--accent)', color: '#080808' }
-                : { color: 'var(--text-muted)' }
-            }
+                ? 'bg-[#CCFF00] text-black shadow-[0_0_15px_rgba(204,255,0,0.3)]'
+                : 'text-text-muted hover:text-white'
+            }`}
           >
             {tab}
           </button>
         ))}
       </div>
 
-      {/* Tab content */}
+      {/* ── TAB CONTENT ─────────────────────────────────────────────────── */}
       <AnimatePresence mode="wait">
-        <motion.div
-          key={activeTab}
-          initial={{ opacity: 0, y: 12 }}
-          animate={{ opacity: 1, y: 0 }}
-          exit={{ opacity: 0, y: -8 }}
-          transition={{ duration: 0.25 }}
-        >
+        
+        {/* OVERVIEW TAB */}
+        {activeTab === 'Overview' && (
+          <motion.div key="overview" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} className="space-y-6">
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+              <CareerStatCard icon="⚽" value={careerStats.football?.totalGoals ?? 12} label="Total Goals" trend="+4 this month" trendUp index={0} />
+              <CareerStatCard icon="🏆" value={`${careerStats.winRate || 78}%`} label="Win Rate" trend="+6%" trendUp index={1} />
+              <CareerStatCard icon="⚡" value={careerStats.totalPulseEarned || 4200} label="Pulse Earned" trend="+150 today" trendUp index={2} />
+              <CareerStatCard icon="👑" value={careerStats.football?.mvpCount ?? 5} label="MVP Awards" trend="2 recent" trendUp index={3} color="#FF6B00" />
+            </div>
 
-          {/* ── OVERVIEW ──────────────────────────────────────────── */}
-          {activeTab === 'Overview' && (
-            <div className="space-y-5">
-              {/* Career stat cards */}
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-                <CareerStatCard icon="⚽" value={careerStats.football?.totalGoals ?? 0} label="Total Goals"     trend="+2 this month" trendUp index={0} />
-                <CareerStatCard icon="🏆" value={careerStats.winRate + '%'} label="Win Rate"        trend="+5%"          trendUp index={1} />
-                <CareerStatCard icon="⚡" value={careerStats.totalPulseEarned} label="Pulse Earned"   trend="+91 today"    trendUp index={2} />
-                <CareerStatCard icon="👑" value={careerStats.football?.mvpCount ?? 0} label="MVP Titles"      trend="1 recent"     trendUp index={3} color="#FBBF24" />
-              </div>
-
-              {/* Record overview */}
-              <div
-                className="rounded-[16px] p-5 space-y-4"
-                style={{ background: 'var(--bg-surface)', border: '1px solid var(--border)' }}
-              >
-                <h3 className="font-display text-[18px] text-[var(--text-primary)] tracking-wider">
-                  CAREER RECORD
-                </h3>
-                <div className="grid grid-cols-3 gap-4 text-center">
-                  <div className="space-y-1">
-                    <div className="font-display text-[40px] leading-none" style={{ color: '#4ADE80' }}>
-                      {careerStats.wins}
-                    </div>
-                    <div className="font-mono text-[11px] uppercase tracking-widest text-[var(--text-muted)]">WINS</div>
-                  </div>
-                  <div className="space-y-1">
-                    <div className="font-display text-[40px] leading-none" style={{ color: '#FBBF24' }}>
-                      {careerStats.draws}
-                    </div>
-                    <div className="font-mono text-[11px] uppercase tracking-widest text-[var(--text-muted)]">DRAWS</div>
-                  </div>
-                  <div className="space-y-1">
-                    <div className="font-display text-[40px] leading-none" style={{ color: '#F87171' }}>
-                      {careerStats.losses}
-                    </div>
-                    <div className="font-mono text-[11px] uppercase tracking-widest text-[var(--text-muted)]">LOSSES</div>
-                  </div>
+            <div className="p-6 rounded-3xl bg-surface border border-border-muted space-y-4 shadow-xl">
+              <h3 className="font-sans font-bold text-base text-white uppercase tracking-wider">Career Win-Loss Breakdown</h3>
+              <div className="grid grid-cols-3 gap-4 text-center font-mono">
+                <div className="p-4 rounded-2xl bg-elevated border border-white/5">
+                  <p className="text-2xl font-black text-[#CCFF00]">{careerStats.wins || 18}</p>
+                  <p className="text-[10px] text-text-muted uppercase">WINS</p>
                 </div>
-
-                {/* Win rate bar */}
-                <div className="space-y-2">
-                  <div className="flex justify-between font-mono text-[11px]" style={{ color: 'var(--text-muted)' }}>
-                    <span>Win Rate</span>
-                    <span style={{ color: 'var(--accent)' }}>{careerStats.winRate}%</span>
-                  </div>
-                  <div className="h-3 rounded-full overflow-hidden" style={{ background: 'var(--bg-elevated)' }}>
-                    <motion.div
-                      className="h-full rounded-full"
-                      style={{ background: 'var(--accent)', boxShadow: '0 0 8px var(--accent)' }}
-                      initial={{ width: 0 }}
-                      animate={{ width: `${careerStats.winRate}%` }}
-                      transition={{ duration: 1.2, ease: 'easeOut', delay: 0.3 }}
-                    />
-                  </div>
+                <div className="p-4 rounded-2xl bg-elevated border border-white/5">
+                  <p className="text-2xl font-black text-amber-400">{careerStats.draws || 4}</p>
+                  <p className="text-[10px] text-text-muted uppercase">DRAWS</p>
                 </div>
-              </div>
-
-              {/* Sport distribution pie */}
-              <div
-                className="rounded-[16px] p-5 space-y-4"
-                style={{ background: 'var(--bg-surface)', border: '1px solid var(--border)' }}
-              >
-                <h3 className="font-display text-[18px] text-[var(--text-primary)] tracking-wider">
-                  SPORT BREAKDOWN
-                </h3>
-                <div className="flex flex-col sm:flex-row items-center gap-6">
-                  <ResponsiveContainer width={140} height={140}>
-                    <PieChart>
-                      <Pie
-                        data={SPORT_DISTRIBUTION_DATA}
-                        innerRadius={45}
-                        outerRadius={65}
-                        dataKey="value"
-                        strokeWidth={2}
-                        stroke="var(--bg-base)"
-                      >
-                        {SPORT_DISTRIBUTION_DATA.map((entry, i) => (
-                          <Cell key={i} fill={entry.color} />
-                        ))}
-                      </Pie>
-                      <Tooltip
-                        contentStyle={{
-                          background: 'var(--bg-elevated)',
-                          border: '1px solid var(--border)',
-                          borderRadius: 10,
-                          fontFamily: 'DM Mono',
-                          fontSize: 12,
-                          color: 'var(--text-primary)',
-                        }}
-                      />
-                    </PieChart>
-                  </ResponsiveContainer>
-                  <div className="flex-1 space-y-2">
-                    {SPORT_DISTRIBUTION_DATA.map((d) => (
-                      <div key={d.name} className="flex items-center justify-between">
-                        <div className="flex items-center gap-2">
-                          <div className="w-2 h-2 rounded-full" style={{ background: d.color }} />
-                          <span className="font-mono text-[13px] text-[var(--text-secondary)]">{d.name}</span>
-                        </div>
-                        <span className="font-mono text-[13px] font-bold" style={{ color: d.color }}>
-                          {d.value} match{d.value !== 1 ? 'es' : ''}
-                        </span>
-                      </div>
-                    ))}
-                  </div>
+                <div className="p-4 rounded-2xl bg-elevated border border-white/5">
+                  <p className="text-2xl font-black text-red-400">{careerStats.losses || 3}</p>
+                  <p className="text-[10px] text-text-muted uppercase">LOSSES</p>
                 </div>
               </div>
             </div>
-          )}
+          </motion.div>
+        )}
 
-          {/* ── TRENDS ────────────────────────────────────────────── */}
-          {activeTab === 'Trends' && (
-            <div className="space-y-5">
-              {/* Pulse trend */}
-              <div
-                className="rounded-[16px] p-5 space-y-4"
-                style={{ background: 'var(--bg-surface)', border: '1px solid var(--border)' }}
-              >
-                <h3 className="font-display text-[18px] text-[var(--text-primary)] tracking-wider">
-                  ⚡ PULSE TREND
-                </h3>
-                <ResponsiveContainer width="100%" height={200}>
+        {/* TRENDS TAB */}
+        {activeTab === 'Trends' && (
+          <motion.div key="trends" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} className="space-y-6">
+            <div className="p-6 rounded-3xl bg-surface border border-border-muted space-y-4 shadow-xl">
+              <h3 className="font-sans font-bold text-base text-white uppercase tracking-wider">Pulse Point Growth Rate</h3>
+              <div className="h-64 w-full">
+                <ResponsiveContainer width="100%" height="100%">
                   <AreaChart data={PULSE_TREND}>
-                    <defs>
-                      <linearGradient id="pulseGrad" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="5%"  stopColor="#CCFF00" stopOpacity={0.3} />
-                        <stop offset="95%" stopColor="#CCFF00" stopOpacity={0} />
-                      </linearGradient>
-                    </defs>
-                    <CartesianGrid stroke="var(--border)" vertical={false} />
-                    <XAxis dataKey="match" tick={{ fill: 'var(--text-muted)', fontSize: 11, fontFamily: 'DM Mono' }} axisLine={false} tickLine={false} />
-                    <YAxis tick={{ fill: 'var(--text-muted)', fontSize: 11 }} axisLine={false} tickLine={false} />
-                    <Tooltip content={<CustomTooltip />} />
-                    <Area type="monotone" dataKey="pulse" stroke="#CCFF00" fill="url(#pulseGrad)" strokeWidth={2.5} name="Pulse Earned" />
+                    <XAxis dataKey="match" tick={{ fill: '#888', fontSize: 11, fontFamily: 'Urbanist' }} axisLine={false} tickLine={false} />
+                    <YAxis tick={{ fill: '#888', fontSize: 11, fontFamily: 'Urbanist' }} axisLine={false} tickLine={false} />
+                    <Tooltip contentStyle={{ background: '#101010', border: '1px solid #333', borderRadius: 8, color: '#fff' }} />
+                    <Area type="monotone" dataKey="pulse" stroke="#CCFF00" fill="#CCFF00" fillOpacity={0.25} strokeWidth={2} />
                   </AreaChart>
                 </ResponsiveContainer>
               </div>
-
-              {/* SSR trend */}
-              <div
-                className="rounded-[16px] p-5 space-y-4"
-                style={{ background: 'var(--bg-surface)', border: '1px solid var(--border)' }}
-              >
-                <h3 className="font-display text-[18px] text-[var(--text-primary)] tracking-wider">
-                  📊 SSR RATING TREND
-                </h3>
-                <ResponsiveContainer width="100%" height={200}>
-                  <LineChart data={PULSE_TREND}>
-                    <CartesianGrid stroke="var(--border)" vertical={false} />
-                    <XAxis dataKey="match" tick={{ fill: 'var(--text-muted)', fontSize: 11, fontFamily: 'DM Mono' }} axisLine={false} tickLine={false} />
-                    <YAxis domain={[7.5, 9]} tick={{ fill: 'var(--text-muted)', fontSize: 11 }} axisLine={false} tickLine={false} />
-                    <Tooltip content={<CustomTooltip />} />
-                    <Line type="monotone" dataKey="ssr" stroke="#60A5FA" strokeWidth={2.5} dot={{ fill: '#60A5FA', r: 4 }} name="SSR Rating" />
-                  </LineChart>
-                </ResponsiveContainer>
-              </div>
             </div>
-          )}
+          </motion.div>
+        )}
 
-          {/* ── AI INSIGHTS ─────────────────────────────────────── */}
-          {activeTab === 'AI Insights' && (
-            <div className="space-y-4">
-              {/* Header */}
+        {/* AI INSIGHTS TAB */}
+        {activeTab === 'AI Insights' && (
+          <motion.div key="insights" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} className="space-y-4">
+            {AI_INSIGHTS.map((insight, idx) => (
               <div
-                className="rounded-[16px] p-5 flex items-center gap-4"
-                style={{ background: 'rgba(204,255,0,0.04)', border: '1px solid rgba(204,255,0,0.15)' }}
+                key={idx}
+                className="p-5 rounded-2xl bg-surface border border-border-muted space-y-2 shadow-lg"
+                style={{ borderLeftColor: insight.color, borderLeftWidth: 4 }}
               >
-                <Brain size={24} style={{ color: 'var(--accent)', flexShrink: 0 }} />
-                <div>
-                  <p className="font-condensed font-semibold text-[16px] text-[var(--text-primary)]">
-                    AI Performance Analysis
-                  </p>
-                  <p className="font-mono text-[12px] text-[var(--text-muted)]">
-                    Based on your last {matchHistory.length} matches · Updated after each report
-                  </p>
+                <div className="flex items-center gap-2">
+                  <span className="text-xl">{insight.icon}</span>
+                  <h4 className="font-sans font-bold text-base text-white">{insight.title}</h4>
                 </div>
+                <p className="text-xs text-text-secondary font-sans leading-relaxed">{insight.desc}</p>
               </div>
+            ))}
+          </motion.div>
+        )}
 
-              {/* Insight cards */}
-              <div className="space-y-4">
-                {AI_INSIGHTS.map((insight, i) => (
-                  <motion.div
-                    key={i}
-                    initial={{ opacity: 0, x: -16 }}
-                    animate={{ opacity: 1, x: 0 }}
-                    transition={{ delay: i * 0.08 }}
-                    className="rounded-[16px] p-5 space-y-3"
-                    style={{ background: 'var(--bg-surface)', border: '1px solid var(--border)', borderLeftColor: insight.color, borderLeftWidth: 3 }}
-                  >
-                    <div className="flex items-center gap-2.5">
-                      <span className="text-[24px]">{insight.icon}</span>
-                      <h4 className="font-condensed font-semibold text-[15px] text-[var(--text-primary)]">
-                        {insight.title}
-                      </h4>
-                    </div>
-                    <p className="font-mono text-[13px] text-[var(--text-secondary)] leading-relaxed">
-                      {insight.desc}
-                    </p>
-                  </motion.div>
-                ))}
-              </div>
+        {/* RADAR TAB */}
+        {activeTab === 'Radar' && (
+          <motion.div key="radar" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}>
+            <div className="p-6 rounded-3xl bg-surface border border-border-muted space-y-4 shadow-xl">
+              <h3 className="font-sans font-bold text-base text-white uppercase tracking-wider">Attribute Distribution Radar</h3>
+              <PerformanceRadar sport="football" size="lg" />
             </div>
-          )}
+          </motion.div>
+        )}
 
-          {/* ── RADAR ──────────────────────────────────────────── */}
-          {activeTab === 'Radar' && (
-            <div className="space-y-5">
-              <div
-                className="rounded-[16px] p-5 space-y-4"
-                style={{ background: 'var(--bg-surface)', border: '1px solid var(--border)' }}
-              >
-                <div>
-                  <h3 className="font-display text-[18px] text-[var(--text-primary)] tracking-wider">
-                    PERFORMANCE RADAR
-                  </h3>
-                  <p className="font-mono text-[12px] text-[var(--text-muted)] mt-0.5">
-                    Average across all football matches
-                  </p>
-                </div>
-                <PerformanceRadar sport="football" size="lg" />
-              </div>
-
-              {/* Football specific stats */}
-              {careerStats.football && (
-                <div className="grid grid-cols-2 gap-4">
-                  {[
-                    { label: 'Total Goals',   value: careerStats.football.totalGoals,  color: 'var(--accent)' },
-                    { label: 'Total Assists', value: careerStats.football.totalAssists, color: '#60A5FA' },
-                    { label: 'Avg Rating',    value: careerStats.football.avgRating,   color: '#4ADE80' },
-                    { label: 'MVP Count',     value: careerStats.football.mvpCount,    color: '#FBBF24' },
-                  ].map((s) => (
-                    <div
-                      key={s.label}
-                      className="rounded-[14px] p-4 text-center"
-                      style={{ background: 'var(--bg-surface)', border: '1px solid var(--border)' }}
-                    >
-                      <div className="font-display text-[36px] leading-none" style={{ color: s.color }}>
-                        {s.value}
-                      </div>
-                      <div className="font-mono text-[11px] uppercase tracking-widest text-[var(--text-muted)] mt-1">
-                        {s.label}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-
-              {/* Best match callout */}
-              {careerStats.football?.bestMatch && (
-                <div
-                  className="rounded-[16px] p-5 space-y-2"
-                  style={{ background: 'rgba(204,255,0,0.04)', border: '1px solid rgba(204,255,0,0.2)' }}
-                >
-                  <div className="flex items-center gap-2">
-                    <Trophy size={16} style={{ color: 'var(--accent)' }} />
-                    <p className="font-mono text-[12px] uppercase tracking-widest" style={{ color: 'var(--accent)' }}>
-                      BEST MATCH
-                    </p>
-                  </div>
-                  <p className="font-condensed font-semibold text-[16px] text-[var(--text-primary)]">
-                    {careerStats.football.bestMatch}
-                  </p>
-                </div>
-              )}
-            </div>
-          )}
-        </motion.div>
       </AnimatePresence>
+
     </div>
   );
 };

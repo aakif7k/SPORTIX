@@ -1,0 +1,304 @@
+import React, { useState } from 'react';
+import {
+  Heart, MessageCircle, Share2, Bookmark,
+  MoreHorizontal, MapPin, ChevronLeft, ChevronRight, Trash2,
+} from 'lucide-react';
+import { motion, AnimatePresence } from 'framer-motion';
+import type { DbPost } from '../../services/socialService';
+import { SportBadge } from '../ui/Badge';
+import { useAuth } from '@/context/AuthContext';
+
+interface PostCardProps {
+  post: DbPost;
+  onLike: (postId: string, currentlyLiked: boolean) => void;
+  onDelete?: (postId: string) => void;
+}
+
+// ─── Helpers ─────────────────────────────────────────────────────────────────
+
+function formatTimeAgo(iso: string): string {
+  const diff = Date.now() - new Date(iso).getTime();
+  const m = Math.floor(diff / 60000);
+  if (m < 1) return 'just now';
+  if (m < 60) return `${m}m`;
+  const h = Math.floor(m / 60);
+  if (h < 24) return `${h}h`;
+  const d = Math.floor(h / 24);
+  if (d < 7) return `${d}d`;
+  return new Date(iso).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
+}
+
+function formatCount(n: number): string {
+  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
+  if (n >= 1000) return `${(n / 1000).toFixed(1)}k`;
+  return n.toString();
+}
+
+// ─── Avatar with initials fallback ───────────────────────────────────────────
+const AuthorAvatar: React.FC<{ avatarUrl: string | null; name: string; size?: number }> = ({
+  avatarUrl, name, size = 36,
+}) => {
+  const [imgError, setImgError] = useState(false);
+  const initial = (name || '?').charAt(0).toUpperCase();
+
+  if (avatarUrl && !imgError) {
+    return (
+      <img
+        src={avatarUrl}
+        alt={name}
+        width={size}
+        height={size}
+        className="rounded-full object-cover border border-border-muted"
+        style={{ width: size, height: size }}
+        onError={() => setImgError(true)}
+      />
+    );
+  }
+
+  return (
+    <div
+      className="rounded-full flex items-center justify-center bg-[#1A2200] border border-[#CCFF00]/30 flex-shrink-0"
+      style={{ width: size, height: size }}
+    >
+      <span className="text-[#CCFF00] font-bold leading-none" style={{ fontSize: size * 0.45 }}>
+        {initial}
+      </span>
+    </div>
+  );
+};
+
+// ─── Media Grid ───────────────────────────────────────────────────────────────
+const MediaGrid: React.FC<{ urls: string[]; type: DbPost['media_type'] }> = ({ urls, type }) => {
+  const [activeIndex, setActiveIndex] = useState(0);
+
+  if (!urls || urls.length === 0 || type === 'none') return null;
+
+  if (type === 'video') {
+    return (
+      <div className="relative rounded-xl overflow-hidden bg-black aspect-video">
+        <video src={urls[0]} className="w-full h-full object-contain" controls muted playsInline />
+      </div>
+    );
+  }
+
+  if (urls.length === 1) {
+    return (
+      <div className="rounded-xl overflow-hidden">
+        <img src={urls[0]} alt="Post media" className="w-full max-h-96 object-cover" />
+      </div>
+    );
+  }
+
+  if (urls.length === 2) {
+    return (
+      <div className="grid grid-cols-2 gap-0.5 rounded-xl overflow-hidden">
+        {urls.map((url, i) => (
+          <img key={i} src={url} alt={`Media ${i + 1}`} className="w-full h-44 object-cover" />
+        ))}
+      </div>
+    );
+  }
+
+  if (urls.length === 3) {
+    return (
+      <div className="grid grid-cols-2 gap-0.5 rounded-xl overflow-hidden">
+        <img src={urls[0]} alt="Media 1" className="row-span-2 w-full h-56 object-cover" />
+        <img src={urls[1]} alt="Media 2" className="w-full h-28 object-cover" />
+        <img src={urls[2]} alt="Media 3" className="w-full h-28 object-cover" />
+      </div>
+    );
+  }
+
+  // 4+ images — carousel
+  return (
+    <div className="relative rounded-xl overflow-hidden">
+      <img src={urls[activeIndex]} alt={`Media ${activeIndex + 1}`} className="w-full max-h-80 object-cover" />
+      {activeIndex > 0 && (
+        <button
+          onClick={() => setActiveIndex(i => i - 1)}
+          className="absolute left-2 top-1/2 -translate-y-1/2 w-7 h-7 rounded-full bg-black/60 flex items-center justify-center text-white"
+        >
+          <ChevronLeft size={14} />
+        </button>
+      )}
+      {activeIndex < urls.length - 1 && (
+        <button
+          onClick={() => setActiveIndex(i => i + 1)}
+          className="absolute right-2 top-1/2 -translate-y-1/2 w-7 h-7 rounded-full bg-black/60 flex items-center justify-center text-white"
+        >
+          <ChevronRight size={14} />
+        </button>
+      )}
+      <div className="absolute bottom-2 left-1/2 -translate-x-1/2 flex gap-1">
+        {urls.map((_, i) => (
+          <button
+            key={i}
+            onClick={() => setActiveIndex(i)}
+            className={`w-1.5 h-1.5 rounded-full transition-colors ${i === activeIndex ? 'bg-white' : 'bg-white/40'}`}
+          />
+        ))}
+      </div>
+      <div className="absolute top-2 right-2 px-2 py-0.5 bg-black/60 rounded-full text-white text-[10px] font-mono">
+        {activeIndex + 1}/{urls.length}
+      </div>
+    </div>
+  );
+};
+
+// ─── Delete Confirm Modal ─────────────────────────────────────────────────────
+const DeleteConfirm: React.FC<{ onConfirm: () => void; onCancel: () => void }> = ({ onConfirm, onCancel }) => (
+  <div className="absolute inset-0 z-10 bg-black/80 backdrop-blur-sm flex flex-col items-center justify-center gap-3 rounded-2xl">
+    <p className="text-white font-semibold text-[14px]">Delete this post?</p>
+    <p className="text-text-secondary text-[12px]">This cannot be undone.</p>
+    <div className="flex gap-3">
+      <button
+        onClick={onCancel}
+        className="px-4 py-2 rounded-xl border border-border-muted text-text-secondary text-[13px] hover:text-white transition-colors"
+      >
+        Cancel
+      </button>
+      <button
+        onClick={onConfirm}
+        className="px-4 py-2 rounded-xl bg-red-500 text-white text-[13px] font-semibold hover:bg-red-600 transition-colors"
+      >
+        Delete
+      </button>
+    </div>
+  </div>
+);
+
+// ─── Post Card ────────────────────────────────────────────────────────────────
+export const PostCard: React.FC<PostCardProps> = ({ post, onLike, onDelete }) => {
+  const { currentUser } = useAuth();
+  const [saved, setSaved] = useState(false);
+  const [showDelete, setShowDelete] = useState(false);
+  const [showMore, setShowMore] = useState(false);
+
+  const isOwnPost = post.author_id === currentUser?.id;
+  const authorName = post.author?.full_name || 'Unknown Athlete';
+  const authorSport = post.author?.sport || '';
+  const authorAvatar = post.author?.avatar_url || null;
+
+  return (
+    <motion.div
+      layout
+      className="relative bg-surface border border-border-muted/60 rounded-2xl overflow-hidden"
+    >
+      {/* Delete confirm overlay */}
+      <AnimatePresence>
+        {showDelete && (
+          <DeleteConfirm
+            onConfirm={() => { onDelete?.(post.id); setShowDelete(false); }}
+            onCancel={() => setShowDelete(false)}
+          />
+        )}
+      </AnimatePresence>
+
+      {/* Header */}
+      <div className="flex items-center justify-between px-4 pt-4 pb-3">
+        <div className="flex items-center gap-2.5">
+          <AuthorAvatar avatarUrl={authorAvatar} name={authorName} size={36} />
+          <div>
+            <div className="flex items-center gap-1.5">
+              <span className="text-white font-semibold text-[13px] leading-tight">{authorName}</span>
+              {authorSport && <SportBadge sport={authorSport} size="xs" />}
+            </div>
+            <div className="flex items-center gap-1.5 mt-0.5">
+              {post.location_tag && (
+                <div className="flex items-center gap-0.5">
+                  <MapPin size={9} className="text-text-muted" />
+                  <span className="text-text-muted text-[10px]">{post.location_tag}</span>
+                </div>
+              )}
+              <span className="text-text-muted text-[10px]">{formatTimeAgo(post.created_at)}</span>
+            </div>
+          </div>
+        </div>
+
+        {/* More / Delete */}
+        <div className="relative">
+          <button
+            onClick={() => setShowMore(m => !m)}
+            className="text-text-muted hover:text-text-secondary p-1 transition-colors"
+          >
+            <MoreHorizontal size={16} />
+          </button>
+          <AnimatePresence>
+            {showMore && isOwnPost && (
+              <motion.div
+                initial={{ opacity: 0, scale: 0.9, y: -4 }}
+                animate={{ opacity: 1, scale: 1, y: 0 }}
+                exit={{ opacity: 0, scale: 0.9, y: -4 }}
+                className="absolute right-0 top-8 z-20 bg-elevated border border-border-muted rounded-xl shadow-xl overflow-hidden min-w-[120px]"
+              >
+                <button
+                  onClick={() => { setShowMore(false); setShowDelete(true); }}
+                  className="flex items-center gap-2 px-3 py-2.5 text-red-400 hover:bg-red-500/10 text-[13px] w-full transition-colors"
+                >
+                  <Trash2 size={13} />
+                  Delete post
+                </button>
+              </motion.div>
+            )}
+          </AnimatePresence>
+        </div>
+      </div>
+
+      {/* Content */}
+      {post.content && (
+        <div className="px-4 pb-3">
+          <p className="text-white text-[13px] leading-relaxed whitespace-pre-wrap">{post.content}</p>
+        </div>
+      )}
+
+      {/* Media */}
+      {post.media_urls && post.media_urls.length > 0 && (
+        <div className="px-4 pb-3">
+          <MediaGrid urls={post.media_urls} type={post.media_type} />
+        </div>
+      )}
+
+      {/* Sport tag */}
+      {post.sport_tag && (
+        <div className="px-4 pb-3">
+          <span className="text-[#CCFF00] text-[12px] font-medium">#{post.sport_tag}</span>
+        </div>
+      )}
+
+      {/* Divider */}
+      <div className="mx-4 border-t border-border-muted/40" />
+
+      {/* Actions */}
+      <div className="flex items-center justify-between px-4 py-3">
+        <div className="flex items-center gap-4">
+          <motion.button
+            whileTap={{ scale: 0.85 }}
+            onClick={() => onLike(post.id, post.is_liked ?? false)}
+            className={`flex items-center gap-1.5 text-[12px] font-medium transition-colors
+              ${post.is_liked ? 'text-[#ff4d6d]' : 'text-text-secondary hover:text-white'}`}
+          >
+            <Heart size={16} className={post.is_liked ? 'fill-[#ff4d6d]' : ''} />
+            <span>{formatCount(post.likes_count)}</span>
+          </motion.button>
+
+          <button className="flex items-center gap-1.5 text-text-secondary hover:text-white text-[12px] font-medium transition-colors">
+            <MessageCircle size={16} />
+            <span>{formatCount(post.comments_count)}</span>
+          </button>
+
+          <button className="flex items-center gap-1.5 text-text-secondary hover:text-white text-[12px] font-medium transition-colors">
+            <Share2 size={16} />
+          </button>
+        </div>
+
+        <motion.button
+          whileTap={{ scale: 0.85 }}
+          onClick={() => setSaved(s => !s)}
+          className={`transition-colors ${saved ? 'text-[#CCFF00]' : 'text-text-secondary hover:text-white'}`}
+        >
+          <Bookmark size={16} className={saved ? 'fill-[#CCFF00]' : ''} />
+        </motion.button>
+      </div>
+    </motion.div>
+  );
+};

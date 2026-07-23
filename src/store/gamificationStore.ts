@@ -69,6 +69,7 @@ export interface GamificationState {
   claimMissionReward: (id: string) => void;
   updateMissionProgress: (id: string, progress: number) => void;
   checkIn: () => void;
+  reset: () => void;
 }
 
 // ─── LEVEL SYSTEM ───────────────────────────────────────────────────────────
@@ -209,4 +210,15 @@ export const useGamificationStore = create<GamificationState>((set) => ({
     streakDays: state.streakDays + 1,
     currentPulse: state.currentPulse + 10,
   })),
+
+  reset: () => set({
+    currentPulse: 0,
+    totalXP: 0,
+    currentLevel: 1,
+    streakDays: 0,
+    lastCheckin: null,
+    missions: INITIAL_MISSIONS,
+    dailyRewards: INITIAL_REWARDS,
+    badges: INITIAL_BADGES,
+  }),
 }));

@@ -1,31 +1,42 @@
-from fastapi import APIRouter, Depends
-from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.future import select
-from typing import List
+from fastapi import APIRouter, Depends, Query
+from typing import Optional
+from app.core.dependencies import get_current_user
+from app.services import pulse_service
 
-from app.core.dependencies import get_db, get_current_user
-from app.models.user import User
-from app.models.pulse import PulseHistory
-from app.schemas.pulse import PulseScoreResponse, PulseHistoryResponse
-from app.services.pulse_service import get_or_create_pulse_score
+router = APIRouter()
 
-router = APIRouter(prefix="/api/pulse", tags=["pulse"])
 
-@router.get("/me", response_model=PulseScoreResponse)
-async def get_my_pulse_score(
-    current_user: User = Depends(get_current_user),
-    db: AsyncSession = Depends(get_db)
-):
-    return await get_or_create_pulse_score(db, current_user.id)
+@router.get("/me")
+async def get_my_pulse(user=Depends(get_current_user)):
+    data = await pulse_service.get_pulse(user["id"])
+    return {"success": True, "data": data}
 
-@router.get("/history", response_model=List[PulseHistoryResponse])
-async def get_my_pulse_history(
-    current_user: User = Depends(get_current_user),
-    db: AsyncSession = Depends(get_db)
-):
-    result = await db.execute(
-        select(PulseHistory)
-        .where(PulseHistory.user_id == current_user.id)
-        .order_by(PulseHistory.created_at.desc())
-    )
-    return list(result.scalars().all())
+
+@router.get("/me/history")
+async def get_pulse_history(limit: int = Query(30, le=100), user=Depends(get_current_user)):
+    data = await pulse_service.get_history(user["id"], limit)
+    return {"success": True, "data": data}
+
+
+@router.get("/me/level")
+async def get_my_level(user=Depends(get_current_user)):
+    data = await pulse_service.get_level(user["id"])
+    return {"success": True, "data": data}
+
+
+@router.get("/me/level/history")
+async def get_level_history(user=Depends(get_current_user)):
+    data = await pulse_service.get_level_history(user["id"])
+    return {"success": True, "data": data}
+
+
+@router.get("/me/ssr")
+async def get_my_ssr(sport: Optional[str] = Query(None), user=Depends(get_current_user)):
+    data = await pulse_service.get_ssr(user["id"], sport)
+    return {"success": True, "data": data}
+
+
+@router.get("/{user_id}")
+async def get_user_pulse(user_id: str, user=Depends(get_current_user)):
+    data = await pulse_service.get_pulse(user_id)
+    return {"success": True, "data": data}

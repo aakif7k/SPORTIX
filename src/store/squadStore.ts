@@ -33,6 +33,9 @@ interface SquadStoreState {
   // Media Feed actions
   addSquadPost: (squadId: string, content: string, mediaUrl?: string) => void;
   likeSquadPost: (squadId: string, postId: string, userId: string) => void;
+
+  // Session isolation
+  reset: () => void;
 }
 
 const mockAthletes: Athlete[] = [
@@ -396,13 +399,18 @@ export const useSquadStore = create<SquadStoreState>((set) => ({
   // Coordination actions
   createSquadEvent: (squadId, title, date, type) => set((state) => {
     const eventId = `ev-${Date.now()}`;
+    const user = useAuthStore.getState().user;
+    const userId = user?.id || 'auth_user';
+    const userName = user?.name || 'Athlete';
+    const userAvatar = user?.avatar || 'https://i.pravatar.cc/150?img=33';
+
     const newEvent = {
       eventId,
       title,
       date,
       type,
       status: 'pending' as const,
-      votes: { [useAuthStore.getState().user?.id || 'cu1']: 'yes' as const } // Captain auto-confirms
+      votes: { [userId]: 'yes' as const } // Captain auto-confirms
     };
 
     const updatedSquads = state.squads.map(s => {
@@ -417,9 +425,9 @@ export const useSquadStore = create<SquadStoreState>((set) => ({
 
     const newMessage: ChatMessage = {
       msgId: `c_${Date.now()}`,
-      senderId: useAuthStore.getState().user?.id || 'cu1',
-      senderName: useAuthStore.getState().user?.name || 'Alex Rivera (You)',
-      senderAvatar: useAuthStore.getState().user?.avatar || 'https://images.pexels.com/photos/1486064/pexels-photo-1486064.jpeg?cs=srgb&dl=pexels-nkhajotia-1486064.jpg&fm=jpg',
+      senderId: userId,
+      senderName: userName,
+      senderAvatar: userAvatar,
       senderRole: 'captain',
       content: `📅 ${type === 'match' ? 'Match' : 'Practice'} Scheduled: ${title} — ${new Date(date).toLocaleString([], { dateStyle: 'short', timeStyle: 'short' })}. Please cast your votes.`,
       type: 'announcement',
@@ -651,11 +659,12 @@ export const useSquadStore = create<SquadStoreState>((set) => ({
 
   // Media feed actions
   addSquadPost: (squadId, content, mediaUrl) => set((state) => {
+    const user = useAuthStore.getState().user;
     const newPost = {
       postId: `p-${Date.now()}`,
-      authorId: useAuthStore.getState().user?.id || 'cu1',
-      authorName: useAuthStore.getState().user?.name || 'Alex Rivera (You)',
-      authorAvatar: useAuthStore.getState().user?.avatar || 'https://images.pexels.com/photos/1486064/pexels-photo-1486064.jpeg?cs=srgb&dl=pexels-nkhajotia-1486064.jpg&fm=jpg',
+      authorId: user?.id || 'auth_user',
+      authorName: user?.name || 'Athlete',
+      authorAvatar: user?.avatar || 'https://i.pravatar.cc/150?img=33',
       content,
       mediaUrl,
       timestamp: new Date().toISOString(),
@@ -696,5 +705,22 @@ export const useSquadStore = create<SquadStoreState>((set) => ({
 
     saveToLocalStorage('sportix_squads', updatedSquads);
     return { squads: updatedSquads };
-  })
+  }),
+
+  reset: () => {
+    // Clear all localStorage squad keys on logout
+    localStorage.removeItem('sportix_squads');
+    localStorage.removeItem('sportix_chats');
+    localStorage.removeItem('sportix_generated_squads');
+    localStorage.removeItem('sportix_daily_gen_count');
+    localStorage.removeItem('sportix_last_gen_date');
+    set({
+      squads: [],
+      activeSquadId: null,
+      chats: {},
+      generatedSquads: [],
+      dailyGenerationsCount: 0,
+      lastGenerationDate: new Date().toISOString().split('T')[0],
+    });
+  },
 }));

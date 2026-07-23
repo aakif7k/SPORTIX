@@ -45,9 +45,9 @@ export const FinalCTA: React.FC = () => {
             <motion.div key={word}
               initial={{ opacity: 0, y: 80 }} whileInView={{ opacity: 1, y: 0 }}
               viewport={{ once: true }} transition={{ duration: 0.8, ease: [0.22, 1, 0.36, 1], delay: i * 0.12 }}>
-              <span className="block font-['Bebas_Neue'] leading-[0.9]"
+              <span className="block font-sans font-black leading-[0.95] tracking-tight uppercase"
                 style={{
-                  fontSize: 'clamp(80px,12vw,180px)',
+                  fontSize: 'clamp(52px,9vw,130px)',
                   color: i === 2 ? '#CCFF00' : '#FFFFFF',
                   textShadow: i === 2 ? '0 0 60px rgba(204,255,0,0.5)' : 'none',
                 }}>

@@ -1,48 +1,33 @@
 from pydantic import BaseModel
-from typing import Optional, List
-from datetime import datetime
-import uuid
-from app.schemas.user import UserResponse
+from typing import Optional
+from enum import Enum
 
-class SquadBase(BaseModel):
+
+class MemberRole(str, Enum):
+    captain = "captain"
+    vice_captain = "vice_captain"
+    strategist = "strategist"
+    analyst = "analyst"
+    recruiter = "recruiter"
+    member = "member"
+
+
+class SquadCreate(BaseModel):
     name: str
     sport: str
     formation: str = "4-3-3"
     tactical_notes: Optional[str] = None
+    max_members: int = 15
 
-class SquadCreate(SquadBase):
-    pass
 
-class SquadMemberResponse(BaseModel):
-    id: uuid.UUID
-    squad_id: uuid.UUID
-    user_id: uuid.UUID
-    role: str
+class SquadUpdate(BaseModel):
+    name: Optional[str] = None
+    formation: Optional[str] = None
+    tactical_notes: Optional[str] = None
+    max_members: Optional[int] = None
+
+
+class MemberAdd(BaseModel):
+    user_id: str
+    role: MemberRole = MemberRole.member
     position: Optional[str] = None
-    joined_at: datetime
-    is_active: bool
-    user: Optional[UserResponse] = None
-
-    class Config:
-        from_attributes = True
-
-class SquadResponse(SquadBase):
-    id: uuid.UUID
-    captain_id: Optional[uuid.UUID] = None
-    vice_captain_id: Optional[uuid.UUID] = None
-    chemistry_score: float
-    trust_index: float
-    communication_score: float
-    coordination_score: float
-    win_count: int
-    draw_count: int
-    loss_count: int
-    is_ai_generated: bool
-    created_at: datetime
-    updated_at: datetime
-    captain: Optional[UserResponse] = None
-    vice_captain: Optional[UserResponse] = None
-    members: List[SquadMemberResponse] = []
-
-    class Config:
-        from_attributes = True

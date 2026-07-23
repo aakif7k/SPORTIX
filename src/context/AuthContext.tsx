@@ -1,134 +1,248 @@
 import {
-  createContext,
-  useContext,
-  useEffect,
-  useState,
+  createContext, useContext, useEffect,
+  useState, ReactNode, useCallback
 } from 'react';
-import type { ReactNode } from 'react';
-import type { User as SupabaseUser, Session } from '@supabase/supabase-js';
-import { supabase } from '@/lib/supabase';
+import { account, databases } from '@/lib/appwrite';
 import { useAuthStore } from '@/store/authStore';
-import { getUserProfile } from '@/lib/authService';
-import type { User as AppUser } from '@/types';
+// Appwrite SDK v26+ removed the Models namespace — use inline type
+type AppwriteUser = {
+  $id: string;
+  email: string;
+  name: string;
+  emailVerification: boolean;
+  phoneVerification: boolean;
+  status: boolean;
+  labels: string[];
+  prefs: Record<string, unknown>;
+  registration: string;
+  accessedAt: string;
+};
+
+interface AuthUser {
+  id: string;
+  email: string;
+  name: string;
+  username?: string;
+  avatar_url?: string | null;
+  role?: string;
+  sport?: string;
+  level?: number;
+  pulse_score?: number;
+}
 
 interface AuthContextType {
-  currentUser: SupabaseUser | null;
-  session: Session | null;
+  user: AuthUser | null;
+  appwriteUser: AppwriteUser | null;
   authLoading: boolean;
+  isAuthenticated: boolean;
+  login: (email: string, password: string) => Promise<void>;
+  register: (data: RegisterData) => Promise<void>;
   logout: () => Promise<void>;
+  refreshUser: () => Promise<void>;
 }
 
-const AuthContext = createContext<AuthContextType>({
-  currentUser: null,
-  session: null,
-  authLoading: true,
-  logout: async () => {},
-});
-
-function mapProfileToAppUser(profile: any, supabaseUser: SupabaseUser): AppUser {
-  return {
-    id: supabaseUser.id,
-    uid: supabaseUser.id,
-    name: profile?.full_name || supabaseUser.user_metadata?.full_name || '',
-    username: profile?.username || '',
-    email: supabaseUser.email || '',
-    avatar: profile?.avatar_url || 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=150',
-    coverImage: profile?.cover_image || 'https://images.unsplash.com/photo-1431324155629-1a6deb1dec8d?w=1200&q=80',
-    role: profile?.role || 'athlete',
-    sport: profile?.sport || '',
-    sports: profile?.sports || [],
-    location: profile?.location || '',
-    bio: profile?.bio || '',
-    stats: {
-      matches: profile?.matches || 0,
-      events: profile?.events || 0,
-      followers: profile?.followers || 0,
-      following: profile?.following || 0,
-      wins: profile?.wins || 0,
-      losses: profile?.losses || 0,
-      rating: profile?.pulse_score || 100,
-      yearsExperience: profile?.years_experience || 1,
-    },
-    experienceLevel: profile?.experience_level || 'amateur',
-    achievements: profile?.achievements || [],
-    openToRecruit: profile?.is_open_to_recruit || false,
-    isOnline: profile?.is_active || true,
-    isVerified: profile?.is_verified || false,
-    level: profile?.level || 1,
-    createdAt: profile?.created_at || new Date().toISOString(),
-    performanceData: profile?.performance_data || {
-      speed: 0,
-      strength: 0,
-      endurance: 0,
-      agility: 0,
-      technique: 0,
-      teamwork: 0,
-    },
-    isOnboardingComplete: profile?.is_onboarding_complete || false,
-  };
+interface RegisterData {
+  email: string;
+  password: string;
+  fullName: string;
+  username: string;
+  role: string;
+  sport: string;
+  sports: string[];
+  experienceLevel: string;
+  location: string;
+  city: string;
 }
+
+const AuthContext = createContext<AuthContextType | null>(null);
 
 export function AuthProvider({ children }: { children: ReactNode }) {
-  const [currentUser, setCurrentUser] = useState<SupabaseUser | null>(null);
-  const [session, setSession] = useState<Session | null>(null);
+  const [user, setUser] = useState<AuthUser | null>(null);
+  const [appwriteUser, setAppwriteUser] =
+    useState<AppwriteUser | null>(null);
   const [authLoading, setAuthLoading] = useState(true);
 
-  useEffect(() => {
-    // 1. Get initial session
-    supabase.auth.getSession().then(async ({ data: { session } }) => {
-      setSession(session);
-      setCurrentUser(session?.user ?? null);
+  // Load user profile from FastAPI backend with fail-fast 2s timeout
+  const loadUserProfile = useCallback(async (
+    appwriteUid: string,
+    jwt: string
+  ) => {
+    try {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 2000);
 
-      if (session?.user) {
-        await loadUserProfile(session.user);
-      } else {
-        useAuthStore.getState().setUser(null);
-      }
-      setAuthLoading(false);
-    });
-
-    // 2. Listen for auth state changes
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      async (_event, session) => {
-        setSession(session);
-        setCurrentUser(session?.user ?? null);
-
-        if (session?.user) {
-          await loadUserProfile(session.user);
-        } else {
-          useAuthStore.getState().setUser(null);
+      const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:8000';
+      const res = await fetch(
+        `${apiUrl}/api/users/me`,
+        {
+          headers: { Authorization: `Bearer ${jwt}` },
+          signal: controller.signal,
         }
-        setAuthLoading(false);
+      );
+      clearTimeout(timeoutId);
+      if (res.ok) {
+        const data = await res.json();
+        return data.data;
+      }
+    } catch (err) {
+      console.warn('Backend loadUserProfile skipped or timed out, falling back to local session user');
+    }
+    return null;
+  }, []);
+
+  // Check existing session on app load
+  const checkSession = useCallback(async () => {
+    setAuthLoading(true);
+    try {
+      // 1. Check if Appwrite session exists
+      const appwriteAccount = await account.get();
+      setAppwriteUser(appwriteAccount);
+
+      // 2. Get JWT from current session
+      const session = await account.createJWT();
+      const jwt = session.jwt;
+
+      // Store JWT for API calls
+      localStorage.setItem('sportix_jwt', jwt);
+      localStorage.setItem('sportix_uid', appwriteAccount.$id);
+
+      // 3. Load full profile from backend
+      const profile = await loadUserProfile(
+        appwriteAccount.$id, jwt
+      );
+
+      if (profile) {
+        setUser(profile);
+        useAuthStore.getState().setUser(profile);
+      } else {
+        // Appwrite session exists but no profile yet
+        // This happens with new Google OAuth users
+        const basicUser = {
+          id: appwriteAccount.$id,
+          email: appwriteAccount.email,
+          name: appwriteAccount.name,
+          username: appwriteAccount.name ? appwriteAccount.name.toLowerCase().replace(/\s+/g, '_') : 'user',
+          role: 'athlete' as const,
+          sport: 'Football',
+          sports: ['Football'],
+          openToRecruit: false,
+          verified: false,
+          joinedDate: new Date().toISOString(),
+          performanceData: { speed: 80, strength: 75, endurance: 85, agility: 80, technique: 78, teamwork: 82 },
+        };
+        setUser(basicUser as any);
+        useAuthStore.getState().setUser(basicUser as any);
+      }
+    } catch (err) {
+      // No active session
+      setUser(null);
+      setAppwriteUser(null);
+      useAuthStore.getState().setUser(null);
+      localStorage.removeItem('sportix_jwt');
+      localStorage.removeItem('sportix_uid');
+    } finally {
+      setAuthLoading(false);
+      useAuthStore.getState().setAuthLoading(false);
+    }
+  }, [loadUserProfile]);
+
+  useEffect(() => {
+    checkSession();
+  }, []);
+
+  const login = async (email: string, password: string) => {
+    // Delete any existing session first
+    try {
+      await account.deleteSession('current');
+    } catch {}
+
+    // Create new session
+    await account.createEmailPasswordSession(email, password);
+
+    // Refresh full auth state
+    await checkSession();
+  };
+
+  const register = async (data: RegisterData) => {
+    const res = await fetch(
+      `${import.meta.env.VITE_API_URL}/api/auth/register`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          email: data.email,
+          password: data.password,
+          full_name: data.fullName,
+          username: data.username,
+          role: data.role,
+          sport: data.sport,
+          sports: data.sports,
+          experience_level: data.experienceLevel,
+          location: data.location,
+          city: data.city,
+        }),
       }
     );
 
-    return () => subscription.unsubscribe();
-  }, []);
-
-  async function loadUserProfile(supabaseUser: SupabaseUser) {
-    try {
-      const profile = await getUserProfile(supabaseUser.id);
-      const appUser = mapProfileToAppUser(profile, supabaseUser);
-      useAuthStore.getState().setUser(appUser);
-    } catch {
-      // Profile might not exist yet (during signup flow)
-      const appUser = mapProfileToAppUser(null, supabaseUser);
-      useAuthStore.getState().setUser(appUser);
+    if (!res.ok) {
+      const err = await res.json();
+      throw new Error(
+        err.error?.message || 'Registration failed'
+      );
     }
-  }
+
+    const result = await res.json();
+
+    // Store JWT from registration response
+    if (result.data?.jwt) {
+      localStorage.setItem('sportix_jwt', result.data.jwt);
+    }
+
+    // Now create Appwrite session for frontend
+    await account.createEmailPasswordSession(
+      data.email, data.password
+    );
+
+    await checkSession();
+  };
 
   const logout = async () => {
-    await supabase.auth.signOut();
-    useAuthStore.getState().setUser(null);
-    setCurrentUser(null);
-    setSession(null);
+    try {
+      await account.deleteSession('current');
+    } catch {}
+    setUser(null);
+    setAppwriteUser(null);
+    localStorage.removeItem('sportix_jwt');
+    localStorage.removeItem('sportix_uid');
+  };
+
+  const refreshUser = async () => {
+    const jwt = localStorage.getItem('sportix_jwt');
+    const uid = localStorage.getItem('sportix_uid');
+    if (jwt && uid) {
+      const profile = await loadUserProfile(uid, jwt);
+      if (profile) setUser(profile);
+    }
   };
 
   return (
-    <AuthContext.Provider value={{ currentUser, session, authLoading, logout }}>
+    <AuthContext.Provider value={{
+      user,
+      appwriteUser,
+      authLoading,
+      isAuthenticated: !!user,
+      login,
+      register,
+      logout,
+      refreshUser,
+    }}>
       {children}
     </AuthContext.Provider>
   );
 }
 
-export const useAuth = () => useContext(AuthContext);
+export function useAuth() {
+  const ctx = useContext(AuthContext);
+  if (!ctx) throw new Error('useAuth must be inside AuthProvider');
+  return ctx;
+}

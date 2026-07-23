@@ -11,6 +11,7 @@ interface PulseStoreState {
     activity: number;
     leadership: number;
   }, totalDelta: number) => void;
+  reset: () => void;
 }
 
 const initialHistory = [
@@ -20,22 +21,24 @@ const initialHistory = [
   { date: '2026-05-18', score: 721, delta: 11, matchId: 'm4' },
 ];
 
-export const usePulseStore = create<PulseStoreState>((set) => ({
-  pulseScore: {
-    userId: 'me',
-    score: 721,
-    tier: 'CONTENDER',
-    breakdown: {
-      matchPerf: 74,
-      consistency: 78,
-      chemistry: 82,
-      reliability: 90,
-      activity: 85,
-      leadership: 68,
-    },
-    history: initialHistory,
-    lastUpdated: '2026-05-18T18:00:00Z',
+const getInitialPulseScore = (): PulseScore => ({
+  userId: '', // Will be set to real uid when user logs in
+  score: 721,
+  tier: 'CONTENDER',
+  breakdown: {
+    matchPerf: 74,
+    consistency: 78,
+    chemistry: 82,
+    reliability: 90,
+    activity: 85,
+    leadership: 68,
   },
+  history: initialHistory,
+  lastUpdated: '2026-05-18T18:00:00Z',
+});
+
+export const usePulseStore = create<PulseStoreState>((set) => ({
+  pulseScore: getInitialPulseScore(),
   addScoreDelta: (deltas, totalDelta) => set((state) => {
     const newScore = Math.max(0, Math.min(1000, state.pulseScore.score + totalDelta));
     let newTier: 'CONTENDER' | 'ELITE' | 'PULSE ELITE' = 'CONTENDER';
@@ -71,4 +74,7 @@ export const usePulseStore = create<PulseStoreState>((set) => ({
       }
     };
   }),
+
+  reset: () => set({ pulseScore: getInitialPulseScore() }),
 }));
+

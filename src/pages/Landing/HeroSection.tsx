@@ -1,176 +1,214 @@
-import React, { Suspense, lazy } from 'react';
-import { motion } from 'framer-motion';
+import React, { Suspense, lazy, useState } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
+import { Zap, Play, ArrowRight, Shield, Award, Users, Activity, Sparkles, X } from 'lucide-react';
 
 const AthleteCanvas = lazy(() => import('./AthleteCanvas'));
 
 const fadeUp = (delay = 0) => ({
-  initial: { opacity: 0, y: 60 },
+  initial: { opacity: 0, y: 40 },
   animate: { opacity: 1, y: 0 },
-  transition: { duration: 0.9, ease: [0.22, 1, 0.36, 1] as any, delay },
+  transition: { duration: 0.8, ease: [0.16, 1, 0.3, 1] as any, delay },
 });
 
 export const HeroSection: React.FC = () => {
   const navigate = useNavigate();
-  const [showDemo, setShowDemo] = React.useState(false);
+  const [showDemo, setShowDemo] = useState(false);
 
   return (
-    <section className="relative min-h-screen flex items-center overflow-hidden bg-[#080808] pt-[72px]">
-      {/* Background grid */}
-      <div className="absolute inset-0 pointer-events-none"
-        style={{ backgroundImage: 'linear-gradient(rgba(204,255,0,0.025) 1px,transparent 1px),linear-gradient(90deg,rgba(204,255,0,0.025) 1px,transparent 1px)', backgroundSize: '60px 60px' }} />
+    <section className="relative min-h-[92vh] flex items-center overflow-hidden bg-[#060606] pt-24 pb-16 lg:py-0" id="hero">
+      {/* Dynamic Cyber Grid & Radial Glow */}
+      <div 
+        className="absolute inset-0 pointer-events-none opacity-30"
+        style={{ 
+          backgroundImage: 'linear-gradient(rgba(204,255,0,0.03) 1px, transparent 1px), linear-gradient(90deg, rgba(204,255,0,0.03) 1px, transparent 1px)',
+          backgroundSize: '40px 40px' 
+        }} 
+      />
+      <div 
+        className="absolute top-1/4 right-1/4 w-[600px] h-[600px] pointer-events-none rounded-full blur-3xl opacity-20"
+        style={{ background: 'radial-gradient(circle, rgba(204,255,0,0.25) 0%, transparent 70%)' }} 
+      />
+      <div 
+        className="absolute bottom-10 left-10 w-[500px] h-[500px] pointer-events-none rounded-full blur-3xl opacity-15"
+        style={{ background: 'radial-gradient(circle, rgba(0,212,255,0.2) 0%, transparent 70%)' }} 
+      />
 
-      {/* Radial gradient glow */}
-      <div className="absolute inset-0 pointer-events-none"
-        style={{ background: 'radial-gradient(ellipse 80% 60% at 70% 50%, rgba(204,255,0,0.04) 0%, transparent 70%)' }} />
+      <div className="relative z-10 w-full max-w-[1400px] mx-auto px-5 sm:px-8 lg:px-12 flex flex-col lg:flex-row items-center gap-12 lg:gap-6">
 
-      <div className="relative z-10 w-full max-w-[1400px] mx-auto px-6 lg:px-12 flex flex-col lg:flex-row items-center gap-8 lg:gap-0 py-10 lg:py-0">
+        {/* ── LEFT HERO CONTENT ─────────────────────────────────── */}
+        <div className="flex-1 max-w-2xl lg:max-w-none lg:w-[55%] flex flex-col items-start text-left">
 
-        {/* ── LEFT TEXT PANEL ─────────────────────────────────────── */}
-        <div className="flex-1 max-w-2xl lg:max-w-none lg:w-[55%] flex flex-col">
-
-          {/* Eyebrow */}
-          <motion.div {...fadeUp(0)} className="flex items-center gap-4 mb-6">
-            <div className="w-10 h-px bg-[#CCFF00]" />
-            <span className="font-mono text-[11px] text-[#CCFF00] uppercase tracking-[5px]">
-              The Future of Sports Is Here
+          {/* Live Status Pill */}
+          <motion.div {...fadeUp(0)} className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-[#101010] border border-[#CCFF00]/30 shadow-[0_0_15px_rgba(204,255,0,0.15)] mb-6">
+            <span className="w-2 h-2 rounded-full bg-[#CCFF00] animate-pulse" />
+            <span className="text-[11px] font-mono font-bold text-[#CCFF00] uppercase tracking-widest flex items-center gap-1">
+              <Sparkles size={12} /> NEXT-GEN SPORTS INTELLIGENCE v3.0
             </span>
           </motion.div>
 
-          {/* Hero headline */}
-          <div className="mb-6 overflow-hidden">
-            {['DOMINATE', 'CONNECT', 'COMPETE'].map((word, i) => (
-              <motion.div
-                key={word}
-                initial={{ opacity: 0, y: 80 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.85, ease: [0.22, 1, 0.36, 1], delay: 0.2 + i * 0.15 }}
-              >
-                <span
-                  className="block font-['Bebas_Neue'] leading-[0.9]"
-                  style={{
-                    fontSize: 'clamp(72px,9vw,150px)',
-                    color: i === 1 ? '#CCFF00' : '#FFFFFF',
-                    textShadow: i === 1 ? '0 0 60px rgba(204,255,0,0.5)' : 'none',
-                  }}
-                >
-                  {word}
-                </span>
-              </motion.div>
-            ))}
-          </div>
+          {/* H1 Headline for SEO */}
+          <motion.div {...fadeUp(0.15)} className="mb-6">
+            <h1 className="text-4xl sm:text-6xl lg:text-7xl font-black text-white tracking-tight leading-[1.05] uppercase">
+              Dominate.<br />
+              <span className="text-transparent bg-clip-text bg-gradient-to-r from-[#CCFF00] via-[#D7FF72] to-[#00D4FF] filter drop-shadow-[0_0_25px_rgba(204,255,0,0.35)]">
+                Connect.
+              </span><br />
+              Compete.
+            </h1>
+          </motion.div>
 
           {/* Sub-headline */}
-          <motion.p {...fadeUp(0.6)}
-            className="font-mono text-[17px] text-[#888] max-w-[480px] leading-[1.7] mb-8">
-            The AI-powered sports ecosystem where elite athletes build careers, find squads, and dominate competitions.
+          <motion.p {...fadeUp(0.3)} className="text-base sm:text-lg text-text-secondary max-w-xl font-sans leading-relaxed mb-8">
+            The premiere AI-powered sports platform connecting elite athletes, automating squad matchmaking, event management, and real-time PlayerDNA performance analytics.
           </motion.p>
 
-          {/* CTA Buttons */}
-          <motion.div {...fadeUp(0.8)} className="flex flex-col sm:flex-row items-center gap-4 mb-10 w-full sm:w-auto">
+          {/* Call-to-action buttons */}
+          <motion.div {...fadeUp(0.45)} className="flex flex-col sm:flex-row items-stretch sm:items-center gap-4 w-full sm:w-auto mb-10">
             <motion.button
               onClick={() => navigate('/signup')}
-              whileHover={{ scale: 1.05 }}
-              whileTap={{ scale: 0.98 }}
-              className="w-full sm:w-auto h-14 px-8 rounded-[12px] font-['Barlow_Condensed'] font-semibold text-[18px] text-[#080808] bg-[#CCFF00] transition-all"
-              style={{ boxShadow: '0 0 0 rgba(204,255,0,0.4)' }}
-              onMouseEnter={e => (e.currentTarget.style.boxShadow = '0 0 40px rgba(204,255,0,0.4)')}
-              onMouseLeave={e => (e.currentTarget.style.boxShadow = '0 0 0 rgba(204,255,0,0.4)')}
+              whileHover={{ scale: 1.03, y: -2 }}
+              whileTap={{ scale: 0.97 }}
+              className="px-8 py-4 bg-[#CCFF00] hover:bg-[#b8e600] text-black font-mono font-bold text-sm uppercase tracking-wider rounded-2xl shadow-[0_0_30px_rgba(204,255,0,0.35)] transition-all flex items-center justify-center gap-2 group"
             >
-              Join SPORTiX →
+              <span>Join SPORTiX Free</span>
+              <ArrowRight size={16} className="group-hover:translate-x-1 transition-transform" />
             </motion.button>
-
-            <span className="hidden sm:inline font-mono text-[#444] text-sm">or</span>
 
             <motion.button
               onClick={() => setShowDemo(true)}
-              whileHover={{ scale: 1.03 }}
-              whileTap={{ scale: 0.98 }}
-              className="w-full sm:w-auto h-14 px-8 rounded-[12px] font-['Barlow_Condensed'] font-semibold text-[18px] text-[#FFFFFF] border transition-all"
-              style={{ borderColor: 'rgba(255,255,255,0.12)', background: 'transparent' }}
-              onMouseEnter={e => { (e.currentTarget as HTMLElement).style.borderColor = 'rgba(204,255,0,0.4)'; (e.currentTarget as HTMLElement).style.color = '#CCFF00'; }}
-              onMouseLeave={e => { (e.currentTarget as HTMLElement).style.borderColor = 'rgba(255,255,255,0.12)'; (e.currentTarget as HTMLElement).style.color = '#ffffff'; }}
+              whileHover={{ scale: 1.02, y: -1 }}
+              whileTap={{ scale: 0.97 }}
+              className="px-7 py-4 bg-[#141414] hover:bg-[#1f1f1f] border border-white/15 text-white font-mono font-bold text-sm uppercase tracking-wider rounded-2xl transition-all flex items-center justify-center gap-2.5"
             >
-              ▶ Watch Demo
+              <div className="w-6 h-6 rounded-full bg-[#CCFF00]/10 flex items-center justify-center border border-[#CCFF00]/30">
+                <Play size={10} className="text-[#CCFF00] fill-[#CCFF00] ml-0.5" />
+              </div>
+              <span>Watch Interactive Demo</span>
             </motion.button>
           </motion.div>
 
-          {/* Social proof */}
-          <motion.div {...fadeUp(1.0)} className="flex items-center gap-4">
-            <div className="flex">
-              {['MR', 'SJ', 'AO', 'KN', 'DV'].map((initials, i) => (
-                <div key={initials}
-                  className="w-9 h-9 rounded-full flex items-center justify-center font-['Barlow_Condensed'] font-bold text-[12px] border-2 border-[#080808]"
-                  style={{
-                    background: ['#1A2200', '#0D1A2B', '#0D2200', '#1A0D2B', '#2B1A0D'][i],
-                    color: '#CCFF00',
-                    marginLeft: i > 0 ? '-10px' : '0',
-                    zIndex: 5 - i,
-                    position: 'relative',
-                  }}>
-                  {initials}
-                </div>
+          {/* Social Proof */}
+          <motion.div {...fadeUp(0.6)} className="flex items-center gap-4 p-3 rounded-2xl bg-surface/40 border border-border-muted/50 backdrop-blur">
+            <div className="flex -space-x-2.5 overflow-hidden">
+              {['https://i.pravatar.cc/100?img=33', 'https://i.pravatar.cc/100?img=47', 'https://i.pravatar.cc/100?img=12', 'https://i.pravatar.cc/100?img=60'].map((src, idx) => (
+                <img key={idx} src={src} alt="Athlete" className="inline-block h-8 w-8 rounded-full ring-2 ring-[#060606] object-cover" />
               ))}
             </div>
-            <div>
-              <div className="flex gap-0.5 mb-1">
+            <div className="text-left">
+              <div className="flex items-center gap-1">
                 {[...Array(5)].map((_, i) => (
-                  <svg key={i} className="w-3.5 h-3.5" fill="#CCFF00" viewBox="0 0 20 20">
-                    <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
-                  </svg>
+                  <Zap key={i} size={11} className="text-[#CCFF00] fill-[#CCFF00]" />
                 ))}
+                <span className="text-xs font-bold text-white ml-1">4.9/5</span>
               </div>
-              <p className="font-mono text-[12px] text-[#888]">2,400+ athletes already training</p>
+              <p className="text-[11px] font-mono text-text-muted">Trusted by 2,400+ Elite Athletes & Scouts</p>
             </div>
           </motion.div>
+
         </div>
 
-        {/* ── RIGHT 3D PANEL ─────────────────────────────────────── */}
+        {/* ── RIGHT 3D CANVAS & FLOATING BADGES ─────────────────── */}
         <motion.div
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          transition={{ duration: 1.2, delay: 0.3 }}
-          className="relative w-full lg:w-[45%] h-[400px] sm:h-[500px] lg:h-[85vh] flex-shrink-0"
+          initial={{ opacity: 0, scale: 0.95 }}
+          animate={{ opacity: 1, scale: 1 }}
+          transition={{ duration: 1, delay: 0.2 }}
+          className="relative w-full lg:w-[45%] h-[380px] sm:h-[480px] lg:h-[70vh] flex items-center justify-center"
         >
-          <Suspense fallback={
-            <div className="w-full h-full flex items-center justify-center">
-              <div className="w-12 h-12 rounded-full border-2 border-[#CCFF00] border-t-transparent animate-spin" />
-            </div>
-          }>
-            <AthleteCanvas />
-          </Suspense>
-        </motion.div>
-      </div>
-
-      {/* Demo Modal */}
-      {showDemo && (
-        <motion.div
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          className="fixed inset-0 z-[200] flex items-center justify-center bg-black/80 backdrop-blur-md"
-          onClick={() => setShowDemo(false)}
-        >
-          <motion.div
-            initial={{ scale: 0.9, opacity: 0 }}
-            animate={{ scale: 1, opacity: 1 }}
-            className="w-full max-w-2xl aspect-video rounded-2xl overflow-hidden relative"
-            style={{ background: '#111', border: '1px solid rgba(204,255,0,0.2)' }}
-            onClick={e => e.stopPropagation()}
+          {/* Floating Live Badge Top Left */}
+          <motion.div 
+            animate={{ y: [-6, 6, -6] }}
+            transition={{ duration: 4, repeat: Infinity, ease: 'easeInOut' }}
+            className="absolute top-6 left-4 z-20 bg-[#101010]/90 backdrop-blur-md border border-[#CCFF00]/30 rounded-2xl p-3 shadow-[0_0_20px_rgba(0,0,0,0.6)] flex items-center gap-3"
           >
-            <div className="absolute inset-0 flex flex-col items-center justify-center gap-4">
-              <div className="w-20 h-20 rounded-full flex items-center justify-center"
-                style={{ background: 'rgba(204,255,0,0.1)', border: '2px solid rgba(204,255,0,0.3)' }}>
-                <svg className="w-8 h-8 ml-1" fill="#CCFF00" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
-              </div>
-              <p className="font-['Bebas_Neue'] text-3xl text-white">SPORTIX DEMO</p>
-              <p className="font-mono text-sm text-[#888]">Demo video coming soon</p>
-              <button onClick={() => setShowDemo(false)} className="mt-4 font-mono text-[12px] text-[#666] hover:text-[#CCFF00] transition-colors">
-                [ CLOSE ]
-              </button>
+            <div className="w-9 h-9 rounded-xl bg-[#CCFF00]/10 flex items-center justify-center border border-[#CCFF00]/30">
+              <Activity size={18} className="text-[#CCFF00]" />
+            </div>
+            <div>
+              <p className="text-[10px] font-mono text-text-muted uppercase tracking-widest">PlayerDNA Rating</p>
+              <p className="text-sm font-mono font-bold text-white">94.8 SSR <span className="text-[#CCFF00] text-xs">Peak</span></p>
             </div>
           </motion.div>
+
+          {/* Floating Squad Badge Bottom Right */}
+          <motion.div 
+            animate={{ y: [6, -6, 6] }}
+            transition={{ duration: 5, repeat: Infinity, ease: 'easeInOut', delay: 1 }}
+            className="absolute bottom-8 right-4 z-20 bg-[#101010]/90 backdrop-blur-md border border-[#00D4FF]/30 rounded-2xl p-3 shadow-[0_0_20px_rgba(0,0,0,0.6)] flex items-center gap-3"
+          >
+            <div className="w-9 h-9 rounded-xl bg-[#00D4FF]/10 flex items-center justify-center border border-[#00D4FF]/30">
+              <Users size={18} className="text-[#00D4FF]" />
+            </div>
+            <div>
+              <p className="text-[10px] font-mono text-text-muted uppercase tracking-widest">AutoSquad Match</p>
+              <p className="text-sm font-mono font-bold text-white">Chemistry: <span className="text-[#00D4FF]">98%</span></p>
+            </div>
+          </motion.div>
+
+          {/* 3D Athlete Canvas Component */}
+          <div className="w-full h-full rounded-3xl overflow-hidden border border-white/10 bg-surface/30 backdrop-blur relative shadow-[0_0_40px_rgba(0,0,0,0.8)]">
+            <Suspense fallback={
+              <div className="w-full h-full flex items-center justify-center">
+                <div className="w-10 h-10 rounded-full border-2 border-[#CCFF00] border-t-transparent animate-spin" />
+              </div>
+            }>
+              <AthleteCanvas />
+            </Suspense>
+          </div>
         </motion.div>
-      )}
+
+      </div>
+
+      {/* Interactive Demo Video Modal */}
+      <AnimatePresence>
+        {showDemo && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/85 backdrop-blur-md"
+            onClick={() => setShowDemo(false)}
+          >
+            <motion.div
+              initial={{ scale: 0.9, opacity: 0, y: 20 }}
+              animate={{ scale: 1, opacity: 1, y: 0 }}
+              exit={{ scale: 0.9, opacity: 0, y: 20 }}
+              className="w-full max-w-3xl bg-[#101010] border border-[#CCFF00]/30 rounded-3xl overflow-hidden shadow-[0_0_60px_rgba(0,0,0,0.9)] relative"
+              onClick={e => e.stopPropagation()}
+            >
+              <div className="p-4 border-b border-white/10 flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <Zap size={18} className="text-[#CCFF00]" />
+                  <span className="font-mono text-sm font-bold text-white uppercase tracking-wider">SPORTiX Platform Demo</span>
+                </div>
+                <button 
+                  onClick={() => setShowDemo(false)} 
+                  className="p-1 rounded-xl text-text-muted hover:text-white hover:bg-white/10 transition-colors"
+                >
+                  <X size={18} />
+                </button>
+              </div>
+              <div className="aspect-video bg-black flex flex-col items-center justify-center p-6 text-center space-y-4 relative">
+                <div className="w-16 h-16 rounded-2xl bg-[#CCFF00]/10 border border-[#CCFF00]/30 flex items-center justify-center text-[#CCFF00] shadow-glow-volt">
+                  <Play size={28} className="fill-[#CCFF00] ml-1" />
+                </div>
+                <div>
+                  <h3 className="font-mono text-lg font-bold text-white uppercase tracking-wider">Interactive Platform Tour</h3>
+                  <p className="font-sans text-xs text-text-secondary max-w-md mt-1">
+                    Explore live Matchmaking, PlayerDNA radar analysis, ClashHub event hosting, and the HypeZone social feed in action.
+                  </p>
+                </div>
+                <button
+                  onClick={() => { setShowDemo(false); navigate('/signup'); }}
+                  className="px-6 py-2.5 bg-[#CCFF00] text-black font-mono font-bold text-xs uppercase tracking-wider rounded-xl hover:bg-[#b8e600] transition-colors"
+                >
+                  Launch App Now
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </section>
   );
 };

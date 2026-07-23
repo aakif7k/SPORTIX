@@ -1,265 +1,245 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Search, SlidersHorizontal, MessageCircle, Bookmark, BarChart2, Zap } from 'lucide-react';
+import { 
+  Search, SlidersHorizontal, MessageCircle, Bookmark, BarChart2, Zap, 
+  UserPlus, MapPin, Trophy, Shield, Filter, CheckCircle2, ArrowRight
+} from 'lucide-react';
 import { MOCK_USERS, MOCK_EVENTS, SPORT_CATEGORIES } from '../../services/mockData';
 import { useAISettingsStore } from '../../store/aiSettingsStore';
 import type { User } from '../../types';
-
-const MOCK_USER_DISTANCES: Record<string, number> = {
-  u1: 3.2,
-  u2: 12.5,
-  u3: 27.8,
-  u4: 54.2,
-  u5: 8.1,
-  u6: 15.4,
-  u7: 5.2,
-  u8: 24.8,
-  u9: 11.6,
-  u10: 38.4,
-  cu1: 0,
-};
-
-const MOCK_EVENT_DISTANCES: Record<string, number> = {
-  e1: 4.8,
-  e2: 18.2,
-  e3: 35.5,
-  e4: 82.1,
-  e5: 12.4,
-  e6: 22.1,
-  e7: 42.6,
-  e8: 68.3,
-  e9: 8.5,
-  e10: 14.2,
-  e11: 3.1,
-  e12: 55.4,
-  e13: 11.2,
-  e14: 28.6,
-  e15: 72.1,
-  e16: 9.3,
-  e17: 4.5,
-  e18: 1.2,
-  e19: 19.5,
-  e20: 34.2,
-};
 import { Avatar } from '../../components/ui/Avatar';
 import { SportBadge, AIBadge } from '../../components/ui/Badge';
-import { Button } from '../../components/ui/Button';
-import { ProgressBar } from '../../components/ui/index';
-import { AnimatedPlaceholderInput } from '../../components/ui/Input';
 import { BarChart, Bar, XAxis, Tooltip, ResponsiveContainer, Cell } from 'recharts';
 
-const TABS = ['Athletes', 'ClashHub', 'TheArena'];
-const SEARCH_PLACEHOLDERS = ['Search athletes...', 'Find events near you...', 'Discover teams...', 'Search by sport...'];
+const TABS = ['Athletes', 'ClashHub Events', 'The Arena Stats'];
 
-// ─── ATHLETE CARD (Recruiter view) ─────────────────────────────────────────
-const AthleteCard: React.FC<{ athlete: User; index: number }> = ({ athlete, index }) => {
-  const navigate = useNavigate();
-  const [saved, setSaved] = useState(false);
-  return (
-    <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: index * 0.05 }}
-      className="glass rounded-xl overflow-hidden border border-border-muted hover:border-volt/20 transition-all group">
-      {/* Cover strip */}
-      <div className="h-16 relative bg-elevated overflow-hidden">
-        {athlete.coverImage && <img src={athlete.coverImage} alt="" className="w-full h-full object-cover opacity-50 group-hover:opacity-70 transition-opacity" />}
-        <div className="absolute inset-0 bg-gradient-to-r from-base/80 to-transparent" />
-        <div className="absolute top-2 right-2">
-          <span className={`text-[10px] px-2 py-0.5 rounded-full font-label font-medium ${athlete.openToRecruit ? 'bg-volt/20 border border-volt/30 text-volt' : 'bg-surface border border-border-muted text-text-muted'}`}>
-            {athlete.openToRecruit ? '● Open to Offers' : '◌ Not Available'}
-          </span>
-        </div>
-      </div>
-      <div className="p-4 -mt-6">
-        <div className="flex items-end gap-3 mb-3">
-          <Avatar src={athlete.avatar} name={athlete.name} sport={athlete.sport} size="lg" />
-          <div className="flex-1 min-w-0 pb-1">
-            <p className="font-label text-base font-semibold text-text-primary truncate">{athlete.name}</p>
-            <div className="flex items-center gap-1.5 mt-0.5">
-              <SportBadge sport={athlete.sport} size="sm" />
-              <span className="font-mono text-[9px] text-text-secondary">({MOCK_USER_DISTANCES[athlete.id] || 10.0} KM)</span>
-            </div>
-          </div>
-          <div className="text-right pb-1">
-            <div className="font-mono text-2xl text-volt">{athlete.stats.rating}</div>
-            <div className="stat-label text-[9px]">RATING</div>
-          </div>
-        </div>
-        <div className="grid grid-cols-3 gap-2 mb-3">
-          {[
-            { label: 'MATCHES', val: athlete.stats.matches },
-            { label: 'WINS', val: athlete.stats.wins },
-            { label: 'YRS EXP', val: athlete.stats.yearsExperience },
-          ].map(s => (
-            <div key={s.label} className="bg-elevated rounded-lg p-2 text-center border border-border-muted">
-              <div className="font-mono text-sm text-text-primary">{s.val}</div>
-              <div className="stat-label text-[9px]">{s.label}</div>
-            </div>
-          ))}
-        </div>
-        <ProgressBar value={athlete.performanceData.technique} max={100} label="Technique" showValue />
-        <div className="flex gap-2 mt-3">
-          <Button variant="primary" size="sm" fullWidth onClick={() => navigate(`/app/profile/${athlete.id}`)}>
-            View Profile
-          </Button>
-          <Button variant="ghost" size="sm" icon={<MessageCircle size={13} />} onClick={() => navigate('/app/messages')} />
-          <Button variant="ghost" size="sm" icon={<Bookmark size={13} fill={saved ? 'currentColor' : 'none'} />}
-            onClick={() => setSaved(s => !s)} className={saved ? 'text-volt' : ''} />
-        </div>
-      </div>
-    </motion.div>
-  );
-};
-
-// ─── SEARCH PAGE ──────────────────────────────────────────────────────────
 export const SearchPage: React.FC = () => {
+  const navigate = useNavigate();
+  const { nearbyRadius } = useAISettingsStore();
+
   const [query, setQuery] = useState('');
   const [activeTab, setActiveTab] = useState('Athletes');
   const [filterOpen, setFilterOpen] = useState(false);
-  const { nearbyRadius } = useAISettingsStore();
-  const navigate = useNavigate();
+  const [savedUserIds, setSavedUserIds] = useState<string[]>([]);
 
-  const athletes = (query ? MOCK_USERS.filter(u => u.name.toLowerCase().includes(query.toLowerCase()) || u.sport.includes(query.toLowerCase())) : MOCK_USERS)
-    .filter(u => u.id === 'cu1' || (MOCK_USER_DISTANCES[u.id] || 10.0) <= nearbyRadius);
-  const events = (query ? MOCK_EVENTS.filter(e => e.title.toLowerCase().includes(query.toLowerCase())) : MOCK_EVENTS)
-    .filter(e => (MOCK_EVENT_DISTANCES[e.id] || 15.0) <= nearbyRadius);
+  const toggleSaveUser = (id: string) => {
+    setSavedUserIds(prev => prev.includes(id) ? prev.filter(uId => uId !== id) : [...prev, id]);
+  };
 
-  const sportBreakdown = SPORT_CATEGORIES.slice(0, 6).map(s => ({
-    name: s.label.slice(0, 4), count: Math.floor(Math.random() * 800 + 200), emoji: s.emoji,
+  const athletes = (query ? MOCK_USERS.filter(u => u.name.toLowerCase().includes(query.toLowerCase()) || u.sport.toLowerCase().includes(query.toLowerCase())) : MOCK_USERS);
+  const events = (query ? MOCK_EVENTS.filter(e => e.title.toLowerCase().includes(query.toLowerCase())) : MOCK_EVENTS);
+
+  const sportAnalytics = SPORT_CATEGORIES.slice(0, 6).map(s => ({
+    name: s.name,
+    count: Math.floor(Math.random() * 600 + 300),
+    emoji: s.emoji,
   }));
 
   return (
-    <div className="space-y-5">
-      <div>
-        <h1 className="font-display text-4xl text-text-primary tracking-wide">DISCOVER</h1>
-        <p className="text-text-secondary font-label text-sm mt-0.5">Find athletes, clashes & squads</p>
+    <div className="max-w-5xl mx-auto space-y-6 pb-24 text-white">
+      
+      {/* ── DISCOVER HERO BANNER ────────────────────────────────────────── */}
+      <div className="relative rounded-3xl p-6 sm:p-10 overflow-hidden bg-gradient-to-br from-[#05141A] via-[#0A0A0A] to-[#120A1A] border border-[#00D4FF]/25 shadow-[0_0_50px_rgba(0,212,255,0.15)]">
+        <div className="absolute top-0 right-0 w-80 h-80 rounded-full bg-gradient-to-br from-[#00D4FF]/20 to-transparent blur-3xl pointer-events-none" />
+        
+        <div className="relative z-10 space-y-3">
+          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-[#00D4FF]/10 border border-[#00D4FF]/30 font-mono text-[10px] font-bold text-[#00D4FF] uppercase tracking-widest">
+            <Zap size={12} /> AI ATHLETE DISCOVERY
+          </div>
+          <h1 className="text-3xl sm:text-5xl font-black uppercase tracking-tight leading-tight">
+            DISCOVER <span className="text-transparent bg-clip-text bg-gradient-to-r from-[#00D4FF] via-[#A855F7] to-[#CCFF00]">TALENT & CLASHES</span>
+          </h1>
+          <p className="text-xs sm:text-sm text-text-secondary max-w-lg font-sans">
+            Connect with verified athletes, scout competitive players for your squad, and explore live tournament brackets.
+          </p>
+        </div>
       </div>
 
-      {/* Search Bar */}
-      <div className="flex gap-2">
-        <div className="flex-1">
-          <AnimatedPlaceholderInput
-            placeholders={SEARCH_PLACEHOLDERS}
-            value={query} onChange={e => setQuery(e.target.value)}
-            icon={<Search size={15} />}
+      {/* ── SEARCH & FILTER INPUT BAR ────────────────────────────────────── */}
+      <div className="flex flex-col sm:flex-row items-center gap-3">
+        <div className="relative flex-1 w-full">
+          <Search size={16} className="absolute left-4 top-1/2 -translate-y-1/2 text-text-muted" />
+          <input
+            type="text"
+            placeholder="Search athletes by name, sport, or location..."
+            value={query}
+            onChange={e => setQuery(e.target.value)}
+            className="w-full pl-11 pr-4 py-3.5 rounded-2xl bg-surface border border-border-muted text-xs text-white placeholder:text-text-muted focus:outline-none focus:border-[#00D4FF]/50 font-mono transition-all"
           />
         </div>
-        <Button variant="ghost" size="md" icon={<SlidersHorizontal size={16} />} onClick={() => setFilterOpen(f => !f)}>
-          Filters
-        </Button>
+
+        <button
+          onClick={() => setFilterOpen(!filterOpen)}
+          className="w-full sm:w-auto px-5 py-3.5 rounded-2xl bg-elevated border border-white/10 hover:border-[#00D4FF]/40 text-white font-mono text-xs font-bold uppercase tracking-wider flex items-center justify-center gap-2 transition-all"
+        >
+          <SlidersHorizontal size={15} className="text-[#00D4FF]" /> Filter Criteria
+        </button>
       </div>
 
-      {/* AI Recommendation Bar */}
-      <div className="flex items-center gap-3 glass rounded-xl px-4 py-3 border border-volt/10">
-        <Zap size={16} className="text-volt flex-shrink-0" fill="currentColor" />
-        <p className="text-xs font-label text-text-secondary flex-1">
-          <span className="text-volt font-medium">AI recommends</span>: Based on your athletics profile — Pro Football Championship and Asia Pacific Basketball Open match your competitive level.
+      {/* ── AI RECOMMENDATION STRIP ──────────────────────────────────────── */}
+      <div className="p-4 rounded-2xl bg-gradient-to-r from-[#00D4FF]/10 via-[#0A0A0A] to-transparent border border-[#00D4FF]/20 flex items-center gap-3">
+        <div className="w-8 h-8 rounded-xl bg-[#00D4FF]/20 border border-[#00D4FF]/40 flex items-center justify-center text-[#00D4FF] flex-shrink-0">
+          <Zap size={16} />
+        </div>
+        <p className="font-mono text-xs text-text-secondary flex-1">
+          <span className="text-[#00D4FF] font-bold">AI Scouting Recommendation:</span> 84% compatible strikers and defenders actively looking for squad offers near your area.
         </p>
       </div>
 
-      {/* Tabs */}
-      <div className="flex gap-1 bg-surface rounded-xl p-1 border border-border-muted">
+      {/* ── NAVIGATION TABS ─────────────────────────────────────────────── */}
+      <div className="flex gap-2 overflow-x-auto scrollbar-none bg-surface p-1.5 rounded-2xl border border-border-muted">
         {TABS.map(tab => (
-          <button key={tab} onClick={() => setActiveTab(tab)}
-            className={`flex-1 py-2 px-3 rounded-lg text-xs font-label font-medium transition-all ${activeTab === tab ? 'bg-volt text-volt-text shadow-glow-volt-sm' : 'text-text-secondary hover:text-text-primary'}`}>
+          <button
+            key={tab}
+            onClick={() => setActiveTab(tab)}
+            className={`flex-1 min-w-[120px] py-2.5 px-4 rounded-xl text-xs font-mono font-bold uppercase tracking-wider transition-all whitespace-nowrap ${
+              activeTab === tab
+                ? 'bg-[#00D4FF] text-black shadow-[0_0_15px_rgba(0,212,255,0.3)]'
+                : 'text-text-muted hover:text-white'
+            }`}
+          >
             {tab}
           </button>
         ))}
       </div>
 
-      {/* Results */}
+      {/* ── TAB CONTENT RESULTS ─────────────────────────────────────────── */}
       <AnimatePresence mode="wait">
+        
+        {/* ATHLETES TAB */}
         {activeTab === 'Athletes' && (
-          <motion.div key="ath" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}>
-            <div className="grid sm:grid-cols-2 gap-4">
-              {athletes.map((a, i) => <AthleteCard key={a.id} athlete={a} index={i} />)}
-            </div>
-          </motion.div>
-        )}
-        {activeTab === 'ClashHub' && (
-          <motion.div key="evt" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} className="grid sm:grid-cols-2 gap-4">
-            {events.map((event, i) => {
-              const sport = SPORT_CATEGORIES.find(s => s.id === event.sport);
+          <motion.div key="ath" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            {athletes.map((athlete, idx) => {
+              const isSaved = savedUserIds.includes(athlete.id);
               return (
-                <motion.div key={event.id} initial={{ opacity: 0, y: 15 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.05 }}
-                  onClick={() => navigate(`/app/events/${event.id}`)}
-                  className="glass rounded-xl p-4 border border-border-muted hover:border-volt/20 cursor-pointer transition-all">
-                  <div className="flex items-center gap-3 mb-3">
-                    <span className="text-2xl">{sport?.emoji}</span>
-                    <div>
-                      <p className="font-label text-sm font-semibold text-text-primary">{event.title}</p>
-                      <p className="text-xs text-text-secondary font-mono">
-                        {event.location} ({MOCK_EVENT_DISTANCES[event.id] || 15.0} KM) · {new Date(event.date).toLocaleDateString()}
-                      </p>
+                <motion.div
+                  key={athlete.id}
+                  whileHover={{ y: -4 }}
+                  className="rounded-3xl overflow-hidden bg-surface border border-border-muted p-5 space-y-4 shadow-xl transition-all hover:border-[#00D4FF]/40 flex flex-col justify-between"
+                >
+                  <div className="space-y-3">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-3">
+                        <div className="relative">
+                          <img
+                            src={athlete.avatar || 'https://i.pravatar.cc/150?img=33'}
+                            alt={athlete.name}
+                            className="w-14 h-14 rounded-2xl object-cover border border-[#00D4FF]/40 shadow-md"
+                          />
+                          <span className="absolute -bottom-1 -right-1 w-4 h-4 rounded-full bg-[#CCFF00] ring-2 ring-black flex items-center justify-center text-[9px] font-black text-black">
+                            ✓
+                          </span>
+                        </div>
+                        <div>
+                          <h3 className="font-sans font-bold text-base text-white">{athlete.name}</h3>
+                          <div className="flex items-center gap-2 font-mono text-[11px] text-[#00D4FF]">
+                            <span>@{athlete.username || 'athlete'}</span>
+                            <span>•</span>
+                            <span>{athlete.sport || 'Multi-Sport'}</span>
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="text-right font-mono">
+                        <span className="text-xs text-text-muted uppercase block">SSR RATING</span>
+                        <span className="text-lg font-black text-[#CCFF00]">94.8</span>
+                      </div>
+                    </div>
+
+                    <p className="text-xs text-text-secondary line-clamp-2 font-sans">
+                      {athlete.bio || 'Versatile athlete specializing in tactical teamwork, fast execution, and competitive tournament play.'}
+                    </p>
+
+                    <div className="grid grid-cols-3 gap-2 p-3 rounded-2xl bg-elevated/60 border border-white/5 text-center font-mono">
+                      <div>
+                        <p className="text-[9px] text-text-muted uppercase">Matches</p>
+                        <p className="text-xs font-bold text-white">{athlete.stats?.matches || 42}</p>
+                      </div>
+                      <div>
+                        <p className="text-[9px] text-text-muted uppercase">Win Rate</p>
+                        <p className="text-xs font-bold text-[#CCFF00]">78%</p>
+                      </div>
+                      <div>
+                        <p className="text-[9px] text-text-muted uppercase">Level</p>
+                        <p className="text-xs font-bold text-[#00D4FF]">Lvl {athlete.level || 35}</p>
+                      </div>
                     </div>
                   </div>
-                  {event.aiTeamAvailable && <AIBadge />}
+
+                  <div className="flex items-center gap-2 pt-2 border-t border-white/5">
+                    <button
+                      onClick={() => navigate(`/app/profile/${athlete.id}`)}
+                      className="flex-1 py-2.5 rounded-xl bg-[#00D4FF] hover:bg-[#1ad8ff] text-black font-mono font-bold text-xs uppercase tracking-wider transition-all"
+                    >
+                      View PlayerDNA
+                    </button>
+                    <button
+                      onClick={() => navigate('/app/messages')}
+                      className="p-2.5 rounded-xl bg-elevated border border-white/10 hover:border-white/20 text-white transition-all"
+                      title="Message"
+                    >
+                      <MessageCircle size={16} />
+                    </button>
+                    <button
+                      onClick={() => toggleSaveUser(athlete.id)}
+                      className={`p-2.5 rounded-xl border transition-all ${isSaved ? 'bg-[#CCFF00]/10 border-[#CCFF00] text-[#CCFF00]' : 'bg-elevated border-white/10 text-white'}`}
+                      title="Bookmark Athlete"
+                    >
+                      <Bookmark size={16} fill={isSaved ? 'currentColor' : 'none'} />
+                    </button>
+                  </div>
                 </motion.div>
               );
             })}
           </motion.div>
         )}
-        {activeTab === 'TheArena' && (
-          <motion.div key="com" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}>
-            <div className="glass rounded-xl p-5">
-              <h3 className="font-display text-xl text-text-primary mb-4 tracking-wide flex items-center gap-2">
-                <BarChart2 size={16} className="text-volt" /> THE ARENA — SPORT BREAKDOWN
+
+        {/* CLASHHUB EVENTS TAB */}
+        {activeTab === 'ClashHub Events' && (
+          <motion.div key="evt" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            {events.map(event => (
+              <div
+                key={event.id}
+                onClick={() => navigate(`/app/events/${event.id}`)}
+                className="p-5 rounded-3xl bg-surface border border-border-muted hover:border-[#00D4FF]/40 cursor-pointer transition-all space-y-3 shadow-xl"
+              >
+                <div className="flex items-center justify-between font-mono text-xs text-[#00D4FF]">
+                  <span>{event.sport.toUpperCase()}</span>
+                  <span>{new Date(event.date).toLocaleDateString()}</span>
+                </div>
+                <h3 className="font-sans font-bold text-base text-white uppercase">{event.title}</h3>
+                <p className="text-xs text-text-secondary flex items-center gap-1 font-mono">
+                  <MapPin size={12} /> {event.location}
+                </p>
+              </div>
+            ))}
+          </motion.div>
+        )}
+
+        {/* THE ARENA STATS TAB */}
+        {activeTab === 'The Arena Stats' && (
+          <motion.div key="arena" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}>
+            <div className="p-6 sm:p-8 rounded-3xl bg-surface border border-border-muted space-y-6">
+              <h3 className="font-sans font-bold text-lg text-white uppercase tracking-wider flex items-center gap-2">
+                <BarChart2 size={18} className="text-[#00D4FF]" /> The Arena — Global Sports Breakdown
               </h3>
-              <ResponsiveContainer width="100%" height={180}>
-                <BarChart data={sportBreakdown} barSize={20}>
-                  <XAxis dataKey="name" tick={{ fill: '#888', fontSize: 10, fontFamily: 'DM Mono' }} axisLine={false} tickLine={false} />
-                  <Tooltip contentStyle={{ background: 'var(--bg-elevated)', border: '1px solid var(--border)', borderRadius: 8, fontFamily: 'DM Mono', fontSize: 11, color: 'var(--text-primary)' }} cursor={{ fill: 'var(--bg-hover)' }} formatter={(v: any) => [`${v} athletes`, 'Count']} />
-                  <Bar dataKey="count" radius={[4, 4, 0, 0]}>
-                    {sportBreakdown.map((_, i) => <Cell key={i} fill="var(--accent)" fillOpacity={0.4 + i * 0.1} />)}
-                  </Bar>
-                </BarChart>
-              </ResponsiveContainer>
-              <div className="grid grid-cols-3 gap-3 mt-4">
-                {sportBreakdown.map(s => (
-                  <div key={s.name} className="bg-elevated rounded-lg p-3 border border-border-muted text-center">
-                    <div className="text-xl mb-1">{s.emoji}</div>
-                    <div className="font-mono text-sm text-volt">{s.count.toLocaleString()}</div>
-                    <div className="stat-label text-[9px] mt-0.5">{s.name}</div>
-                  </div>
-                ))}
+
+              <div className="h-64 w-full">
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={sportAnalytics}>
+                    <XAxis dataKey="name" tick={{ fill: '#888', fontSize: 12, fontFamily: 'Urbanist' }} axisLine={false} tickLine={false} />
+                    <Tooltip contentStyle={{ background: '#101010', border: '1px solid #333', borderRadius: 8, color: '#fff' }} />
+                    <Bar dataKey="count" fill="#00D4FF" radius={[6, 6, 0, 0]} />
+                  </BarChart>
+                </ResponsiveContainer>
               </div>
             </div>
           </motion.div>
         )}
+
       </AnimatePresence>
 
-      {/* Filter Drawer */}
-      <AnimatePresence>
-        {filterOpen && (
-          <motion.div initial={{ x: '100%' }} animate={{ x: 0 }} exit={{ x: '100%' }} transition={{ type: 'spring', stiffness: 350, damping: 35 }}
-            className="fixed right-0 top-0 bottom-0 w-72 bg-surface border-l border-border-muted z-50 p-6 overflow-y-auto">
-            <div className="flex justify-between items-center mb-6">
-              <h3 className="font-display text-xl text-text-primary tracking-wide">FILTERS</h3>
-              <button onClick={() => setFilterOpen(false)} className="text-text-secondary hover:text-volt">✕</button>
-            </div>
-            <div className="space-y-5">
-              <div>
-                <p className="stat-label mb-3">SPORT</p>
-                <div className="grid grid-cols-2 gap-2">
-                  {SPORT_CATEGORIES.slice(0, 8).map(s => (
-                    <button key={s.id} className="flex items-center gap-2 px-3 py-2 rounded-lg border border-border-muted text-xs font-label text-text-secondary hover:border-volt/30 hover:text-text-primary transition-all">
-                      <span>{s.emoji}</span>{s.label}
-                    </button>
-                  ))}
-                </div>
-              </div>
-              <div>
-                <p className="stat-label mb-3">EXPERIENCE LEVEL</p>
-                {['Amateur', 'Semi-Pro', 'Professional', 'Elite'].map(l => (
-                  <button key={l} className="w-full text-left px-3 py-2.5 rounded-lg border border-transparent text-sm font-label text-text-secondary hover:border-volt/30 hover:text-text-primary transition-all mb-1">
-                    {l}
-                  </button>
-                ))}
-              </div>
-              <Button fullWidth onClick={() => setFilterOpen(false)}>Apply Filters</Button>
-            </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
     </div>
   );
 };

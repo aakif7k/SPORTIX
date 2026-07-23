@@ -1,72 +1,34 @@
-from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.future import select
-from typing import List
+from fastapi import APIRouter, Depends, Query
+from app.core.dependencies import get_current_user
+from app.services import coins_service
 
-from app.core.dependencies import get_db, get_current_user
-from app.models.user import User
-from app.models.coins import CoinTransaction
-from app.schemas.coins import CoinBalanceResponse, CoinTransactionResponse, PurchaseRequest
-from app.services.coins_service import get_or_create_user_coins, spend_coins
+router = APIRouter()
 
-router = APIRouter(prefix="/api/coins", tags=["coins"])
 
-@router.get("/balance", response_model=CoinBalanceResponse)
-async def get_balance(
-    current_user: User = Depends(get_current_user),
-    db: AsyncSession = Depends(get_db)
-):
-    return await get_or_create_user_coins(db, current_user.id)
+@router.get("/balance")
+async def get_balance(user=Depends(get_current_user)):
+    data = await coins_service.get_balance(user["id"])
+    return {"success": True, "data": data}
 
-@router.get("/transactions", response_model=List[CoinTransactionResponse])
+
+@router.get("/transactions")
 async def get_transactions(
-    current_user: User = Depends(get_current_user),
-    db: AsyncSession = Depends(get_db)
+    page: int = Query(0),
+    limit: int = Query(20, le=50),
+    user=Depends(get_current_user),
 ):
-    result = await db.execute(
-        select(CoinTransaction)
-        .where(CoinTransaction.user_id == current_user.id)
-        .order_by(CoinTransaction.created_at.desc())
-    )
-    return list(result.scalars().all())
+    data = await coins_service.get_transactions(user["id"], page, limit)
+    return {"success": True, "data": data}
 
-@router.post("/purchase")
-async def purchase_cosmetic(
-    purchase: PurchaseRequest,
-    current_user: User = Depends(get_current_user),
-    db: AsyncSession = Depends(get_db)
-):
-    # Perform transaction
-    description = f"Purchased {purchase.item_type.title()}: {purchase.item_id}"
-    await spend_coins(
-        db,
-        current_user.id,
-        purchase.cost,
-        f"purchase_{purchase.item_type}",
-        description
-    )
-    
-    # Apply to user profile
-    if purchase.item_type == "theme":
-        current_user.profile_theme = purchase.item_id
-    elif purchase.item_type == "banner":
-        current_user.profile_banner = purchase.item_id
-    elif purchase.item_type == "border":
-        current_user.profile_border = purchase.item_id
-    elif purchase.item_type == "effect":
-        current_user.profile_effect = purchase.item_id
-    else:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Invalid cosmetic item type"
-        )
-        
-    await db.flush()
-    return {
-        "success": True,
-        "message": f"Successfully purchased and equipped {purchase.item_id}",
-        "profile_theme": current_user.profile_theme,
-        "profile_banner": current_user.profile_banner,
-        "profile_border": current_user.profile_border,
-        "profile_effect": current_user.profile_effect
-    }
+
+@router.post("/award")
+async def award_coins(user_id: str, amount: float, reason: str, user=Depends(get_current_user)):
+    """Admin/system endpoint to award coins to a user."""
+    data = await coins_service.award(user_id, amount, reason)
+    return {"success": True, "data": data}
+
+
+@router.post("/spend")
+async def spend_coins(amount: float, reason: str, user=Depends(get_current_user)):
+    data = await coins_service.spend(user["id"], amount, reason)
+    return {"success": True, "data": data}

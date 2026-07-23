@@ -1,55 +1,40 @@
-from fastapi import APIRouter, Depends, status, HTTPException
-from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.future import select
-from typing import List
-import uuid
+from fastapi import APIRouter, Depends, Query
+from app.core.dependencies import get_current_user
+from app.services import notification_service
 
-from app.core.dependencies import get_db, get_current_user
-from app.models.user import User
-from app.models.notification import Notification
-from app.schemas.notification import NotificationResponse
+router = APIRouter()
 
-router = APIRouter(prefix="/api/notifications", tags=["notifications"])
 
-@router.get("", response_model=List[NotificationResponse])
-async def get_my_notifications(
-    current_user: User = Depends(get_current_user),
-    db: AsyncSession = Depends(get_db)
+@router.get("/")
+async def get_notifications(
+    page: int = Query(0),
+    limit: int = Query(20, le=50),
+    unread_only: bool = Query(False),
+    user=Depends(get_current_user),
 ):
-    result = await db.execute(
-        select(Notification)
-        .where(Notification.user_id == current_user.id)
-        .order_by(Notification.created_at.desc())
-    )
-    return list(result.scalars().all())
+    data = await notification_service.get_for_user(user["id"], page, limit, unread_only)
+    return {"success": True, "data": data}
 
-@router.put("/{notif_id}/read")
-async def mark_notification_read(
-    notif_id: uuid.UUID,
-    current_user: User = Depends(get_current_user),
-    db: AsyncSession = Depends(get_db)
-):
-    notif = await db.get(Notification, notif_id)
-    if not notif or notif.user_id != current_user.id:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Notification not found")
-        
-    notif.is_read = True
-    await db.flush()
-    return {"success": True, "message": "Notification marked as read"}
 
-@router.put("/read-all")
-async def mark_all_read(
-    current_user: User = Depends(get_current_user),
-    db: AsyncSession = Depends(get_db)
-):
-    result = await db.execute(
-        select(Notification).where(
-            Notification.user_id == current_user.id,
-            Notification.is_read == False
-        )
-    )
-    unread = result.scalars().all()
-    for notif in unread:
-        notif.is_read = True
-    await db.flush()
-    return {"success": True, "message": f"Marked {len(unread)} notifications as read"}
+@router.get("/unread-count")
+async def get_unread_count(user=Depends(get_current_user)):
+    count = await notification_service.get_unread_count(user["id"])
+    return {"success": True, "data": {"count": count}}
+
+
+@router.post("/{notification_id}/read")
+async def mark_read(notification_id: str, user=Depends(get_current_user)):
+    await notification_service.mark_read(notification_id, user["id"])
+    return {"success": True}
+
+
+@router.post("/read-all")
+async def mark_all_read(user=Depends(get_current_user)):
+    await notification_service.mark_all_read(user["id"])
+    return {"success": True, "message": "All notifications marked as read"}
+
+
+@router.delete("/{notification_id}")
+async def delete_notification(notification_id: str, user=Depends(get_current_user)):
+    await notification_service.delete(notification_id, user["id"])
+    return {"success": True}

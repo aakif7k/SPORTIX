@@ -8,7 +8,7 @@ import {
 } from 'lucide-react';
 import { GLOBAL_SPORTS } from '../../services/mockData';
 import { Button } from '../../components/ui/Button';
-import { supabase } from '@/lib/supabase';
+import { databases, DATABASE_ID, COLLECTIONS } from '@/lib/appwrite';
 import { useAuth } from '@/context/AuthContext';
 import { checkUsernameAvailable, getUserProfile } from '@/lib/authService';
 import toast from 'react-hot-toast';
@@ -252,14 +252,16 @@ export const OnboardingPage: React.FC = () => {
     return GLOBAL_SPORTS.slice(0, 12);
   }, [sportSearch]);
 
-  /* ── Save to Supabase ── */
+  /* ── Save to Appwrite ── */
   const handleCompleteOnboarding = async () => {
     if (!currentUser) return;
     setIsLoading(true);
     try {
-      const { error } = await supabase
-        .from('profiles')
-        .update({
+      await databases.updateDocument(
+        DATABASE_ID,
+        COLLECTIONS.PROFILES,
+        currentUser.id,
+        {
           role,
           full_name: fullName,
           username: username.toLowerCase().trim(),
@@ -271,10 +273,8 @@ export const OnboardingPage: React.FC = () => {
           avatar_url:       photoPreview || null,
           is_onboarding_complete: true,
           updated_at: new Date().toISOString(),
-        })
-        .eq('id', currentUser.id);
-
-      if (error) throw error;
+        },
+      );
       toast.success("Profile set up! Let's go ⚡");
       navigate('/home');
     } catch {

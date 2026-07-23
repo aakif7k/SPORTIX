@@ -135,14 +135,13 @@ export const AutoSquadShowcase: React.FC = () => {
             AI-Powered Matchmaking
           </p>
           <h2
-            className="font-['Bebas_Neue'] text-[#ffffff] "
-            style={{ fontSize: "clamp(48px,6vw,96px)", lineHeight: 1 }}
+            className="font-sans font-black text-white uppercase tracking-tight"
+            style={{ fontSize: "clamp(36px,5vw,72px)", lineHeight: 1.05 }}
           >
-            YOUR SQUAD.
-            <br />
+            YOUR SQUAD.<br />
             <span
+              className="text-transparent bg-clip-text bg-gradient-to-r from-[#CCFF00] to-[#00D4FF]"
               style={{
-                color: "#CCFF00",
                 textShadow: "0 0 40px rgba(204,255,0,0.3)",
               }}
             >
@@ -254,7 +253,7 @@ export const AutoSquadShowcase: React.FC = () => {
                 }}
               >
                 <div className="flex items-center justify-between mb-5">
-                  <h3 className="font-['Bebas_Neue'] text-[28px] text-white">
+                  <h3 className="font-sans font-extrabold text-[24px] text-white">
                     IRON PULSE FC
                   </h3>
                   <span

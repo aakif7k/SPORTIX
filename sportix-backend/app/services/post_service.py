@@ -1,134 +1,238 @@
-import uuid
-from datetime import datetime
-from fastapi import HTTPException, status
-from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.future import select
-from sqlalchemy.orm import selectinload
+from appwrite.id import ID
+from appwrite.query import Query
+from app.core.appwrite import db
+from app.core.config import settings
+from datetime import datetime, timezone
 
-from app.models.post import Post, PostLike, Comment
-from app.services.pulse_service import add_pulse_points
-from app.services.mission_service import update_mission_progress
+DB = settings.appwrite_database_id
+POSTS = settings.collection_posts
+USERS = settings.collection_users
 
-async def create_new_post(
-    db: AsyncSession,
-    user_id: uuid.UUID,
-    post_in
-) -> Post:
-    post = Post(
-        id=uuid.uuid4(),
-        user_id=user_id,
-        content=post_in.content,
-        media_url=post_in.media_url,
-        media_type=post_in.media_type,
-        is_highlight=post_in.is_highlight,
-        likes_count=0,
-        comments_count=0,
-        created_at=datetime.utcnow(),
-        updated_at=datetime.utcnow()
-    )
-    db.add(post)
-    await db.flush()
-    
-    # Award Pulse Points and Update Missions
-    if post.is_highlight:
-        await add_pulse_points(db, user_id, 15.0, "highlight", "Uploaded profile video highlight")
-        await update_mission_progress(db, user_id, "upload_highlight")
-    else:
-        await add_pulse_points(db, user_id, 8.0, "post", "Created a community feed post")
-        await update_mission_progress(db, user_id, "create_post")
-        
-    return post
-
-async def like_post(db: AsyncSession, user_id: uuid.UUID, post_id: uuid.UUID) -> dict:
-    post = await db.get(Post, post_id)
-    if not post:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Post not found")
-        
-    result = await db.execute(
-        select(PostLike).where(
-            PostLike.user_id == user_id,
-            PostLike.post_id == post_id
+def get_user_info(user_id: str) -> dict:
+    """Get basic user info for denormalization."""
+    try:
+        users = db.list_documents(
+            DB, USERS,
+            queries=[Query.equal("auth_uid", [user_id])]
         )
+        if users["documents"]:
+            u = users["documents"][0]
+            return {
+                "author_id": user_id,
+                "author_username": u.get("username", ""),
+                "author_full_name": u.get("full_name", ""),
+                "author_avatar_url": u.get("avatar_url"),
+                "author_sport": u.get("sport", ""),
+                "author_level": u.get("level", 1),
+            }
+    except:
+        pass
+    return {"author_id": user_id}
+
+async def create(user_id: str, payload) -> dict:
+    user_info = get_user_info(user_id)
+
+    doc = db.create_document(
+        DB, POSTS,
+        document_id=ID.unique(),
+        data={
+            **user_info,
+            "content": payload.content,
+            "media_urls": payload.media_urls or [],
+            "media_type": payload.media_type or "none",
+            "post_type": payload.post_type or "general",
+            "sport_tag": payload.sport_tag,
+            "location_tag": payload.location_tag,
+            "likes_count": 0,
+            "comments_count": 0,
+            "shares_count": 0,
+            "is_deleted": False,
+            "created_at": datetime.now(timezone.utc).isoformat(),
+        }
     )
-    like = result.scalar_one_or_none()
-    
-    if like:
-        # Unlike
-        await db.delete(like)
-        post.likes_count = max(0, post.likes_count - 1)
-        action = "unliked"
-    else:
-        # Like
-        like = PostLike(
-            id=uuid.uuid4(),
-            user_id=user_id,
-            post_id=post_id,
-            created_at=datetime.utcnow()
+    return doc
+
+async def get_feed(
+    user_id: str,
+    page: int = 0,
+    limit: int = 20,
+    post_type: str = None,
+    sport: str = None
+) -> dict:
+    queries = [
+        Query.equal("is_deleted", [False]),
+        Query.order_desc("$createdAt"),
+        Query.limit(limit),
+        Query.offset(page * limit),
+    ]
+    if post_type:
+        queries.append(Query.equal("post_type", [post_type]))
+    if sport:
+        queries.append(Query.equal("sport_tag", [sport]))
+
+    result = db.list_documents(DB, POSTS, queries=queries)
+    return {
+        "posts": result["documents"],
+        "total": result["total"],
+        "page": page,
+        "limit": limit,
+        "has_more": (page + 1) * limit < result["total"],
+    }
+
+async def get_by_user(
+    author_id: str,
+    page: int = 0,
+    limit: int = 20
+) -> dict:
+    queries = [
+        Query.equal("author_id", [author_id]),
+        Query.equal("is_deleted", [False]),
+        Query.order_desc("$createdAt"),
+        Query.limit(limit),
+        Query.offset(page * limit),
+    ]
+    result = db.list_documents(DB, POSTS, queries=queries)
+    return {
+        "posts": result["documents"],
+        "total": result["total"],
+    }
+
+async def get_by_id(post_id: str, viewer_id: str = None) -> dict:
+    doc = db.get_document(DB, POSTS, post_id)
+    if doc.get("is_deleted"):
+        from fastapi import HTTPException
+        raise HTTPException(404, "Post not found")
+    return doc
+
+async def update(
+    post_id: str, user_id: str, payload
+) -> dict:
+    doc = db.get_document(DB, POSTS, post_id)
+    if doc.get("author_id") != user_id:
+        from fastapi import HTTPException
+        raise HTTPException(403, "Not your post")
+
+    updates = {}
+    if payload.content is not None:
+        updates["content"] = payload.content
+    if payload.sport_tag is not None:
+        updates["sport_tag"] = payload.sport_tag
+    if payload.location_tag is not None:
+        updates["location_tag"] = payload.location_tag
+
+    return db.update_document(DB, POSTS, post_id, updates)
+
+async def delete(post_id: str, user_id: str):
+    doc = db.get_document(DB, POSTS, post_id)
+    if doc.get("author_id") != user_id:
+        from fastapi import HTTPException
+        raise HTTPException(403, "Not your post")
+    db.update_document(DB, POSTS, post_id, {"is_deleted": True})
+
+async def toggle_like(post_id: str, user_id: str) -> dict:
+    LIKES = settings.collection_post_likes if hasattr(
+        settings, 'collection_post_likes'
+    ) else "post_likes"
+
+    # Check if already liked
+    try:
+        existing = db.list_documents(
+            DB, LIKES,
+            queries=[
+                Query.equal("post_id", [post_id]),
+                Query.equal("user_id", [user_id]),
+            ]
         )
-        db.add(like)
-        post.likes_count += 1
-        action = "liked"
-        
-        # Award 1 Pulse Point for active community engagement
-        await add_pulse_points(db, user_id, 1.0, "reaction", f"Liked post {post_id}")
-        await update_mission_progress(db, user_id, "react_posts")
-        
-    await db.flush()
-    return {"success": True, "action": action, "likes_count": post.likes_count}
+        if existing["documents"]:
+            # Unlike
+            db.delete_document(
+                DB, LIKES, existing["documents"][0]["$id"]
+            )
+            post = db.get_document(DB, POSTS, post_id)
+            new_count = max(0, post.get("likes_count", 0) - 1)
+            db.update_document(
+                DB, POSTS, post_id, {"likes_count": new_count}
+            )
+            return {"liked": False, "likes_count": new_count}
+        else:
+            # Like
+            db.create_document(
+                DB, LIKES,
+                document_id=ID.unique(),
+                data={
+                    "post_id": post_id,
+                    "user_id": user_id,
+                    "created_at":
+                        datetime.now(timezone.utc).isoformat(),
+                }
+            )
+            post = db.get_document(DB, POSTS, post_id)
+            new_count = post.get("likes_count", 0) + 1
+            db.update_document(
+                DB, POSTS, post_id, {"likes_count": new_count}
+            )
+            return {"liked": True, "likes_count": new_count}
+    except Exception as e:
+        raise ValueError(f"Like failed: {str(e)}")
+
+async def get_comments(post_id: str, page: int = 0) -> dict:
+    COMMENTS = "comments"
+    result = db.list_documents(
+        DB, COMMENTS,
+        queries=[
+            Query.equal("post_id", [post_id]),
+            Query.equal("is_deleted", [False]),
+            Query.order_asc("$createdAt"),
+            Query.limit(50),
+            Query.offset(page * 50),
+        ]
+    )
+    return {"comments": result["documents"]}
 
 async def add_comment(
-    db: AsyncSession,
-    user_id: uuid.UUID,
-    post_id: uuid.UUID,
-    comment_in
-) -> Comment:
-    post = await db.get(Post, post_id)
-    if not post:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Post not found")
-        
-    comment = Comment(
-        id=uuid.uuid4(),
-        post_id=post_id,
-        user_id=user_id,
-        content=comment_in.content,
-        created_at=datetime.utcnow()
-    )
-    db.add(comment)
-    post.comments_count += 1
-    await db.flush()
-    
-    # Award 2 Pulse Points for active communication
-    await add_pulse_points(db, user_id, 2.0, "comment", "Commented on a feed post")
-    await update_mission_progress(db, user_id, "comment")
-    
-    return comment
+    post_id: str, user_id: str, content: str
+) -> dict:
+    COMMENTS = "comments"
+    user_info = get_user_info(user_id)
 
-async def list_feed_posts(
-    db: AsyncSession,
-    current_user_id: uuid.UUID,
-    skip: int = 0,
-    limit: int = 20
-) -> list[Post]:
-    result = await db.execute(
-        select(Post)
-        .options(
-            selectinload(Post.user),
-            selectinload(Post.comments).selectinload(Comment.user)
-        )
-        .order_by(Post.created_at.desc())
-        .offset(skip)
-        .limit(limit)
+    doc = db.create_document(
+        DB, COMMENTS,
+        document_id=ID.unique(),
+        data={
+            "post_id": post_id,
+            "author_id": user_id,
+            "author_username": user_info.get(
+                "author_username", ""
+            ),
+            "author_avatar_url": user_info.get(
+                "author_avatar_url"
+            ),
+            "content": content.strip(),
+            "is_deleted": False,
+            "created_at":
+                datetime.now(timezone.utc).isoformat(),
+        }
     )
-    posts = list(result.scalars().all())
-    
-    # Mark which ones are liked by current user
-    for post in posts:
-        like_check = await db.execute(
-            select(PostLike).where(
-                PostLike.user_id == current_user_id,
-                PostLike.post_id == post.id
-            )
+
+    # Increment comment count on post
+    try:
+        post = db.get_document(DB, POSTS, post_id)
+        new_count = post.get("comments_count", 0) + 1
+        db.update_document(
+            DB, POSTS, post_id,
+            {"comments_count": new_count}
         )
-        post.is_liked = like_check.scalar_one_or_none() is not None
-        
-    return posts
+    except:
+        pass
+
+    return doc
+
+async def delete_comment(comment_id: str, user_id: str):
+    COMMENTS = "comments"
+    doc = db.get_document(DB, COMMENTS, comment_id)
+    if doc.get("author_id") != user_id:
+        from fastapi import HTTPException
+        raise HTTPException(403, "Not your comment")
+    db.update_document(
+        DB, COMMENTS, comment_id, {"is_deleted": True}
+    )

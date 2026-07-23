@@ -1,79 +1,47 @@
-from pydantic import BaseModel
-from typing import Optional, List, Dict, Any
-from datetime import datetime
-import uuid
-from app.schemas.user import UserResponse
-from app.schemas.squad import SquadResponse
+from pydantic import BaseModel, field_validator
+from typing import Optional, Dict, Any
+from enum import Enum
 
-class MatchBase(BaseModel):
-    event_id: Optional[uuid.UUID] = None
-    squad_id: uuid.UUID
-    opponent_squad_id: Optional[uuid.UUID] = None
-    result: str = "pending"  # win | loss | draw | pending
 
-class MatchCreate(MatchBase):
-    pass
+class MatchResult(str, Enum):
+    win = "win"
+    loss = "loss"
+    draw = "draw"
+    pending = "pending"
 
-class PlayerStatSubmit(BaseModel):
+
+class ValidationVote(str, Enum):
+    confirm = "confirm"
+    partial = "partial"
+    dispute = "dispute"
+
+
+class RetentionVote(str, Enum):
+    definitely = "definitely"
+    maybe = "maybe"
+    no = "no"
+
+
+class StatsSubmission(BaseModel):
+    match_id: str
     sport: str
     stats_data: Dict[str, Any]
+    match_rating: float
+    is_mvp: bool = False
     media_proof_url: Optional[str] = None
 
-class StatValidationSubmit(BaseModel):
-    vote: str  # confirm | partial | dispute
+    @field_validator("match_rating")
+    @classmethod
+    def rating_valid(cls, v: float) -> float:
+        if not 1 <= v <= 10:
+            raise ValueError("Match rating must be between 1 and 10")
+        return v
+
+
+class StatValidate(BaseModel):
+    vote: ValidationVote
     reason: Optional[str] = None
 
-class StatValidationResponse(BaseModel):
-    id: uuid.UUID
-    player_stat_id: uuid.UUID
-    validator_id: uuid.UUID
-    vote: str
-    reason: Optional[str] = None
-    created_at: datetime
-    validator: Optional[UserResponse] = None
 
-    class Config:
-        from_attributes = True
-
-class PlayerStatResponse(BaseModel):
-    id: uuid.UUID
-    match_id: uuid.UUID
-    user_id: uuid.UUID
-    sport: str
-    stats_data: Dict[str, Any]
-    media_proof_url: Optional[str] = None
-    validation_status: str
-    submitted_at: datetime
-    user: Optional[UserResponse] = None
-    validations: List[StatValidationResponse] = []
-
-    class Config:
-        from_attributes = True
-
-class RetentionVoteSubmit(BaseModel):
-    vote: str  # definitely | maybe | no
-
-class RetentionVoteResponse(BaseModel):
-    id: uuid.UUID
-    match_id: uuid.UUID
-    voter_id: uuid.UUID
-    squad_id: uuid.UUID
-    vote: str
-    created_at: datetime
-    voter: Optional[UserResponse] = None
-
-    class Config:
-        from_attributes = True
-
-class MatchResponse(MatchBase):
-    id: uuid.UUID
-    chemistry_delta: float
-    top_performer_id: Optional[uuid.UUID] = None
-    played_at: datetime
-    created_at: datetime
-    squad: Optional[SquadResponse] = None
-    opponent_squad: Optional[SquadResponse] = None
-    top_performer: Optional[UserResponse] = None
-
-    class Config:
-        from_attributes = True
+class SquadRetentionVote(BaseModel):
+    vote: RetentionVote

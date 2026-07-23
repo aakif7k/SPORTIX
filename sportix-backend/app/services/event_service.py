@@ -1,134 +1,135 @@
-import uuid
-from datetime import datetime
-from fastapi import HTTPException, status
-from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.future import select
-from sqlalchemy.orm import selectinload
+from appwrite.query import Query as Q
+from appwrite.id import ID
+from app.core.appwrite import db, DB_ID
+from app.core.config import settings
+from app.schemas.event import EventCreate
+from typing import Optional
 
-from app.models.event import Event, EventParticipant
-from app.services.mission_service import update_mission_progress
 
-async def create_new_event(
-    db: AsyncSession,
-    organizer_id: uuid.UUID,
-    event_in
-) -> Event:
-    event = Event(
-        id=uuid.uuid4(),
-        organizer_id=organizer_id,
-        title=event_in.title,
-        description=event_in.description,
-        sport=event_in.sport,
-        event_type=event_in.event_type,
-        format=event_in.format,
-        date=event_in.date,
-        venue=event_in.venue,
-        city=event_in.city,
-        max_participants=event_in.max_participants,
-        current_count=1,  # Organizer joins automatically
-        status="open",
-        is_ai_managed=False,
-        created_at=datetime.utcnow()
-    )
-    db.add(event)
-    await db.flush()
-    
-    # Add organizer as participant
-    organizer_participant = EventParticipant(
-        id=uuid.uuid4(),
-        event_id=event.id,
-        user_id=organizer_id,
-        entry_type="solo",
-        status="confirmed",
-        joined_at=datetime.utcnow()
-    )
-    db.add(organizer_participant)
-    await db.flush()
-    return event
-
-async def join_event(
-    db: AsyncSession,
-    user_id: uuid.UUID,
-    event_id: uuid.UUID,
-    entry_type: str = "solo",
-    squad_id: uuid.UUID = None
+async def browse(
+    sport: Optional[str] = None,
+    event_type: Optional[str] = None,
+    city: Optional[str] = None,
+    status: Optional[str] = None,
+    skill_level: Optional[str] = None,
+    page: int = 0,
+    limit: int = 20,
 ) -> dict:
-    event = await db.get(Event, event_id)
-    if not event:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Event not found")
-        
-    if event.status != "open":
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Event is not open for registration")
-        
-    # Check if already joined
-    result = await db.execute(
-        select(EventParticipant).where(
-            EventParticipant.event_id == event_id,
-            EventParticipant.user_id == user_id
-        )
-    )
-    existing = result.scalar_one_or_none()
-    if existing:
-        return {"success": True, "message": "Already registered for event"}
-        
-    if event.current_count >= event.max_participants:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Event is full")
-        
-    participant = EventParticipant(
-        id=uuid.uuid4(),
-        event_id=event_id,
-        user_id=user_id,
-        entry_type=entry_type,
-        squad_id=squad_id,
-        status="confirmed",
-        joined_at=datetime.utcnow()
-    )
-    db.add(participant)
-    event.current_count += 1
-    
-    if event.current_count >= event.max_participants:
-        event.status = "full"
-        
-    await db.flush()
-    
-    # Update Daily Mission Progress
-    await update_mission_progress(db, user_id, "join_event")
-    
-    return {"success": True, "message": "Successfully joined event"}
-
-async def leave_event(db: AsyncSession, user_id: uuid.UUID, event_id: uuid.UUID) -> dict:
-    event = await db.get(Event, event_id)
-    if not event:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Event not found")
-        
-    result = await db.execute(
-        select(EventParticipant).where(
-            EventParticipant.event_id == event_id,
-            EventParticipant.user_id == user_id
-        )
-    )
-    participant = result.scalar_one_or_none()
-    if not participant:
-        return {"success": True, "message": "Not registered in this event"}
-        
-    await db.delete(participant)
-    event.current_count = max(0, event.current_count - 1)
-    
-    if event.status == "full" and event.current_count < event.max_participants:
-        event.status = "open"
-        
-    await db.flush()
-    return {"success": True, "message": "Successfully left event"}
-
-async def list_events(db: AsyncSession, sport: str = None, city: str = None) -> list[Event]:
-    query = select(Event).options(
-        selectinload(Event.organizer),
-        selectinload(Event.participants).selectinload(EventParticipant.user)
-    )
+    queries = [Q.limit(limit), Q.offset(page * limit), Q.order_asc("eventDate")]
     if sport:
-        query = query.where(Event.sport == sport)
+        queries.append(Q.equal("sport", sport))
+    if event_type:
+        queries.append(Q.equal("eventType", event_type))
     if city:
-        query = query.where(Event.city == city)
-        
-    result = await db.execute(query.order_by(Event.date.asc()))
-    return list(result.scalars().all())
+        queries.append(Q.equal("city", city))
+    if status:
+        queries.append(Q.equal("status", status))
+    if skill_level:
+        queries.append(Q.equal("skillLevel", skill_level))
+    return db.list_documents(DB_ID, settings.collection_events, queries=queries)
+
+
+async def create(user_id: str, payload: EventCreate) -> dict:
+    return db.create_document(
+        DB_ID, settings.collection_events, ID.unique(),
+        data={
+            "organizerId": user_id,
+            "title": payload.title,
+            "description": payload.description,
+            "sport": payload.sport,
+            "eventType": payload.event_type.value,
+            "format": payload.format.value,
+            "skillLevel": payload.skill_level,
+            "venue": payload.venue,
+            "city": payload.city,
+            "eventDate": payload.event_date,
+            "endDate": payload.end_date,
+            "registrationDeadline": payload.registration_deadline,
+            "maxParticipants": payload.max_participants,
+            "minParticipants": payload.min_participants,
+            "entryFee": payload.entry_fee,
+            "prizePool": payload.prize_pool,
+            "rules": payload.rules,
+            "isAiManaged": payload.is_ai_managed,
+            "status": "upcoming",
+            "participantsCount": 0,
+        },
+    )
+
+
+async def get_by_id(event_id: str) -> dict:
+    return db.get_document(DB_ID, settings.collection_events, event_id)
+
+
+async def get_user_events(user_id: str) -> dict:
+    created = db.list_documents(
+        DB_ID, settings.collection_events,
+        queries=[Q.equal("organizerId", user_id), Q.order_desc("$createdAt")],
+    )
+    joined = db.list_documents(
+        DB_ID, settings.collection_event_participants,
+        queries=[Q.equal("userId", user_id), Q.limit(50)],
+    )
+    return {"created": created, "joined": joined}
+
+
+async def update(event_id: str, user_id: str, data: dict) -> dict:
+    doc = db.get_document(DB_ID, settings.collection_events, event_id)
+    if doc.get("organizerId") != user_id:
+        raise PermissionError("Only the organizer can update this event")
+    return db.update_document(DB_ID, settings.collection_events, event_id, data)
+
+
+async def cancel(event_id: str, user_id: str):
+    doc = db.get_document(DB_ID, settings.collection_events, event_id)
+    if doc.get("organizerId") != user_id:
+        raise PermissionError("Only the organizer can cancel this event")
+    db.update_document(DB_ID, settings.collection_events, event_id, {"status": "cancelled"})
+
+
+async def join(event_id: str, user_id: str, squad_id: Optional[str], entry_type: str) -> dict:
+    # Check not already joined
+    existing = db.list_documents(
+        DB_ID, settings.collection_event_participants,
+        queries=[Q.equal("eventId", event_id), Q.equal("userId", user_id), Q.limit(1)],
+    )
+    if existing.get("documents"):
+        raise ValueError("Already registered for this event")
+
+    doc = db.create_document(
+        DB_ID, settings.collection_event_participants, ID.unique(),
+        data={
+            "eventId": event_id,
+            "userId": user_id,
+            "squadId": squad_id,
+            "entryType": entry_type,
+            "status": "registered",
+        },
+    )
+    # Bump participants count
+    e = db.get_document(DB_ID, settings.collection_events, event_id)
+    db.update_document(DB_ID, settings.collection_events, event_id,
+                       {"participantsCount": e.get("participantsCount", 0) + 1})
+    return doc
+
+
+async def leave(event_id: str, user_id: str):
+    existing = db.list_documents(
+        DB_ID, settings.collection_event_participants,
+        queries=[Q.equal("eventId", event_id), Q.equal("userId", user_id), Q.limit(1)],
+    )
+    for doc in existing.get("documents", []):
+        db.delete_document(DB_ID, settings.collection_event_participants, doc["$id"])
+    try:
+        e = db.get_document(DB_ID, settings.collection_events, event_id)
+        db.update_document(DB_ID, settings.collection_events, event_id,
+                           {"participantsCount": max(0, e.get("participantsCount", 1) - 1)})
+    except Exception:
+        pass
+
+
+async def get_participants(event_id: str) -> dict:
+    return db.list_documents(
+        DB_ID, settings.collection_event_participants,
+        queries=[Q.equal("eventId", event_id), Q.limit(200)],
+    )

@@ -1,69 +1,57 @@
-import uuid
-from datetime import datetime
-from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.future import select
+from appwrite.query import Query as Q
+from appwrite.id import ID
+from app.core.appwrite import db, DB_ID
+from app.core.config import settings
 
-from app.models.badge import Badge, UserBadge
-from app.services.notification_service import create_notification
-from app.websockets.manager import ws_manager
+# Badge catalog — in production these would live in the badges collection
+BADGE_CATALOG = [
+    {"key": "first_post",      "name": "First Post",       "description": "Shared your first update",    "icon": "📝", "category": "social"},
+    {"key": "team_player",     "name": "Team Player",      "description": "Joined your first squad",     "icon": "🤝", "category": "squad"},
+    {"key": "event_warrior",   "name": "Event Warrior",    "description": "Registered for 3 events",     "icon": "⚔️", "category": "event"},
+    {"key": "streak_7",        "name": "7-Day Streak",     "description": "Active 7 days in a row",      "icon": "🔥", "category": "streak"},
+    {"key": "streak_30",       "name": "Month Legend",     "description": "Active 30 days in a row",     "icon": "👑", "category": "streak"},
+    {"key": "stat_master",     "name": "Stat Master",      "description": "10 validated stat reports",   "icon": "📊", "category": "match"},
+    {"key": "social_100",      "name": "Connected",        "description": "100 followers",                "icon": "🌟", "category": "social"},
+    {"key": "pulse_500",       "name": "High Pulse",       "description": "Reached 500 Pulse score",     "icon": "⚡", "category": "pulse"},
+    {"key": "mvp",             "name": "MVP",              "description": "Earned MVP in a match",       "icon": "🏆", "category": "match"},
+]
 
-async def check_and_award_badge(
-    db: AsyncSession,
-    user_id: uuid.UUID,
-    condition_type: str,  # level_up | streak | wins | squad_joins | missions | prestige
-    value: int
-) -> list:
-    # Find all badges matching condition_type where condition_value <= value
-    result = await db.execute(
-        select(Badge).where(
-            Badge.condition_type == condition_type,
-            Badge.condition_value <= value
-        )
+
+async def get_all() -> dict:
+    return {"documents": BADGE_CATALOG, "total": len(BADGE_CATALOG)}
+
+
+async def get_user_badges(user_id: str) -> dict:
+    return db.list_documents(
+        DB_ID, settings.collection_user_badges,
+        queries=[Q.equal("userId", user_id), Q.order_desc("$createdAt"), Q.limit(50)],
     )
-    eligible_badges = result.scalars().all()
-    
-    # Check which ones the user already unlocked
-    result = await db.execute(
-        select(UserBadge.badge_id).where(UserBadge.user_id == user_id)
+
+
+async def get_recent(user_id: str) -> dict:
+    return db.list_documents(
+        DB_ID, settings.collection_user_badges,
+        queries=[Q.equal("userId", user_id), Q.order_desc("$createdAt"), Q.limit(5)],
     )
-    unlocked_badge_ids = set(result.scalars().all())
-    
-    newly_awarded = []
-    for badge in eligible_badges:
-        if badge.id not in unlocked_badge_ids:
-            user_badge = UserBadge(
-                id=uuid.uuid4(),
-                user_id=user_id,
-                badge_id=badge.id,
-                unlocked_at=datetime.utcnow(),
-                is_featured=False
-            )
-            db.add(user_badge)
-            newly_awarded.append(badge)
-            
-            # Send Database Notification
-            await create_notification(
-                db,
-                user_id,
-                "badge_unlocked",
-                "New Badge Unlocked!",
-                f"You unlocked the '{badge.name}' badge.",
-                {"badge_id": str(badge.id), "icon_key": badge.icon_key, "glow_color": badge.glow_color}
-            )
-            
-            # Push live WebSockets alert
-            await ws_manager.send_notification_to_user(
-                user_id,
-                {
-                    "event": "badge_unlocked",
-                    "data": {
-                        "badge_id": str(badge.id),
-                        "name": badge.name,
-                        "description": badge.description,
-                        "icon_key": badge.icon_key,
-                        "glow_color": badge.glow_color,
-                        "is_animated": badge.is_animated
-                    }
-                }
-            )
-    return newly_awarded
+
+
+async def award_badge(user_id: str, badge_key: str) -> dict:
+    """Award a badge if user doesn't already have it."""
+    existing = db.list_documents(
+        DB_ID, settings.collection_user_badges,
+        queries=[Q.equal("userId", user_id), Q.equal("badgeKey", badge_key), Q.limit(1)],
+    )
+    if existing.get("documents"):
+        return existing["documents"][0]  # already awarded
+    badge_info = next((b for b in BADGE_CATALOG if b["key"] == badge_key), {})
+    return db.create_document(
+        DB_ID, settings.collection_user_badges, ID.unique(),
+        data={
+            "userId": user_id,
+            "badgeKey": badge_key,
+            "name": badge_info.get("name", badge_key),
+            "description": badge_info.get("description", ""),
+            "icon": badge_info.get("icon", "🏅"),
+            "category": badge_info.get("category", "general"),
+        },
+    )

@@ -1,42 +1,57 @@
+"""
+Auth endpoint tests.
+Run with: pytest tests/test_auth.py -v
+"""
 import pytest
+from fastapi.testclient import TestClient
+from unittest.mock import patch, MagicMock
+from main import app
 
-@pytest.mark.asyncio
-async def test_register_and_login(client):
-    # 1. Register a new user
-    register_payload = {
-        "email": "testathlete@sportix.com",
-        "username": "testathlete",
-        "full_name": "Test Athlete",
-        "password": "testpassword123",
-        "role": "athlete",
-        "sport": "Football",
-        "sports": ["Football"],
-        "position": "GK",
-        "experience_level": "beginner",
-        "location": "London, UK",
-        "city": "London",
-        "latitude": 51.5074,
-        "longitude": -0.1278,
-        "bio": "I am a test athlete profile.",
-        "is_open_to_recruit": True
-    }
-    
-    response = await client.post("/api/auth/register", json=register_payload)
-    assert response.status_code == 210 or response.status_code == 201, response.text
-    data = response.json()
-    assert data["username"] == "testathlete"
-    assert data["email"] == "testathlete@sportix.com"
-    assert data["profile_theme"] == "default"
+client = TestClient(app)
 
-    # 2. Authenticate login
-    login_payload = {
-        "username": "testathlete",
-        "password": "testpassword123"
-    }
-    
-    response = await client.post("/api/auth/login", data=login_payload)
-    assert response.status_code == 200, response.text
-    login_data = response.json()
-    assert "access_token" in login_data
-    assert login_data["username"] == "testathlete"
-    assert login_data["role"] == "athlete"
+
+def test_health():
+    r = client.get("/health")
+    assert r.status_code == 200
+    assert r.json()["status"] == "healthy"
+
+
+def test_root():
+    r = client.get("/")
+    assert r.status_code == 200
+    data = r.json()
+    assert data["name"] == "SPORTiX API"
+
+
+@patch("app.services.auth_service.register_user")
+def test_register(mock_register):
+    mock_register.return_value = {"user_id": "123", "email": "test@example.com", "username": "testuser"}
+    r = client.post("/api/auth/register", json={
+        "email": "test@example.com",
+        "password": "securepass",
+        "full_name": "Test User",
+        "username": "testuser",
+        "sport": "football",
+    })
+    assert r.status_code == 201
+    assert r.json()["success"] is True
+
+
+def test_register_short_username():
+    r = client.post("/api/auth/register", json={
+        "email": "test@example.com",
+        "password": "securepass",
+        "full_name": "Test User",
+        "username": "ab",
+    })
+    assert r.status_code == 422  # Validation error
+
+
+def test_register_short_password():
+    r = client.post("/api/auth/register", json={
+        "email": "test@example.com",
+        "password": "short",
+        "full_name": "Test User",
+        "username": "validuser",
+    })
+    assert r.status_code == 422

@@ -1,45 +1,84 @@
-from fastapi import APIRouter, Depends, status, Query
-from sqlalchemy.ext.asyncio import AsyncSession
-import uuid
-from typing import List, Optional
+from fastapi import APIRouter, Depends, Query
+from typing import Optional
+from app.core.dependencies import get_current_user
+from app.schemas.event import EventCreate, EventUpdate
+from app.services import event_service
 
-from app.core.dependencies import get_db, get_current_user
-from app.models.user import User
-from app.schemas.event import EventCreate, EventResponse
-from app.services.event_service import create_new_event, join_event, leave_event, list_events
+router = APIRouter()
 
-router = APIRouter(prefix="/api/events", tags=["events"])
 
-@router.post("", response_model=EventResponse, status_code=status.HTTP_201_CREATED)
-async def create_event(
-    event_in: EventCreate,
-    current_user: User = Depends(get_current_user),
-    db: AsyncSession = Depends(get_db)
+@router.get("/")
+async def browse_events(
+    sport: Optional[str] = Query(None),
+    event_type: Optional[str] = Query(None),
+    city: Optional[str] = Query(None),
+    status: Optional[str] = Query(None),
+    skill_level: Optional[str] = Query(None),
+    page: int = Query(0),
+    limit: int = Query(20, le=50),
+    user=Depends(get_current_user),
 ):
-    return await create_new_event(db, current_user.id, event_in)
+    data = await event_service.browse(
+        sport=sport, event_type=event_type, city=city,
+        status=status, skill_level=skill_level, page=page, limit=limit,
+    )
+    return {"success": True, "data": data}
 
-@router.get("", response_model=List[EventResponse])
-async def get_events(
-    sport: Optional[str] = None,
-    city: Optional[str] = None,
-    db: AsyncSession = Depends(get_db)
-):
-    return await list_events(db, sport, city)
+
+@router.post("/", status_code=201)
+async def create_event(payload: EventCreate, user=Depends(get_current_user)):
+    data = await event_service.create(user["id"], payload)
+    return {"success": True, "data": data}
+
+
+@router.get("/me")
+async def my_events(user=Depends(get_current_user)):
+    data = await event_service.get_user_events(user["id"])
+    return {"success": True, "data": data}
+
+
+@router.get("/nearby")
+async def nearby_events(city: str = Query(...), page: int = Query(0), user=Depends(get_current_user)):
+    data = await event_service.browse(city=city, page=page)
+    return {"success": True, "data": data}
+
+
+@router.get("/{event_id}")
+async def get_event(event_id: str, user=Depends(get_current_user)):
+    data = await event_service.get_by_id(event_id)
+    return {"success": True, "data": data}
+
+
+@router.put("/{event_id}")
+async def update_event(event_id: str, payload: EventUpdate, user=Depends(get_current_user)):
+    data = await event_service.update(event_id, user["id"], payload.model_dump(exclude_none=True))
+    return {"success": True, "data": data}
+
+
+@router.delete("/{event_id}")
+async def cancel_event(event_id: str, user=Depends(get_current_user)):
+    await event_service.cancel(event_id, user["id"])
+    return {"success": True, "message": "Event cancelled"}
+
 
 @router.post("/{event_id}/join")
-async def register_event(
-    event_id: uuid.UUID,
+async def join_event(
+    event_id: str,
+    squad_id: Optional[str] = None,
     entry_type: str = "solo",
-    squad_id: Optional[uuid.UUID] = None,
-    current_user: User = Depends(get_current_user),
-    db: AsyncSession = Depends(get_db)
+    user=Depends(get_current_user),
 ):
-    return await join_event(db, current_user.id, event_id, entry_type, squad_id)
+    data = await event_service.join(event_id, user["id"], squad_id, entry_type)
+    return {"success": True, "data": data}
 
-@router.delete("/{event_id}/leave")
-async def withdraw_event(
-    event_id: uuid.UUID,
-    current_user: User = Depends(get_current_user),
-    db: AsyncSession = Depends(get_db)
-):
-    return await leave_event(db, current_user.id, event_id)
+
+@router.delete("/{event_id}/join")
+async def leave_event(event_id: str, user=Depends(get_current_user)):
+    await event_service.leave(event_id, user["id"])
+    return {"success": True, "message": "Left event"}
+
+
+@router.get("/{event_id}/participants")
+async def get_participants(event_id: str, user=Depends(get_current_user)):
+    data = await event_service.get_participants(event_id)
+    return {"success": True, "data": data}

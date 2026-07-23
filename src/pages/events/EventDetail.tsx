@@ -315,13 +315,14 @@ export const EventDetail: React.FC = () => {
             {/* Participant avatars row */}
             <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.18 }}
               className="flex items-center gap-3 mt-4">
-              <div className="flex -space-x-2">
-                {MOCK_USERS.slice(0, 5).map((u, i) => (
-                  <img key={u.id} src={u.avatar} alt={u.name}
-                    className="w-7 h-7 rounded-full border-2 object-cover"
-                    style={{ borderColor: 'var(--bg-surface)', zIndex: 5 - i }} />
-                ))}
-              </div>
+                {(event.participants || []).slice(0, 5).map((pId, i) => {
+                  const u = MOCK_USERS.find(user => user.id === pId || user.uid === pId) || { avatar: `https://i.pravatar.cc/150?img=${(i % 50) + 1}`, name: 'Athlete' };
+                  return (
+                    <img key={pId || i} src={u.avatar} alt={u.name}
+                      className="w-7 h-7 rounded-full border-2 object-cover"
+                      style={{ borderColor: 'var(--bg-surface)', zIndex: 5 - i }} />
+                  );
+                })}
               <span className="font-mono text-[10px] text-white/70">
                 <strong className="text-white">{event.participants.length}</strong>/{event.maxParticipants} registered
               </span>

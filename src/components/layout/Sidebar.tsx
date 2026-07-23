@@ -1,22 +1,21 @@
 import React, { useState, useRef } from 'react';
 import { NavLink, useNavigate } from 'react-router-dom';
-import { motion } from 'framer-motion';
+import { motion, AnimatePresence } from 'framer-motion';
 import {
   Home, Calendar, Search, MessageCircle, Bell, User, Zap,
-  LogOut, Settings,
+  LogOut, Settings, ShieldCheck, Flame, ChevronRight
 } from 'lucide-react';
 import { useAuthStore } from '../../store/authStore';
 import { useNotificationStore } from '../../store/notificationStore';
 
 // ─── NAV CONFIG ──────────────────────────────────────────────────────────────
 const NAV_ITEMS = [
-  { to: '/app/feed',          icon: Home,          label: 'HypeZone',  accent: 'var(--volt)',  badge: null },
-  { to: '/app/events',        icon: Calendar,      label: 'ClashHub',  accent: '#FF6B00',      badge: '3' },
-  { to: '/app/discover',      icon: Search,        label: 'Discover',  accent: '#00D4FF',      badge: null },
-  { to: '/pulse',             icon: Zap,           label: 'Pulse',     accent: 'var(--volt)',  badge: null },
-  { to: '/app/messages',      icon: MessageCircle, label: 'Huddle',    accent: '#A855F7',      badge: null },
-  { to: '/app/notifications', icon: Bell,          label: 'Buzz',      accent: '#FF3B00',      badge: null },
-  { to: '/app/profile/me',    icon: User,          label: 'PlayerDNA', accent: 'var(--volt)',  badge: null },
+  { to: '/app/feed',          icon: Home,          label: 'HypeZone',  accent: '#CCFF00', badge: null },
+  { to: '/app/events',        icon: Calendar,      label: 'ClashHub',  accent: '#FF6B00', badge: '3' },
+  { to: '/app/discover',      icon: Search,        label: 'Discover',  accent: '#00D4FF', badge: null },
+  { to: '/pulse',             icon: Zap,           label: 'Pulse',     accent: '#CCFF00', badge: null },
+  { to: '/app/messages',      icon: MessageCircle, label: 'Huddle',    accent: '#A855F7', badge: null },
+  { to: '/app/profile/me',    icon: User,          label: 'PlayerDNA', accent: '#00D4FF', badge: null },
 ];
 
 interface SidebarProps { className?: string; }
@@ -28,11 +27,11 @@ export const Sidebar: React.FC<SidebarProps> = ({ className = '' }) => {
   const navigate = useNavigate();
   const hoverTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // Debounced hover handlers to prevent jitter on fast mouse moves
   const handleMouseEnter = () => {
     if (hoverTimeout.current) clearTimeout(hoverTimeout.current);
     hoverTimeout.current = setTimeout(() => setExpanded(true), 40);
   };
+  
   const handleMouseLeave = () => {
     if (hoverTimeout.current) clearTimeout(hoverTimeout.current);
     hoverTimeout.current = setTimeout(() => setExpanded(false), 60);
@@ -45,37 +44,40 @@ export const Sidebar: React.FC<SidebarProps> = ({ className = '' }) => {
       data-expanded={expanded}
       className={`sidebar-rail hidden md:flex flex-col h-screen sticky top-0 z-40 flex-shrink-0 overflow-visible ${className}`}
       style={{
-        width: expanded ? '240px' : '64px',
+        width: expanded ? '240px' : '68px',
         transition: 'width 220ms cubic-bezier(0.4, 0, 0.2, 1)',
         willChange: 'width',
-        background: 'var(--bg-elevated)',
-        borderRight: '1px solid var(--border)',
+        background: 'rgba(10, 10, 14, 0.95)',
+        backdropFilter: 'blur(24px)',
+        borderRight: '1px solid rgba(255, 255, 255, 0.08)',
+        boxShadow: expanded ? '10px 0 30px rgba(0, 0, 0, 0.5)' : 'none',
       }}
     >
-      {/* ── Ambient glow top ── */}
+      {/* ── Ambient Top Cyber Glow ── */}
       <div
-        className="absolute top-0 left-0 right-0 h-40 pointer-events-none"
-        style={{ background: 'radial-gradient(ellipse at 50% 0%, var(--volt-08) 0%, transparent 70%)' }}
+        className="absolute top-0 left-0 right-0 h-44 pointer-events-none"
+        style={{ background: 'radial-gradient(ellipse at 50% 0%, rgba(204, 255, 0, 0.12) 0%, transparent 75%)' }}
       />
-      {/* ── Subtle grid ── */}
+      
+      {/* ── Subtle Background Grid Lines ── */}
       <div
-        className="absolute inset-0 pointer-events-none opacity-20"
+        className="absolute inset-0 pointer-events-none opacity-15"
         style={{
-          backgroundImage: 'linear-gradient(var(--volt-04) 1px, transparent 1px), linear-gradient(90deg, var(--volt-04) 1px, transparent 1px)',
-          backgroundSize: '20px 20px',
+          backgroundImage: 'linear-gradient(rgba(204, 255, 0, 0.05) 1px, transparent 1px), linear-gradient(90deg, rgba(204, 255, 0, 0.05) 1px, transparent 1px)',
+          backgroundSize: '24px 24px',
         }}
       />
 
-      {/* ═══════════════════════ LOGO ═══════════════════════ */}
-      <div className="relative flex items-center gap-3 px-4 py-4 min-h-[68px] overflow-hidden" style={{ borderBottom: '1px solid var(--border)' }}>
+      {/* ═══════════════════════ LOGO HEADER ═══════════════════════ */}
+      <div className="relative flex items-center gap-3 px-4 py-4 min-h-[72px] border-b border-white/10 overflow-hidden">
         <motion.div
           whileHover={{ scale: 1.08, rotate: 3 }}
           whileTap={{ scale: 0.92 }}
           onClick={() => navigate('/app/feed')}
-          className="flex-shrink-0 w-9 h-9 rounded-xl overflow-hidden cursor-pointer relative"
-          style={{ boxShadow: '0 0 20px var(--volt-35)' }}
+          className="flex-shrink-0 w-10 h-10 rounded-2xl overflow-hidden cursor-pointer relative border border-[#CCFF00]/40 shadow-[0_0_20px_rgba(204,255,0,0.3)] bg-black flex items-center justify-center"
         >
           <img src="/logo.png" alt="SportiX" className="w-full h-full object-cover" />
+          <span className="absolute bottom-0.5 right-0.5 w-2.5 h-2.5 rounded-full bg-[#CCFF00] ring-2 ring-black" />
         </motion.div>
 
         <div
@@ -89,119 +91,100 @@ export const Sidebar: React.FC<SidebarProps> = ({ className = '' }) => {
             whiteSpace: 'nowrap',
           }}
         >
-          <span style={{ fontFamily: 'Bebas Neue, sans-serif', fontSize: '22px', color: 'var(--volt)', letterSpacing: '0.15em', lineHeight: 1 }}>
-            SPORTIX
+          <span className="font-sans text-xl font-black text-white tracking-widest leading-none flex items-center gap-1">
+            SPORT<span className="text-[#CCFF00]">IX</span>
           </span>
-          <span style={{ fontFamily: 'DM Mono', fontSize: '8px', color: 'var(--text-muted)', letterSpacing: '0.2em' }}>
-            PRO NETWORK
+          <span className="font-mono text-[9px] text-[#CCFF00] font-bold tracking-wider mt-0.5 flex items-center gap-1">
+            <Flame size={10} className="text-[#CCFF00] animate-pulse" /> ATHLETE NETWORK
           </span>
         </div>
       </div>
 
-      {/* ═══════════════════════ NAV ITEMS ═══════════════════════ */}
-      <nav className="flex-1 py-3 px-2 space-y-0.5 overflow-y-auto" style={{ scrollbarWidth: 'none' }}>
+      {/* ═══════════════════════ NAVIGATION ITEMS ═══════════════════════ */}
+      <nav className="flex-1 py-4 px-3 space-y-1.5 overflow-y-auto scrollbar-none">
         <p
-          style={{
-            fontFamily: 'Space Grotesk', fontSize: '8px', fontWeight: 700,
-            textTransform: 'uppercase', letterSpacing: '0.2em', color: 'var(--text-muted)',
-            paddingLeft: '12px', marginBottom: '6px', marginTop: '4px',
-            opacity: expanded ? 1 : 0,
-            transition: 'opacity 160ms ease',
-            transitionDelay: expanded ? '50ms' : '0ms',
-          }}
+          className="font-mono text-[9px] font-bold text-text-muted uppercase tracking-widest px-3 mb-2 transition-opacity duration-200"
+          style={{ opacity: expanded ? 1 : 0 }}
         >
-          Navigate
+          NAVIGATION
         </p>
 
         {NAV_ITEMS.map(({ to, icon: Icon, label, accent, badge }) => {
-          const isBuzz = label === 'Buzz';
-          const badgeCount = isBuzz ? unreadCount : (badge ? parseInt(badge) : 0);
-
           return (
-            <NavLink key={to} to={to} style={{ textDecoration: 'none' }}>
+            <NavLink key={to} to={to} className="block text-none">
               {({ isActive }) => (
                 <div
-                  className="relative flex items-center gap-3 cursor-pointer rounded-xl sidebar-nav-item"
-                  style={{
-                    padding: '9px 0',
-                    justifyContent: 'flex-start',
-                    transition: 'background 0.18s ease',
-                  }}
-                  data-active={isActive}
-                  data-accent={accent}
+                  className={`relative flex items-center gap-3 cursor-pointer rounded-2xl py-2.5 px-2.5 transition-all duration-200 group ${
+                    isActive 
+                      ? 'bg-white/10 border border-white/15 shadow-[0_0_20px_rgba(0,0,0,0.4)]' 
+                      : 'hover:bg-white/5 border border-transparent'
+                  }`}
                 >
-                  {/* Active bar */}
+                  {/* Active Indicator Bar */}
                   {isActive && (
                     <motion.div
-                      layoutId="active-pill"
-                      className="absolute left-0 top-1/2 -translate-y-1/2 w-0.5 h-5 rounded-r-full"
-                      style={{ background: accent, boxShadow: `0 0 8px ${accent}` }}
+                      layoutId="sidebar-active-pill"
+                      className="absolute left-0 top-1/2 -translate-y-1/2 w-1 h-6 rounded-r-full"
+                      style={{ background: accent, boxShadow: `0 0 12px ${accent}` }}
                     />
                   )}
 
-                  {/* Icon container */}
+                  {/* Icon Box */}
                   <div
-                    className="relative flex-shrink-0 flex items-center justify-center rounded-lg w-8 h-8"
+                    className="relative flex-shrink-0 flex items-center justify-center rounded-xl w-9 h-9 transition-all duration-200"
                     style={{
-                      marginLeft: '8px',
-                      background: isActive ? `${accent}22` : 'var(--bg-hover, rgba(255,255,255,0.04))',
-                      border: `1px solid ${isActive ? `${accent}44` : 'var(--border)'}`,
-                      boxShadow: isActive ? `0 0 12px ${accent}30` : 'none',
-                      transition: 'background 0.18s ease, border-color 0.18s ease, box-shadow 0.18s ease',
+                      background: isActive ? `${accent}25` : 'rgba(255, 255, 255, 0.05)',
+                      border: `1px solid ${isActive ? `${accent}66` : 'rgba(255, 255, 255, 0.08)'}`,
+                      boxShadow: isActive ? `0 0 16px ${accent}33` : 'none',
                     }}
                   >
-                    <Icon size={15} style={{ color: isActive ? accent : 'var(--text-muted)', transition: 'color 0.18s ease' }} />
-                    {badgeCount > 0 && (
-                      <motion.span
-                        initial={{ scale: 0 }} animate={{ scale: 1 }}
-                        className="absolute -top-1.5 -right-1.5 min-w-[14px] h-3.5 rounded-full flex items-center justify-center"
-                        style={{ background: '#FF3B00', fontSize: '8px', fontFamily: 'DM Mono', fontWeight: 700, color: '#fff', padding: '0 3px', boxShadow: '0 0 6px rgba(255,59,0,0.6)' }}
+                    <Icon size={18} style={{ color: isActive ? accent : '#A1A1AA' }} />
+                    {badge && (
+                      <span
+                        className="absolute -top-1 -right-1 min-w-[15px] h-4 rounded-full flex items-center justify-center bg-[#FF3B00] text-white text-[9px] font-bold font-mono px-1 shadow-[0_0_8px_rgba(255,59,0,0.8)]"
                       >
-                        {badgeCount > 9 ? '9+' : badgeCount}
-                      </motion.span>
+                        {badge}
+                      </span>
                     )}
                   </div>
 
                   {/* Label */}
                   <div
-                    className="flex flex-col min-w-0 overflow-hidden"
+                    className="flex items-center justify-between flex-1 min-w-0 overflow-hidden"
                     style={{
                       opacity: expanded ? 1 : 0,
-                      transform: expanded ? 'translateX(0)' : 'translateX(-6px)',
+                      transform: expanded ? 'translateX(0)' : 'translateX(-8px)',
                       transition: 'opacity 160ms ease, transform 160ms ease',
-                      transitionDelay: expanded ? '70ms' : '0ms',
+                      transitionDelay: expanded ? '60ms' : '0ms',
                       whiteSpace: 'nowrap',
                       pointerEvents: expanded ? 'auto' : 'none',
                     }}
                   >
-                    <span style={{
-                      fontFamily: 'Barlow Condensed', fontWeight: 600, fontSize: '14px',
-                      color: isActive ? accent : 'var(--text-secondary, var(--text-muted))',
-                      transition: 'color 0.18s ease',
-                      letterSpacing: '0.5px',
-                    }}>
+                    <span 
+                      className="font-sans font-bold text-sm tracking-wide transition-colors"
+                      style={{ color: isActive ? '#FFFFFF' : '#A1A1AA' }}
+                    >
                       {label}
                     </span>
+                    {isActive && (
+                      <ChevronRight size={14} style={{ color: accent }} />
+                    )}
                   </div>
                 </div>
               )}
             </NavLink>
           );
         })}
-
       </nav>
 
-      {/* ═══════════════════════ BOTTOM USER SECTION ═══════════════════════ */}
-      <div className="mt-auto flex-shrink-0 relative" style={{ borderTop: '1px solid var(--border)' }}>
-        <div className="absolute bottom-0 left-0 right-0 h-20 pointer-events-none" style={{ background: 'radial-gradient(ellipse at 50% 100%, var(--volt-04) 0%, transparent 70%)' }} />
-
+      {/* ═══════════════════════ USER PROFILE FOOTER ═══════════════════════ */}
+      <div className="mt-auto flex-shrink-0 relative border-t border-white/10 p-3">
         {user && (
-          <div className="w-full relative" style={{ paddingBottom: '0' }}>
-
-
-            {/* Collapsed: avatar only */}
+          <div className="relative">
+            
+            {/* Collapsed Avatar Only */}
             <div
-              className="w-full flex items-center justify-center py-3"
+              className="w-full flex items-center justify-center py-2"
               style={{
                 opacity: expanded ? 0 : 1,
                 transform: expanded ? 'scale(0.85)' : 'scale(1)',
@@ -212,73 +195,77 @@ export const Sidebar: React.FC<SidebarProps> = ({ className = '' }) => {
               }}
             >
               <div
-                className="relative flex-shrink-0 cursor-pointer"
+                className="relative flex-shrink-0 cursor-pointer group"
                 onClick={() => navigate('/app/profile/me')}
               >
-                <div className="w-10 h-10 rounded-xl overflow-hidden" style={{ border: '1px solid var(--volt-30)' }}>
-                  <img src={user.avatar} alt={user.name} className="w-full h-full object-cover" />
+                <div className="w-10 h-10 rounded-2xl overflow-hidden border border-[#CCFF00]/40 shadow-[0_0_12px_rgba(204,255,0,0.2)] bg-elevated">
+                  <img 
+                    src={user?.avatar || (user as any)?.avatar_url || 'https://i.pravatar.cc/150?img=33'} 
+                    alt={user?.name || 'Athlete'} 
+                    className="w-full h-full object-cover" 
+                  />
                 </div>
-                <div className="absolute -bottom-0 -right-0.5 w-3 h-3 rounded-full bg-volt" style={{ border: '2px solid var(--bg-elevated)' }} />
+                <span className="absolute -bottom-0.5 -right-0.5 w-3.5 h-3.5 rounded-full bg-[#CCFF00] ring-2 ring-black flex items-center justify-center text-[8px] font-black text-black">
+                  ✓
+                </span>
               </div>
             </div>
 
-            {/* Expanded: full profile card */}
+            {/* Expanded Full Profile Card */}
             <div
-              className="mx-3 rounded-[16px] overflow-hidden flex flex-col items-center relative group/profile"
+              className="rounded-2xl overflow-hidden bg-surface border border-white/10 p-3 space-y-3 shadow-xl transition-all duration-200"
               style={{
-                background: 'var(--bg-surface)',
-                border: '1px solid var(--accent-border)',
                 opacity: expanded ? 1 : 0,
-                transform: expanded ? 'translateY(0) scale(1)' : 'translateY(6px) scale(0.97)',
+                transform: expanded ? 'translateY(0) scale(1)' : 'translateY(8px) scale(0.95)',
                 transition: 'opacity 200ms ease, transform 200ms ease',
                 transitionDelay: expanded ? '60ms' : '0ms',
                 pointerEvents: expanded ? 'auto' : 'none',
-                marginTop: expanded ? '6px' : '0',
-                marginBottom: expanded ? '6px' : '0',
               }}
             >
-              <div className="absolute inset-0 pointer-events-none rounded-[16px] border border-volt opacity-0 group-hover/profile:opacity-30 transition-opacity duration-300 z-20" />
-
-              {/* Cover strip */}
-              <div className="w-full h-[28px] relative">
-                <svg width="100%" height="100%" xmlns="http://www.w3.org/2000/svg" preserveAspectRatio="none">
-                  <defs>
-                    <pattern id="sport-pattern-bottom" x="0" y="0" width="40" height="40" patternUnits="userSpaceOnUse">
-                      <path d="M0 40L40 0H20L0 20M40 40V20L20 40" fill="none" stroke="var(--volt-10)" strokeWidth="1"/>
-                    </pattern>
-                    <linearGradient id="cover-grad-bottom" x1="0" y1="0" x2="1" y2="1">
-                      <stop offset="0%" stopColor="#081A00" />
-                      <stop offset="100%" stopColor="#050508" />
-                    </linearGradient>
-                  </defs>
-                  <rect width="100%" height="100%" fill="url(#cover-grad-bottom)"/>
-                  <rect width="100%" height="100%" fill="url(#sport-pattern-bottom)"/>
-                </svg>
-              </div>
-
-              {/* Avatar */}
-              <div className="relative -mt-[20px] mb-2 z-10">
-                <div className="w-[40px] h-[40px] rounded-full overflow-hidden" style={{ border: '2px solid var(--volt)', outline: '2px solid var(--bg-elevated)', outlineOffset: '-2px', backgroundColor: 'var(--bg-elevated)' }}>
-                  <img src={user.avatar} alt={user.name} className="w-full h-full object-cover rounded-full" />
+              {/* Profile Header */}
+              <div 
+                className="flex items-center gap-3 cursor-pointer group"
+                onClick={() => navigate('/app/profile/me')}
+              >
+                <div className="relative flex-shrink-0">
+                  <img 
+                    src={user?.avatar || (user as any)?.avatar_url || 'https://i.pravatar.cc/150?img=33'} 
+                    alt={user?.name || 'Athlete'} 
+                    className="w-10 h-10 rounded-2xl object-cover border border-[#CCFF00]/50 shadow-md bg-elevated"
+                  />
+                  <span className="absolute -bottom-1 -right-1 w-3.5 h-3.5 rounded-full bg-[#CCFF00] ring-2 ring-black flex items-center justify-center text-[8px] font-black text-black">
+                    ✓
+                  </span>
+                </div>
+                <div className="flex-1 min-w-0">
+                  <h3 className="font-sans font-bold text-sm text-white truncate leading-snug group-hover:text-[#CCFF00] transition-colors">
+                    {user?.name || 'Athlete'}
+                  </h3>
+                  <div className="flex items-center gap-1 font-mono text-[9px] text-[#CCFF00]">
+                    <span>#{(user?.sport || 'FOOTBALL').toUpperCase()}</span>
+                    <span>•</span>
+                    <span className="text-text-muted">SSR: 94.8</span>
+                  </div>
                 </div>
               </div>
 
-              {/* Name */}
-              <h3 className="font-condensed text-[16px] font-bold mb-1 leading-none truncate w-full text-center px-2" style={{ color: 'var(--text-primary)' }}>{user.name}</h3>
-              <div className="mb-3 px-2 py-0.5 rounded-full" style={{ background: 'var(--bg-elevated)', border: '1px solid var(--border)' }}>
-                <span className="font-mono text-[9px] font-bold text-accent">#{user.sport.toUpperCase()}</span>
-              </div>
-
               {/* Action Buttons */}
-              <div className="flex w-full" style={{ borderTop: '1px solid var(--border)', background: 'var(--bg-elevated)' }}>
-                <button onClick={() => navigate('/app/settings')} className="flex-1 py-2.5 flex items-center justify-center gap-1.5 font-mono text-[9px] uppercase tracking-wider hover:bg-white/5 transition-colors" style={{ color: 'var(--text-muted)', borderRight: '1px solid var(--border)' }}>
+              <div className="grid grid-cols-2 gap-2 pt-2 border-t border-white/5">
+                <button
+                  onClick={() => navigate('/app/settings')}
+                  className="py-2 rounded-xl bg-elevated border border-white/10 hover:border-[#CCFF00]/40 font-mono text-[10px] font-bold text-white uppercase tracking-wider flex items-center justify-center gap-1.5 transition-all"
+                >
                   <Settings size={12} /> Edit
                 </button>
-                <button onClick={() => setShowLogoutConfirm(true)} className="flex-1 py-2.5 flex items-center justify-center gap-1.5 font-mono text-[9px] uppercase tracking-wider text-[#FF3B00] hover:bg-[#FF3B00]/10 transition-colors">
+                <button
+                  onClick={() => setShowLogoutConfirm(true)}
+                  className="py-2 rounded-xl bg-red-500/10 border border-red-500/30 hover:bg-red-500/20 font-mono text-[10px] font-bold text-red-400 uppercase tracking-wider flex items-center justify-center gap-1.5 transition-all"
+                >
                   <LogOut size={12} /> Sign Out
                 </button>
               </div>
             </div>
+
           </div>
         )}
       </div>

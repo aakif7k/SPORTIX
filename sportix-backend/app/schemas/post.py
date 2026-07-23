@@ -1,44 +1,54 @@
 from pydantic import BaseModel
 from typing import Optional, List
-from datetime import datetime
-import uuid
-from app.schemas.user import UserResponse
+from enum import Enum
 
-class CommentBase(BaseModel):
+
+class PostType(str, Enum):
+    general = "general"
+    highlight = "highlight"
+    achievement = "achievement"
+    training = "training"
+
+
+class MediaType(str, Enum):
+    none = "none"
+    image = "image"
+    video = "video"
+    multi_image = "multi_image"
+
+
+class PostCreate(BaseModel):
+    content: str
+    media_urls: List[str] = []
+    media_type: MediaType = MediaType.none
+    post_type: PostType = PostType.general
+    sport_tag: Optional[str] = None
+    location_tag: Optional[str] = None
+    is_scheduled: bool = False
+    scheduled_at: Optional[str] = None
+
+
+class PostUpdate(BaseModel):
+    content: Optional[str] = None
+    sport_tag: Optional[str] = None
+    location_tag: Optional[str] = None
+
+
+class CommentCreate(BaseModel):
     content: str
 
-class CommentCreate(CommentBase):
-    pass
 
-class CommentResponse(CommentBase):
-    id: uuid.UUID
-    post_id: uuid.UUID
-    user_id: uuid.UUID
-    created_at: datetime
-    user: Optional[UserResponse] = None
+class ReelCreate(BaseModel):
+    title: str
+    video_url: str
+    thumbnail_url: Optional[str] = None
+    caption: Optional[str] = None
+    sport_tag: Optional[str] = None
+    duration_seconds: int = 0
 
-    class Config:
-        from_attributes = True
 
-class PostBase(BaseModel):
-    content: str
-    media_url: Optional[str] = None
-    media_type: Optional[str] = None  # image | video | highlight
-    is_highlight: bool = False
-
-class PostCreate(PostBase):
-    pass
-
-class PostResponse(PostBase):
-    id: uuid.UUID
-    user_id: uuid.UUID
-    likes_count: int
-    comments_count: int
-    created_at: datetime
-    updated_at: datetime
-    user: Optional[UserResponse] = None
-    comments: List[CommentResponse] = []
-    is_liked: bool = False
-
-    class Config:
-        from_attributes = True
+class StoryCreate(BaseModel):
+    media_url: str
+    media_type: str = "image"
+    caption: Optional[str] = None
+    sport_tag: Optional[str] = None

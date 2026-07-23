@@ -1,65 +1,89 @@
-from fastapi import APIRouter, Depends, status, Query
-from sqlalchemy.ext.asyncio import AsyncSession
-import uuid
-from typing import Optional
+from fastapi import APIRouter, Depends, Query
+from app.core.dependencies import get_current_user
+from app.schemas.squad import SquadCreate, SquadUpdate, MemberAdd
+from app.services import squad_service
 
-from app.core.dependencies import get_db, get_current_user
-from app.models.user import User
-from app.schemas.squad import SquadCreate, SquadResponse
-from app.services.squad_service import create_squad_profile, join_squad_group, leave_squad_group, update_tactics, assign_member_role
-from app.services.ai_squad_service import match_ai_squad
+router = APIRouter()
 
-router = APIRouter(prefix="/api/squads", tags=["squads"])
 
-@router.post("", response_model=SquadResponse, status_code=status.HTTP_201_CREATED)
-async def create_squad(
-    squad_in: SquadCreate,
-    current_user: User = Depends(get_current_user),
-    db: AsyncSession = Depends(get_db)
-):
-    return await create_squad_profile(db, current_user.id, squad_in)
+@router.get("/me")
+async def my_squads(user=Depends(get_current_user)):
+    data = await squad_service.get_user_squads(user["id"])
+    return {"success": True, "data": data}
 
-@router.post("/matchmake")
-async def auto_squad_matchmake(
-    sport: str = Query(..., description="Sport tag for matchmaking"),
-    current_user: User = Depends(get_current_user),
-    db: AsyncSession = Depends(get_db)
-):
-    return await match_ai_squad(db, current_user.id, sport)
 
-@router.post("/{squad_id}/join")
-async def join_squad(
-    squad_id: uuid.UUID,
-    position: str = "Any",
-    current_user: User = Depends(get_current_user),
-    db: AsyncSession = Depends(get_db)
-):
-    return await join_squad_group(db, current_user.id, squad_id, position)
+@router.post("/", status_code=201)
+async def create_squad(payload: SquadCreate, user=Depends(get_current_user)):
+    data = await squad_service.create(user["id"], payload)
+    return {"success": True, "data": data}
 
-@router.delete("/{squad_id}/leave")
-async def leave_squad(
-    squad_id: uuid.UUID,
-    current_user: User = Depends(get_current_user),
-    db: AsyncSession = Depends(get_db)
-):
-    return await leave_squad_group(db, current_user.id, squad_id)
 
-@router.put("/{squad_id}/tactics", response_model=SquadResponse)
-async def adjust_tactics(
-    squad_id: uuid.UUID,
+@router.get("/{squad_id}")
+async def get_squad(squad_id: str, user=Depends(get_current_user)):
+    data = await squad_service.get_by_id(squad_id)
+    return {"success": True, "data": data}
+
+
+@router.put("/{squad_id}")
+async def update_squad(squad_id: str, payload: SquadUpdate, user=Depends(get_current_user)):
+    data = await squad_service.update(squad_id, user["id"], payload)
+    return {"success": True, "data": data}
+
+
+@router.delete("/{squad_id}")
+async def disband_squad(squad_id: str, user=Depends(get_current_user)):
+    await squad_service.disband(squad_id, user["id"])
+    return {"success": True, "message": "Squad disbanded"}
+
+
+@router.get("/{squad_id}/members")
+async def get_members(squad_id: str, user=Depends(get_current_user)):
+    data = await squad_service.get_members(squad_id)
+    return {"success": True, "data": data}
+
+
+@router.post("/{squad_id}/members", status_code=201)
+async def add_member(squad_id: str, payload: MemberAdd, user=Depends(get_current_user)):
+    data = await squad_service.add_member(squad_id, user["id"], payload)
+    return {"success": True, "data": data}
+
+
+@router.delete("/{squad_id}/members/{target_user_id}")
+async def remove_member(squad_id: str, target_user_id: str, user=Depends(get_current_user)):
+    await squad_service.remove_member(squad_id, target_user_id, user["id"])
+    return {"success": True, "message": "Member removed"}
+
+
+@router.patch("/{squad_id}/members/{target_user_id}/role")
+async def update_role(squad_id: str, target_user_id: str, role: str, user=Depends(get_current_user)):
+    await squad_service.update_role(squad_id, target_user_id, role, user["id"])
+    return {"success": True, "message": "Role updated"}
+
+
+@router.get("/{squad_id}/chemistry")
+async def get_chemistry(squad_id: str, user=Depends(get_current_user)):
+    data = await squad_service.get_chemistry(squad_id)
+    return {"success": True, "data": data}
+
+
+@router.get("/{squad_id}/analytics")
+async def get_analytics(squad_id: str, user=Depends(get_current_user)):
+    data = await squad_service.get_analytics(squad_id)
+    return {"success": True, "data": data}
+
+
+@router.put("/{squad_id}/tactics")
+async def update_tactics(
+    squad_id: str,
     formation: str,
-    tactical_notes: Optional[str] = None,
-    current_user: User = Depends(get_current_user),
-    db: AsyncSession = Depends(get_db)
+    tactical_notes: str = None,
+    user=Depends(get_current_user),
 ):
-    return await update_tactics(db, current_user.id, squad_id, formation, tactical_notes)
+    data = await squad_service.update_tactics(squad_id, user["id"], formation, tactical_notes)
+    return {"success": True, "data": data}
 
-@router.put("/{squad_id}/members/{user_id}/role")
-async def set_role(
-    squad_id: uuid.UUID,
-    user_id: uuid.UUID,
-    role: str,  # captain | vice_captain | member | strategist etc.
-    current_user: User = Depends(get_current_user),
-    db: AsyncSession = Depends(get_db)
-):
-    return await assign_member_role(db, current_user.id, squad_id, user_id, role)
+
+@router.post("/{squad_id}/leadership/vote")
+async def vote_leadership(squad_id: str, candidate_id: str, vote: str, user=Depends(get_current_user)):
+    data = await squad_service.vote_leadership(squad_id, candidate_id, user["id"], vote)
+    return {"success": True, "data": data}

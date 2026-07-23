@@ -1,56 +1,54 @@
+"""
+Shared pytest fixtures — mocks Appwrite database and overrides FastAPI dependencies.
+"""
 import pytest
-import asyncio
-import os
-import pytest_asyncio
-from httpx import AsyncClient
-from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker, AsyncSession
+from unittest.mock import MagicMock, patch
+from fastapi.testclient import TestClient
 
-from app.core.database import Base
-from app.core.dependencies import get_db
 from main import app
+from app.core.dependencies import get_current_user, get_optional_user
 
-TEST_DATABASE_URL = "sqlite+aiosqlite:///./test_sportix.db"
+MOCK_USER = {"id": "user123", "email": "player@sportix.com", "name": "Test Player"}
 
-@pytest.fixture(scope="session")
-def event_loop():
-    try:
-        loop = asyncio.get_running_loop()
-    except RuntimeError:
-        loop = asyncio.new_event_loop()
-    yield loop
-    loop.close()
 
-@pytest_asyncio.fixture(scope="session")
-async def test_engine():
-    engine = create_async_engine(TEST_DATABASE_URL, echo=False)
-    async with engine.begin() as conn:
-        await conn.run_sync(Base.metadata.drop_all)
-        await conn.run_sync(Base.metadata.create_all)
-    yield engine
-    # Cleanup DB file after tests
-    await engine.dispose()
-    if os.path.exists("./test_sportix.db"):
-        try:
-            os.remove("./test_sportix.db")
-        except Exception:
-            pass
+async def override_get_current_user():
+    return MOCK_USER
 
-@pytest_asyncio.fixture
-async def db_session(test_engine) -> AsyncSession:
-    AsyncSessionLocal = async_sessionmaker(
-        bind=test_engine,
-        class_=AsyncSession,
-        expire_on_commit=False
-    )
-    async with AsyncSessionLocal() as session:
-        yield session
-        await session.rollback()
 
-@pytest_asyncio.fixture
-async def client(db_session):
-    async def override_get_db():
-        yield db_session
-    app.dependency_overrides[get_db] = override_get_db
-    async with AsyncClient(app=app, base_url="http://test") as ac:
-        yield ac
+async def override_get_optional_user():
+    return MOCK_USER
+
+
+@pytest.fixture(autouse=True)
+def override_dependencies():
+    app.dependency_overrides[get_current_user] = override_get_current_user
+    app.dependency_overrides[get_optional_user] = override_get_optional_user
+    yield
     app.dependency_overrides.clear()
+
+
+@pytest.fixture(autouse=True)
+def mock_appwrite_client():
+    """
+    Auto-use fixture that patches the Appwrite database client
+    for all tests. This prevents real network calls during testing.
+    """
+    mock_db = MagicMock()
+    mock_db.list_documents.return_value = {"documents": [], "total": 0}
+    mock_db.get_document.return_value = {}
+    mock_db.create_document.return_value = {"$id": "mock_doc_id"}
+    mock_db.update_document.return_value = {"$id": "mock_doc_id"}
+    mock_db.delete_document.return_value = {}
+
+    mock_users = MagicMock()
+    mock_storage = MagicMock()
+
+    with patch("app.core.appwrite.db", mock_db), \
+         patch("app.core.appwrite.users_svc", mock_users), \
+         patch("app.core.appwrite.storage_svc", mock_storage):
+        yield mock_db
+
+
+@pytest.fixture
+def client():
+    return TestClient(app)

@@ -57,7 +57,7 @@ export const Navbar: React.FC = () => {
           style={{
             background: 'rgba(255,255,255,0.03)',
             border: '1px solid var(--volt-10)',
-            fontFamily: 'DM Mono',
+            fontFamily: 'Urbanist, sans-serif',
             fontSize: '12px',
             color: 'var(--text-muted)',
           }}
@@ -84,7 +84,7 @@ export const Navbar: React.FC = () => {
             <motion.span
               initial={{ scale: 0 }} animate={{ scale: 1 }}
               className="absolute -top-1 -right-1 min-w-[16px] h-4 rounded-full flex items-center justify-center font-bold"
-              style={{ background: '#FF3B00', fontSize: '8px', fontFamily: 'DM Mono', color: '#fff', padding: '0 3px', boxShadow: '0 0 8px rgba(255,59,0,0.7)' }}
+              style={{ background: '#FF3B00', fontSize: '8px', fontFamily: 'Urbanist, sans-serif', color: '#fff', padding: '0 3px', boxShadow: '0 0 8px rgba(255,59,0,0.7)' }}
             >
               {unreadCount > 9 ? '9+' : unreadCount}
             </motion.span>
@@ -151,58 +151,74 @@ export const Navbar: React.FC = () => {
 };
 
 // ─── BOTTOM NAV (mobile) ───────────────────────────────────────────────────
-const BOT_ITEMS = [
-  { to: '/app/feed', icon: Home, label: 'Hyper Zone' },
-  { to: '/app/events', icon: Calendar, label: 'Clash Hub' },
-  { to: '/app/messages', icon: MessageCircle, label: 'Huddle' },
-  { to: '/app/profile/me', icon: User, label: 'Player DNA' },
-];
-
 export const BottomNav: React.FC = () => {
   const navigate = useNavigate();
+  const { unreadCount } = useNotificationStore();
 
   return (
     <nav className="md:hidden fixed bottom-0 left-0 right-0 z-40 safe-area-inset-bottom premium-nav border-t border-border/10">
-      <div className="flex items-center justify-around px-4 py-2.5">
-        {BOT_ITEMS.slice(0, 2).map(({ to, icon: Icon }) => (
-          <NavLink key={to} to={to}>
-            {({ isActive }) => (
-              <div 
-                className="relative flex items-center justify-center w-12 h-12 rounded-xl transition-all"
-                style={{ color: isActive ? 'var(--volt)' : 'var(--text-muted)' }}
-              >
-                <Icon size={22} />
-                {isActive && <div className="absolute bottom-1 w-4 h-0.5 bg-accent rounded-full shadow-glow-volt-sm" />}
-              </div>
-            )}
-          </NavLink>
-        ))}
-
-        {/* AI+ center button */}
-        <motion.button
-          whileTap={{ scale: 0.9 }} whileHover={{ scale: 1.05 }}
-          onClick={() => navigate('/pulse')}
-          className="w-12 h-12 rounded-full flex-shrink-0 flex items-center justify-center shadow-glow-volt -mt-4 border border-black/10"
-          style={{ background: 'var(--volt)', boxShadow: '0 0 16px var(--volt-40)' }}
-        >
-          <span className="font-display text-2xl font-black text-black select-none leading-none">S</span>
-        </motion.button>
-
-        <NavLink to="/app/messages">
+      <div className="flex items-center justify-around px-2 py-2">
+        
+        {/* HypeZone */}
+        <NavLink to="/app/feed">
           {({ isActive }) => (
             <div 
-              className="relative flex items-center justify-center w-12 h-12 rounded-xl transition-all"
+              className="relative flex items-center justify-center w-11 h-11 rounded-xl transition-all"
               style={{ color: isActive ? 'var(--volt)' : 'var(--text-muted)' }}
             >
-              <MessageCircle size={22} />
+              <Home size={22} />
               {isActive && <div className="absolute bottom-1 w-4 h-0.5 bg-accent rounded-full shadow-glow-volt-sm" />}
             </div>
           )}
         </NavLink>
+
+        {/* ClashHub */}
+        <NavLink to="/app/events">
+          {({ isActive }) => (
+            <div 
+              className="relative flex items-center justify-center w-11 h-11 rounded-xl transition-all"
+              style={{ color: isActive ? '#FF6B00' : 'var(--text-muted)' }}
+            >
+              <Calendar size={22} />
+              {isActive && <div className="absolute bottom-1 w-4 h-0.5 bg-[#FF6B00] rounded-full shadow-glow-volt-sm" />}
+            </div>
+          )}
+        </NavLink>
+
+        {/* AI+ Center Pulse Button */}
+        <motion.button
+          whileTap={{ scale: 0.9 }} whileHover={{ scale: 1.05 }}
+          onClick={() => navigate('/pulse')}
+          className="w-12 h-12 rounded-full flex-shrink-0 flex items-center justify-center shadow-glow-volt -mt-5 border border-black/10"
+          style={{ background: 'var(--volt)', boxShadow: '0 0 18px var(--volt-40)' }}
+          aria-label="Pulse Matchmaking"
+        >
+          <span className="font-display text-2xl font-black text-black select-none leading-none">S</span>
+        </motion.button>
+
+        {/* Buzz (Notifications) */}
+        <NavLink to="/app/notifications">
+          {({ isActive }) => (
+            <div 
+              className="relative flex items-center justify-center w-11 h-11 rounded-xl transition-all"
+              style={{ color: isActive ? '#FF3B00' : 'var(--text-muted)' }}
+            >
+              <Bell size={22} />
+              {unreadCount > 0 && (
+                <span className="absolute -top-0.5 -right-0.5 w-4 h-4 rounded-full bg-[#FF3B00] text-white text-[9px] font-bold font-mono flex items-center justify-center shadow-[0_0_8px_rgba(255,59,0,0.8)]">
+                  {unreadCount > 9 ? '9+' : unreadCount}
+                </span>
+              )}
+              {isActive && <div className="absolute bottom-1 w-4 h-0.5 bg-[#FF3B00] rounded-full shadow-[0_0_8px_rgba(255,59,0,0.8)]" />}
+            </div>
+          )}
+        </NavLink>
+
+        {/* PlayerDNA */}
         <NavLink to="/app/profile/me">
           {({ isActive }) => (
             <div 
-              className="relative flex items-center justify-center w-12 h-12 rounded-xl transition-all"
+              className="relative flex items-center justify-center w-11 h-11 rounded-xl transition-all"
               style={{ color: isActive ? 'var(--volt)' : 'var(--text-muted)' }}
             >
               <User size={22} />

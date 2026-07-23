@@ -11,6 +11,7 @@ import { LoginPage } from './pages/auth/LoginPage';
 import { SignupPage } from './pages/auth/SignupPage';
 import { OnboardingPage } from './pages/auth/OnboardingPage';
 import { ForgotPasswordPage } from './pages/auth/ForgotPasswordPage';
+import { OAuthCallbackPage } from './pages/auth/OAuthCallbackPage';
 
 // App Pages
 import { HomeFeed } from './pages/feed/HomeFeed';
@@ -27,6 +28,9 @@ import { MessagesPage } from './pages/messages/MessagesPage';
 import { SearchPage } from './pages/discover/SearchPage';
 import { NotificationCenter } from './pages/notifications/NotificationCenter';
 import { SettingsPage } from './pages/settings/SettingsPage';
+
+// Social
+import { ReelFeed } from './components/social/ReelFeed';
 
 // ClashHub Performance Pages
 import { MatchReport } from './pages/clashhub/MatchReport';
@@ -60,6 +64,8 @@ const App: React.FC = () => {
           <Route path="/signup" element={<PublicRoute><SignupPage /></PublicRoute>} />
           <Route path="/onboarding" element={<PublicRoute><OnboardingPage /></PublicRoute>} />
           <Route path="/forgot-password" element={<PublicRoute><ForgotPasswordPage /></PublicRoute>} />
+          {/* OAuth callback — must be public, Appwrite redirects here after Google auth */}
+          <Route path="/auth/callback" element={<OAuthCallbackPage />} />
 
           {/* Protected App */}
           <Route path="/app" element={<ProtectedRoute><AppLayout /></ProtectedRoute>}>
@@ -84,6 +90,9 @@ const App: React.FC = () => {
             <Route path="clashhub/history" element={<ClashMatchHistory />} />
             <Route path="clashhub/performance" element={<PerformanceTracker />} />
           </Route>
+
+          {/* Reels — fullscreen, no AppLayout so snap-scroll works freely */}
+          <Route path="/app/reels" element={<ProtectedRoute><ReelFeed /></ProtectedRoute>} />
 
           {/* Protected Pulse */}
           <Route path="/pulse" element={<ProtectedRoute><AppLayout /></ProtectedRoute>}>

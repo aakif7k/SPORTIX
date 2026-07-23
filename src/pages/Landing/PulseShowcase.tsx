@@ -98,12 +98,12 @@ export const PulseShowcase: React.FC = () => (
                 style={{ filter: 'drop-shadow(0 0 10px #CCFF00)' }}
               />
               {/* Center text */}
-              <text x="160" y="90" textAnchor="middle" fontFamily="Bebas Neue" fontSize="14" fill="#666" letterSpacing="2">LEVEL 41</text>
+              <text x="160" y="90" textAnchor="middle" fontFamily="Urbanist, sans-serif" fontWeight="800" fontSize="13" fill="#888" letterSpacing="2">LEVEL 41</text>
               <text x="160" y="142" textAnchor="middle">
-                <tspan fontFamily="Bebas Neue" fontSize="64" fill="#CCFF00">634</tspan>
-                <tspan fontFamily="Bebas Neue" fontSize="24" fill="#444" dx="6">/ 700</tspan>
+                <tspan fontFamily="Urbanist, sans-serif" fontWeight="900" fontSize="56" fill="#CCFF00">634</tspan>
+                <tspan fontFamily="Urbanist, sans-serif" fontWeight="800" fontSize="22" fill="#444" dx="6">/ 700</tspan>
               </text>
-              <text x="160" y="168" textAnchor="middle" fontFamily="DM Mono" fontSize="10" fill="#888" letterSpacing="1">ELITE PHANTOM</text>
+              <text x="160" y="168" textAnchor="middle" fontFamily="Urbanist, sans-serif" fontWeight="700" fontSize="10" fill="#888" letterSpacing="1">ELITE PHANTOM</text>
             </svg>
           </motion.div>
 

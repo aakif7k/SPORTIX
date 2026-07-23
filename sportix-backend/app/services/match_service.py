@@ -1,113 +1,153 @@
-import uuid
-from datetime import datetime
-from fastapi import HTTPException, status
-from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.future import select
-from sqlalchemy.orm import selectinload
+from appwrite.query import Query as Q
+from appwrite.id import ID
+from app.core.appwrite import db, DB_ID
+from app.core.config import settings
+from app.schemas.match import StatsSubmission, StatValidate
+from typing import Optional
 
-from app.models.match import Match
-from app.models.squad import Squad
-from app.services.chemistry_service import recalculate_squad_chemistry
 
-async def create_new_match(
-    db: AsyncSession,
-    match_in
-) -> Match:
-    # Validate squads exist
-    squad = await db.get(Squad, match_in.squad_id)
-    if not squad:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Squad not found")
-        
-    opponent = None
-    if match_in.opponent_squad_id:
-        opponent = await db.get(Squad, match_in.opponent_squad_id)
-        if not opponent:
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Opponent squad not found")
-            
-    match = Match(
-        id=uuid.uuid4(),
-        event_id=match_in.event_id,
-        squad_id=match_in.squad_id,
-        opponent_squad_id=match_in.opponent_squad_id,
-        result=match_in.result,
-        chemistry_delta=0.0,
-        top_performer_id=None,
-        played_at=datetime.utcnow(),
-        created_at=datetime.utcnow()
+async def create(
+    event_id: Optional[str],
+    home_squad_id: Optional[str],
+    away_squad_id: Optional[str],
+    sport: str,
+) -> dict:
+    return db.create_document(
+        DB_ID, settings.collection_matches, ID.unique(),
+        data={
+            "eventId": event_id,
+            "homeSquadId": home_squad_id,
+            "awaySquadId": away_squad_id,
+            "sport": sport,
+            "result": "pending",
+            "scoreHome": None,
+            "scoreAway": None,
+            "status": "active",
+        },
     )
-    db.add(match)
-    await db.flush()
-    return match
 
-async def update_match_result(
-    db: AsyncSession,
-    match_id: uuid.UUID,
-    result_val: str,  # win | loss | draw | pending
-    top_performer_id: uuid.UUID = None
-) -> Match:
-    match = await db.get(Match, match_id)
-    if not match:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Match not found")
-        
-    old_result = match.result
-    match.result = result_val
-    if top_performer_id:
-        match.top_performer_id = top_performer_id
-        
-    # Get squads to adjust win/draw/loss records
-    squad = await db.get(Squad, match.squad_id)
-    opponent = await db.get(Squad, match.opponent_squad_id) if match.opponent_squad_id else None
-    
-    # Rollback old result stats first if it wasn't pending
-    if old_result != "pending":
-        if old_result == "win":
-            squad.win_count = max(0, squad.win_count - 1)
-            if opponent:
-                opponent.loss_count = max(0, opponent.loss_count - 1)
-        elif old_result == "loss":
-            squad.loss_count = max(0, squad.loss_count - 1)
-            if opponent:
-                opponent.win_count = max(0, opponent.win_count - 1)
-        elif old_result == "draw":
-            squad.draw_count = max(0, squad.draw_count - 1)
-            if opponent:
-                opponent.draw_count = max(0, opponent.draw_count - 1)
-                
-    # Apply new results stats
-    if result_val == "win":
-        squad.win_count += 1
-        if opponent:
-            opponent.loss_count += 1
-    elif result_val == "loss":
-        squad.loss_count += 1
-        if opponent:
-            opponent.win_count += 1
-    elif result_val == "draw":
-        squad.draw_count += 1
-        if opponent:
-            opponent.draw_count += 1
-            
-    await db.flush()
-    
-    # Recalculate chemistry score for both squads
-    old_chem = squad.chemistry_score
-    new_chem = await recalculate_squad_chemistry(db, squad.id)
-    match.chemistry_delta = round(new_chem - old_chem, 2)
-    
-    if opponent:
-        await recalculate_squad_chemistry(db, opponent.id)
-        
-    await db.flush()
-    return match
 
-async def list_matches(db: AsyncSession, squad_id: uuid.UUID = None) -> list[Match]:
-    query = select(Match).options(
-        selectinload(Match.squad),
-        selectinload(Match.opponent_squad),
-        selectinload(Match.top_performer)
+async def get_by_id(match_id: str) -> dict:
+    return db.get_document(DB_ID, settings.collection_matches, match_id)
+
+
+async def update_result(
+    match_id: str,
+    result: str,
+    score_home: Optional[int],
+    score_away: Optional[int],
+) -> dict:
+    return db.update_document(
+        DB_ID, settings.collection_matches, match_id,
+        {"result": result, "scoreHome": score_home, "scoreAway": score_away, "status": "completed"},
     )
-    if squad_id:
-        query = query.where((Match.squad_id == squad_id) | (Match.opponent_squad_id == squad_id))
-        
-    result = await db.execute(query.order_by(Match.played_at.desc()))
-    return list(result.scalars().all())
+
+
+async def submit_stats(match_id: str, user_id: str, payload: StatsSubmission) -> dict:
+    # Create the stats document
+    stat = db.create_document(
+        DB_ID, settings.collection_player_stats, ID.unique(),
+        data={
+            "matchId": match_id,
+            "userId": user_id,
+            "sport": payload.sport,
+            "statsData": str(payload.stats_data),
+            "matchRating": payload.match_rating,
+            "isMvp": payload.is_mvp,
+            "mediaProofUrl": payload.media_proof_url,
+            "validationStatus": "pending",
+            "confirmVotes": 0,
+            "disputeVotes": 0,
+        },
+    )
+    # Update pulse score based on match rating
+    _update_pulse_from_match(user_id, payload.match_rating)
+    return stat
+
+
+async def get_stats(match_id: str) -> dict:
+    return db.list_documents(
+        DB_ID, settings.collection_player_stats,
+        queries=[Q.equal("matchId", match_id), Q.limit(50)],
+    )
+
+
+async def validate_stat(stat_id: str, validator_id: str, payload: StatValidate) -> dict:
+    db.create_document(
+        DB_ID, settings.collection_stat_validations, ID.unique(),
+        data={
+            "statId": stat_id,
+            "validatorId": validator_id,
+            "vote": payload.vote.value,
+            "reason": payload.reason,
+        },
+    )
+    # Update vote counts on the stat document
+    stat = db.get_document(DB_ID, settings.collection_player_stats, stat_id)
+    if payload.vote.value == "confirm":
+        db.update_document(DB_ID, settings.collection_player_stats, stat_id,
+                           {"confirmVotes": stat.get("confirmVotes", 0) + 1})
+    elif payload.vote.value == "dispute":
+        db.update_document(DB_ID, settings.collection_player_stats, stat_id,
+                           {"disputeVotes": stat.get("disputeVotes", 0) + 1})
+    # Auto-validate if 3+ confirms with no disputes
+    confirm_count = stat.get("confirmVotes", 0) + (1 if payload.vote.value == "confirm" else 0)
+    if confirm_count >= 3:
+        db.update_document(DB_ID, settings.collection_player_stats, stat_id,
+                           {"validationStatus": "validated"})
+        _award_pulse_for_validation(stat.get("userId", ""))
+    return db.get_document(DB_ID, settings.collection_player_stats, stat_id)
+
+
+async def retention_vote(match_id: str, user_id: str, vote: str) -> dict:
+    return db.create_document(
+        DB_ID, settings.collection_retention_votes, ID.unique(),
+        data={"matchId": match_id, "userId": user_id, "vote": vote},
+    )
+
+
+async def check_pending_report(user_id: str) -> dict:
+    """Check if user has any pending (unvalidated) stat submissions."""
+    res = db.list_documents(
+        DB_ID, settings.collection_player_stats,
+        queries=[Q.equal("userId", user_id), Q.equal("validationStatus", "pending"), Q.limit(5)],
+    )
+    return {
+        "has_pending": len(res.get("documents", [])) > 0,
+        "pending_count": len(res.get("documents", [])),
+        "pending": res.get("documents", []),
+    }
+
+
+def _update_pulse_from_match(user_id: str, rating: float):
+    """Award pulse points based on match rating (1-10 → 0-20 pulse)."""
+    pulse_award = (rating / 10) * 20
+    try:
+        res = db.list_documents(
+            DB_ID, settings.collection_pulse_scores,
+            queries=[Q.equal("userId", user_id), Q.limit(1)],
+        )
+        if res.get("documents"):
+            doc = res["documents"][0]
+            current = doc.get("totalPulse", 100.0)
+            new_total = min(1000, current + pulse_award)
+            db.update_document(DB_ID, settings.collection_pulse_scores, doc["$id"],
+                               {"totalPulse": new_total, "matchPerformance": doc.get("matchPerformance", 0) + pulse_award})
+    except Exception:
+        pass
+
+
+def _award_pulse_for_validation(user_id: str):
+    """Small pulse bonus for having stats validated."""
+    try:
+        res = db.list_documents(
+            DB_ID, settings.collection_pulse_scores,
+            queries=[Q.equal("userId", user_id), Q.limit(1)],
+        )
+        if res.get("documents"):
+            doc = res["documents"][0]
+            db.update_document(DB_ID, settings.collection_pulse_scores, doc["$id"],
+                               {"totalPulse": doc.get("totalPulse", 100) + 5,
+                                "reliability": doc.get("reliability", 0) + 2})
+    except Exception:
+        pass

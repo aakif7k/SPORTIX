@@ -124,8 +124,9 @@ const LandingNavbar: React.FC = () => {
             <LightningBoltIcon />
             <span
               style={{
-                fontFamily: "'Bebas Neue', sans-serif",
-                fontSize: '28px',
+                fontFamily: "'Urbanist', sans-serif",
+                fontSize: '26px',
+                fontWeight: 900,
                 letterSpacing: '0.04em',
                 lineHeight: 1,
                 color: '#FFFFFF',
@@ -151,9 +152,9 @@ const LandingNavbar: React.FC = () => {
                   if (el) el.scrollIntoView({ behavior: 'smooth' });
                 }}
                 style={{
-                  fontFamily: "'Barlow Condensed', sans-serif",
+                  fontFamily: "'Urbanist', sans-serif",
                   fontWeight: 600,
-                  fontSize: '15px',
+                  fontSize: '14px',
                   color: '#888888',
                   textDecoration: 'none',
                   letterSpacing: '0.02em',
@@ -168,7 +169,7 @@ const LandingNavbar: React.FC = () => {
           </div>
 
           {/* Desktop CTA Buttons */}
-          <div className="hidden md:flex" style={{ gap: '12px', alignItems: 'center' }}>
+          <div className="hidden md:flex" style={{ gap: '12px', items: 'center' }}>
             <SignInButton onClick={() => navigate('/login')} />
             <GetStartedButton onClick={() => navigate('/signup')} />
           </div>
@@ -226,9 +227,9 @@ const LandingNavbar: React.FC = () => {
                   }, 200);
                 }}
                 style={{
-                  fontFamily: "'Barlow Condensed', sans-serif",
-                  fontWeight: 600,
-                  fontSize: '22px',
+                  fontFamily: "'Urbanist', sans-serif",
+                  fontWeight: 700,
+                  fontSize: '20px',
                   color: '#888888',
                   textDecoration: 'none',
                   letterSpacing: '0.03em',
@@ -276,8 +277,8 @@ const SignInButton: React.FC<ButtonProps> = ({ onClick, fullWidth }) => {
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
       style={{
-        fontFamily: "'Barlow Condensed', sans-serif",
-        fontWeight: 600,
+        fontFamily: "'Urbanist', sans-serif",
+        fontWeight: 700,
         fontSize: '14px',
         letterSpacing: '0.05em',
         color: '#FFFFFF',

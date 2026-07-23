@@ -1,276 +1,119 @@
-import uuid
-import random
-from datetime import datetime, date, timedelta
-from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.future import select
+from appwrite.query import Query as Q
+from appwrite.id import ID
+from app.core.appwrite import db, DB_ID
+from app.core.config import settings
+from datetime import datetime, timezone, date
 
-from app.models.mission import DailyMission, UserMission
-from app.models.coins import CoinTransaction
-from app.services.coins_service import add_coins
-from app.services.pulse_service import add_pulse_points
-from app.services.notification_service import create_notification
-from app.websockets.manager import ws_manager
 
-DEFAULT_TEMPLATES = [
-    # Easy
-    {"title": "Daily Entry", "description": "Log in to SPORTiX", "mission_type": "login", "target_count": 1, "pulse_reward": 5.0, "coins_reward": 10, "xp_reward": 10, "difficulty": "easy"},
-    {"title": "Social Connection", "description": "Follow another athlete", "mission_type": "follow_athlete", "target_count": 1, "pulse_reward": 5.0, "coins_reward": 15, "xp_reward": 10, "difficulty": "easy"},
-    {"title": "Liker", "description": "Like 3 posts in the feed", "mission_type": "react_posts", "target_count": 3, "pulse_reward": 5.0, "coins_reward": 15, "xp_reward": 10, "difficulty": "easy"},
-    # Medium
-    {"title": "Content Creator", "description": "Share a status update or thought", "mission_type": "create_post", "target_count": 1, "pulse_reward": 10.0, "coins_reward": 25, "xp_reward": 25, "difficulty": "medium"},
-    {"title": "Conversationalist", "description": "Comment on 2 feed posts", "mission_type": "comment", "target_count": 2, "pulse_reward": 10.0, "coins_reward": 25, "xp_reward": 25, "difficulty": "medium"},
-    {"title": "Chatter", "description": "Send 3 messages to squad members", "mission_type": "message_teammate", "target_count": 3, "pulse_reward": 10.0, "coins_reward": 30, "xp_reward": 25, "difficulty": "medium"},
-    {"title": "Event Participant", "description": "Join a local sports event", "mission_type": "join_event", "target_count": 1, "pulse_reward": 12.0, "coins_reward": 30, "xp_reward": 30, "difficulty": "medium"},
-    # Hard
-    {"title": "Victor", "description": "Win a competitive match", "mission_type": "win_match", "target_count": 1, "pulse_reward": 20.0, "coins_reward": 50, "xp_reward": 50, "difficulty": "hard"},
-    {"title": "Showcase", "description": "Post a media highlight on your profile", "mission_type": "upload_highlight", "target_count": 1, "pulse_reward": 20.0, "coins_reward": 50, "xp_reward": 50, "difficulty": "hard"},
-    {"title": "Competitor", "description": "Complete 2 full matches", "mission_type": "complete_match", "target_count": 2, "pulse_reward": 20.0, "coins_reward": 45, "xp_reward": 50, "difficulty": "hard"},
+def _today() -> str:
+    return date.today().isoformat()
+
+
+DAILY_MISSIONS_TEMPLATE = [
+    {"key": "post_update",   "title": "Share Your Day",      "description": "Post a training update",   "reward_coins": 10, "reward_pulse": 2.0},
+    {"key": "view_feed",     "title": "Scout the Feed",      "description": "Browse 10 posts",          "reward_coins": 5,  "reward_pulse": 1.0},
+    {"key": "join_event",    "title": "Event Ready",         "description": "Register for an event",    "reward_coins": 20, "reward_pulse": 5.0},
+    {"key": "update_stats",  "title": "Stat Tracker",        "description": "Submit match stats",       "reward_coins": 15, "reward_pulse": 4.0},
+    {"key": "follow_player", "title": "Grow Your Network",   "description": "Follow a new player",      "reward_coins": 5,  "reward_pulse": 1.0},
 ]
 
-async def seed_mission_templates_if_empty(db: AsyncSession):
-    result = await db.execute(select(DailyMission))
-    exists = result.scalars().first()
-    if not exists:
-        for t in DEFAULT_TEMPLATES:
-            mission = DailyMission(
-                id=uuid.uuid4(),
-                title=t["title"],
-                description=t["description"],
-                mission_type=t["mission_type"],
-                target_count=t["target_count"],
-                pulse_reward=t["pulse_reward"],
-                coins_reward=t["coins_reward"],
-                xp_reward=t["xp_reward"],
-                difficulty=t["difficulty"],
-                is_active=True
-            )
-            db.add(mission)
-        await db.flush()
 
-async def get_or_generate_daily_missions(db: AsyncSession, user_id: uuid.UUID) -> list[UserMission]:
-    await seed_mission_templates_if_empty(db)
-    
-    today = date.today()
-    result = await db.execute(
-        select(UserMission)
-        .where(UserMission.user_id == user_id, UserMission.date == today)
+async def get_today(user_id: str) -> dict:
+    today = _today()
+    res = db.list_documents(
+        DB_ID, settings.collection_user_missions,
+        queries=[Q.equal("userId", user_id), Q.equal("date", today), Q.limit(10)],
     )
-    user_missions = list(result.scalars().all())
-    
-    if user_missions:
-        return user_missions
-        
-    # Generate 5 missions: 1 Easy, 2 Medium, 1 Hard, 1 Random
-    result = await db.execute(select(DailyMission).where(DailyMission.is_active == True))
-    templates = result.scalars().all()
-    
-    easies = [t for t in templates if t.difficulty == "easy"]
-    mediums = [t for t in templates if t.difficulty == "medium"]
-    hards = [t for t in templates if t.difficulty == "hard"]
-    
-    selected_templates = []
-    
-    if easies:
-        selected_templates.append(random.choice(easies))
-    if len(mediums) >= 2:
-        selected_templates.extend(random.sample(mediums, 2))
-    elif mediums:
-        selected_templates.append(random.choice(mediums))
-        
-    if hards:
-        selected_templates.append(random.choice(hards))
-        
-    # The 5th is random from remaining templates
-    remaining = [t for t in templates if t not in selected_templates]
-    if remaining:
-        selected_templates.append(random.choice(remaining))
-        
-    user_missions = []
-    for template in selected_templates:
-        um = UserMission(
-            id=uuid.uuid4(),
-            user_id=user_id,
-            mission_id=template.id,
-            date=today,
-            current_count=0,
-            target_count=template.target_count,
-            is_completed=False,
-            is_claimed=False
+    if res.get("documents"):
+        return res
+    # Seed today's missions for this user
+    missions = []
+    for template in DAILY_MISSIONS_TEMPLATE:
+        doc = db.create_document(
+            DB_ID, settings.collection_user_missions, ID.unique(),
+            data={
+                "userId": user_id,
+                "date": today,
+                "missionKey": template["key"],
+                "title": template["title"],
+                "description": template["description"],
+                "rewardCoins": template["reward_coins"],
+                "rewardPulse": template["reward_pulse"],
+                "isCompleted": False,
+                "isClaimed": False,
+            },
         )
-        db.add(um)
-        user_missions.append(um)
-        
-    await db.flush()
-    return user_missions
+        missions.append(doc)
+    return {"documents": missions, "total": len(missions)}
 
-async def update_mission_progress(
-    db: AsyncSession,
-    user_id: uuid.UUID,
-    mission_type: str,
-    increment: int = 1
-):
-    today = date.today()
-    result = await db.execute(
-        select(UserMission)
-        .join(DailyMission)
-        .where(
-            UserMission.user_id == user_id,
-            UserMission.date == today,
-            DailyMission.mission_type == mission_type,
-            UserMission.is_completed == False
-        )
-    )
-    ums = result.scalars().all()
-    
-    for um in ums:
-        um.current_count = min(um.target_count, um.current_count + increment)
-        if um.current_count >= um.target_count:
-            um.is_completed = True
-            um.completed_at = datetime.utcnow()
-            
-            # Fetch mission details
-            mission = await db.get(DailyMission, um.mission_id)
-            
-            # Send notification
-            await create_notification(
-                db,
-                user_id,
-                "mission_complete",
-                "Daily Mission Completed!",
-                f"You completed '{mission.title}'. Go claim your rewards!",
-                {"user_mission_id": str(um.id), "title": mission.title}
-            )
-            
-            # WS Broadcast
-            await ws_manager.send_notification_to_user(
-                user_id,
-                {
-                    "event": "mission_completed",
-                    "data": {
-                        "user_mission_id": str(um.id),
-                        "title": mission.title,
-                        "description": mission.description
-                    }
-                }
-            )
-    await db.flush()
 
-async def claim_mission_reward(
-    db: AsyncSession,
-    user_id: uuid.UUID,
-    user_mission_id: uuid.UUID
-) -> dict:
-    um = await db.get(UserMission, user_mission_id)
-    if not um or um.user_id != user_id:
-        return {"success": False, "error": "Mission not found"}
-        
-    if not um.is_completed:
-        return {"success": False, "error": "Mission is not completed yet"}
-        
-    if um.is_claimed:
-        return {"success": False, "error": "Reward already claimed"}
-        
-    um.is_claimed = True
-    um.claimed_at = datetime.utcnow()
-    
-    mission = await db.get(DailyMission, um.mission_id)
-    
-    # Award Coins
-    await add_coins(
-        db,
-        user_id,
-        mission.coins_reward,
-        "daily_mission",
-        f"Reward for completing: {mission.title}",
-        reference_id=str(um.id)
-    )
-    
-    # Award Pulse Points
-    pulse_res = await add_pulse_points(
-        db,
-        user_id,
-        mission.pulse_reward,
-        "mission",
-        f"Reward for completing: {mission.title}"
-    )
-    
-    return {
-        "success": True,
-        "coins_earned": mission.coins_reward,
-        "pulse_earned": mission.pulse_reward,
-        "xp_earned": mission.xp_reward,
-        "level_up_info": pulse_res["level_up_info"]
-    }
+async def claim(mission_id: str, user_id: str) -> dict:
+    doc = db.get_document(DB_ID, settings.collection_user_missions, mission_id)
+    if doc.get("userId") != user_id:
+        raise PermissionError("Not your mission")
+    if not doc.get("isCompleted"):
+        raise ValueError("Mission not yet completed")
+    if doc.get("isClaimed"):
+        raise ValueError("Already claimed")
+    updated = db.update_document(DB_ID, settings.collection_user_missions, mission_id,
+                                 {"isClaimed": True})
+    # Award coins and pulse
+    from app.services import coins_service, pulse_service
+    await coins_service.award(user_id, doc.get("rewardCoins", 0), f"Mission: {doc.get('title')}")
+    await pulse_service.award_pulse(user_id, "mission", doc.get("rewardPulse", 0), doc.get("title"))
+    # Update streak
+    await _update_streak(user_id)
+    return updated
 
-async def get_weekly_mission_progress(db: AsyncSession, user_id: uuid.UUID) -> dict:
-    # Get last 7 days of completed user missions
-    today = date.today()
-    start_date = today - timedelta(days=6)
-    
-    result = await db.execute(
-        select(UserMission)
-        .where(
-            UserMission.user_id == user_id,
-            UserMission.date >= start_date,
-            UserMission.is_completed == True
-        )
-    )
-    completed_missions = result.scalars().all()
-    count = len(completed_missions)
-    
-    # Weekly bonus check
-    # Check if a weekly bonus transaction exists for this week
-    year, week_num, _ = today.isocalendar()
-    weekly_ref = f"weekly_bonus_{year}_{week_num}"
-    
-    result = await db.execute(
-        select(CoinTransaction)
-        .where(
-            CoinTransaction.user_id == user_id,
-            CoinTransaction.reference_id == weekly_ref
-        )
-    )
-    bonus_transaction = result.scalar_one_or_none()
-    bonus_claimed = bonus_transaction is not None
-    
-    return {
-        "completed_count": count,
-        "target_count": 20,
-        "bonus_claimed": bonus_claimed,
-        "bonus_eligible": count >= 20 and not bonus_claimed
-    }
 
-async def claim_weekly_bonus(db: AsyncSession, user_id: uuid.UUID) -> dict:
-    progress = await get_weekly_mission_progress(db, user_id)
-    if not progress["bonus_eligible"]:
-        return {"success": False, "error": "Not eligible for weekly bonus or already claimed"}
-        
-    today = date.today()
-    year, week_num, _ = today.isocalendar()
-    weekly_ref = f"weekly_bonus_{year}_{week_num}"
-    
-    bonus_amount = 500
-    await add_coins(
-        db,
-        user_id,
-        bonus_amount,
-        "weekly_mission_bonus",
-        f"Weekly 20+ Missions Bonus (Week {week_num})",
-        reference_id=weekly_ref
+async def get_history(user_id: str) -> dict:
+    return db.list_documents(
+        DB_ID, settings.collection_user_missions,
+        queries=[Q.equal("userId", user_id), Q.equal("isClaimed", True),
+                 Q.limit(50), Q.order_desc("$createdAt")],
     )
-    
-    # Award Pulse Points
-    pulse_res = await add_pulse_points(
-        db,
-        user_id,
-        50.0,
-        "mission",
-        f"Weekly 20+ Missions Bonus (Week {week_num})"
+
+
+async def get_streak(user_id: str) -> dict:
+    res = db.list_documents(
+        DB_ID, settings.collection_user_streaks,
+        queries=[Q.equal("userId", user_id), Q.limit(1)],
     )
-    
-    return {
-        "success": True,
-        "coins_earned": bonus_amount,
-        "pulse_earned": 50.0,
-        "level_up_info": pulse_res["level_up_info"]
-    }
+    if res.get("documents"):
+        return res["documents"][0]
+    return {"userId": user_id, "currentStreak": 0, "longestStreak": 0}
+
+
+async def get_weekly(user_id: str) -> dict:
+    res = db.list_documents(
+        DB_ID, settings.collection_user_missions,
+        queries=[Q.equal("userId", user_id), Q.limit(35), Q.order_desc("date")],
+    )
+    docs = res.get("documents", [])
+    completed = sum(1 for d in docs if d.get("isClaimed"))
+    return {"total": len(docs), "completed": completed, "completion_rate": round(completed / max(1, len(docs)) * 100)}
+
+
+async def _update_streak(user_id: str):
+    res = db.list_documents(
+        DB_ID, settings.collection_user_streaks,
+        queries=[Q.equal("userId", user_id), Q.limit(1)],
+    )
+    today = _today()
+    if res.get("documents"):
+        doc = res["documents"][0]
+        last = doc.get("lastActiveDate")
+        current = doc.get("currentStreak", 0)
+        longest = doc.get("longestStreak", 0)
+        if last == today:
+            return
+        current += 1
+        db.update_document(DB_ID, settings.collection_user_streaks, doc["$id"], {
+            "currentStreak": current,
+            "longestStreak": max(longest, current),
+            "lastActiveDate": today,
+        })
+    else:
+        db.create_document(DB_ID, settings.collection_user_streaks, ID.unique(), {
+            "userId": user_id, "currentStreak": 1, "longestStreak": 1, "lastActiveDate": today,
+        })

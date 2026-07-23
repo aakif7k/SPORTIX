@@ -5,10 +5,16 @@ import './index.css';
 import App from './App.tsx';
 import { AuthProvider } from '@/context/AuthContext';
 import { Toaster } from 'react-hot-toast';
+import { client } from '@/lib/appwrite';
 
 const queryClient = new QueryClient({
   defaultOptions: { queries: { staleTime: 1000 * 60 * 5, retry: 1 } },
 });
+
+// Ping Appwrite backend on startup to verify connectivity
+client.ping()
+  .then(() => console.log('[Appwrite] ✅ Backend reachable — sportixweb connected'))
+  .catch((err: unknown) => console.warn('[Appwrite] ⚠️ Ping failed:', err));
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
@@ -23,7 +29,7 @@ createRoot(document.getElementById('root')!).render(
               color: "#FFFFFF",
               border: "1px solid #2A2A2A",
               borderRadius: "12px",
-              fontFamily: "DM Mono, monospace",
+              fontFamily: "Urbanist, sans-serif",
               fontSize: "13px",
             },
             success: {
