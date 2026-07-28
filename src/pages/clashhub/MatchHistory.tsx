@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { motion } from 'framer-motion';
-import { ArrowLeft, Filter, Trophy, Target, Zap, TrendingUp, Activity, ChevronRight, CheckCircle2 } from 'lucide-react';
+
+import { ArrowLeft, Trophy, Target, Zap, TrendingUp, Activity } from 'lucide-react';
 import { useMatchReport } from '../../hooks/useMatchReport';
 import { useCareerStats } from '../../hooks/useCareerStats';
 import { MatchHistoryCard } from '../../components/performance/MatchHistoryCard';

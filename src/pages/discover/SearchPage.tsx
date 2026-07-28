@@ -2,21 +2,15 @@ import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
-  Search, SlidersHorizontal, MessageCircle, Bookmark, BarChart2, Zap, 
-  UserPlus, MapPin, Trophy, Shield, Filter, CheckCircle2, ArrowRight
+  Search, SlidersHorizontal, MessageCircle, Bookmark, BarChart2, Zap, MapPin
 } from 'lucide-react';
 import { MOCK_USERS, MOCK_EVENTS, SPORT_CATEGORIES } from '../../services/mockData';
-import { useAISettingsStore } from '../../store/aiSettingsStore';
-import type { User } from '../../types';
-import { Avatar } from '../../components/ui/Avatar';
-import { SportBadge, AIBadge } from '../../components/ui/Badge';
-import { BarChart, Bar, XAxis, Tooltip, ResponsiveContainer, Cell } from 'recharts';
+import { BarChart, Bar, XAxis, Tooltip, ResponsiveContainer } from 'recharts';
 
 const TABS = ['Athletes', 'ClashHub Events', 'The Arena Stats'];
 
 export const SearchPage: React.FC = () => {
   const navigate = useNavigate();
-  const { nearbyRadius } = useAISettingsStore();
 
   const [query, setQuery] = useState('');
   const [activeTab, setActiveTab] = useState('Athletes');
@@ -31,7 +25,7 @@ export const SearchPage: React.FC = () => {
   const events = (query ? MOCK_EVENTS.filter(e => e.title.toLowerCase().includes(query.toLowerCase())) : MOCK_EVENTS);
 
   const sportAnalytics = SPORT_CATEGORIES.slice(0, 6).map(s => ({
-    name: s.name,
+    name: s.label,
     count: Math.floor(Math.random() * 600 + 300),
     emoji: s.emoji,
   }));
@@ -110,7 +104,7 @@ export const SearchPage: React.FC = () => {
         {/* ATHLETES TAB */}
         {activeTab === 'Athletes' && (
           <motion.div key="ath" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            {athletes.map((athlete, idx) => {
+            {athletes.map(athlete => {
               const isSaved = savedUserIds.includes(athlete.id);
               return (
                 <motion.div

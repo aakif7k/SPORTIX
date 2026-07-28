@@ -3,15 +3,15 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
   MapPin, MessageCircle, UserPlus, UserCheck, TrendingUp, Edit3, Zap, 
-  Award, Sparkles, Clock, Activity, Flame, Shield, Trophy, Share2, ChevronRight, CheckCircle2
+  Activity, Flame, Shield, Trophy, CheckCircle2
 } from 'lucide-react';
 import { RadarChart, PolarGrid, PolarAngleAxis, Radar, ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip } from 'recharts';
 import { useAuthStore } from '../../store/authStore';
 import { useSquadStore } from '../../store/squadStore';
 import { MOCK_USERS } from '../../services/mockData';
 import type { User } from '../../types';
-import { SportBadge, VerifiedBadge } from '../../components/ui/Badge';
-import { Toggle, ProgressBar } from '../../components/ui/index';
+import { VerifiedBadge } from '../../components/ui/Badge';
+import { Toggle } from '../../components/ui/index';
 import { ProfileEditDrawer } from '../../components/profile/ProfileEditDrawer';
 
 const TABS = ['Overview', 'PlayerDNA', 'Peak Stats', 'Match History', 'Glory Board'];
@@ -55,13 +55,15 @@ export const AthleteProfile: React.FC = () => {
     );
   }
 
+  const userStatsAny = (profileUser.stats || {}) as any;
+
   const radarData = [
-    { subject: 'Pace', A: profileUser.stats?.pace || 88, fullMark: 100 },
-    { subject: 'Shooting', A: profileUser.stats?.shooting || 82, fullMark: 100 },
-    { subject: 'Passing', A: profileUser.stats?.passing || 85, fullMark: 100 },
-    { subject: 'Dribbling', A: profileUser.stats?.dribbling || 90, fullMark: 100 },
-    { subject: 'Defense', A: profileUser.stats?.defense || 74, fullMark: 100 },
-    { subject: 'Physical', A: profileUser.stats?.physicality || 86, fullMark: 100 },
+    { subject: 'Pace', A: userStatsAny.pace || 88, fullMark: 100 },
+    { subject: 'Shooting', A: userStatsAny.shooting || 82, fullMark: 100 },
+    { subject: 'Passing', A: userStatsAny.passing || 85, fullMark: 100 },
+    { subject: 'Dribbling', A: userStatsAny.dribbling || 90, fullMark: 100 },
+    { subject: 'Defense', A: userStatsAny.defense || 74, fullMark: 100 },
+    { subject: 'Physical', A: userStatsAny.physicality || 86, fullMark: 100 },
   ];
 
   const matchPerformanceData = [

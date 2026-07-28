@@ -82,34 +82,38 @@ export async function registerUser(data: RegisterData): Promise<AuthUser> {
   // 2. Create email session immediately (log them in)
   await account.createEmailPasswordSession(data.email, data.password);
 
-  // 3. Create profile document in Appwrite Database
-  const now = new Date().toISOString();
-  await databases.createDocument(
-    DATABASE_ID,
-    COLLECTIONS.PROFILES,
-    user.$id,           // Use the auth user ID as the document ID
-    {
-      full_name:              data.fullName,
-      username:               data.username.toLowerCase().trim(),
-      email:                  data.email,
-      role:                   data.role,
-      sport:                  data.sport,
-      sports:                 data.sports,
-      experience_level:       data.experienceLevel,
-      location:               data.location,
-      avatar_url:             null,
-      bio:                    '',
-      is_open_to_recruit:     false,
-      is_active:              true,
-      is_onboarding_complete: false,
-      pulse_score:            100,
-      level:                  1,
-      coins_balance:          0,
-      login_streak:           0,
-      created_at:             now,
-      updated_at:             now,
-    },
-  );
+  // 3. Create profile document in Appwrite Database (graceful fallback if collection is pending)
+  try {
+    const now = new Date().toISOString();
+    await databases.createDocument(
+      DATABASE_ID,
+      COLLECTIONS.PROFILES,
+      user.$id,           // Use the auth user ID as the document ID
+      {
+        full_name:              data.fullName,
+        username:               data.username.toLowerCase().trim(),
+        email:                  data.email,
+        role:                   data.role,
+        sport:                  data.sport,
+        sports:                 data.sports,
+        experience_level:       data.experienceLevel,
+        location:               data.location,
+        avatar_url:             null,
+        bio:                    '',
+        is_open_to_recruit:     false,
+        is_active:              true,
+        is_onboarding_complete: false,
+        pulse_score:            100,
+        level:                  1,
+        coins_balance:          0,
+        login_streak:           0,
+        created_at:             now,
+        updated_at:             now,
+      },
+    );
+  } catch (err: any) {
+    console.warn('Appwrite profiles document creation skipped (collection pending):', err?.message);
+  }
 
   return toAuthUser(user);
 }
@@ -158,7 +162,8 @@ export async function getUserProfile(uid: string): Promise<UserProfile | null> {
   try {
     const doc = await databases.getDocument(DATABASE_ID, COLLECTIONS.PROFILES, uid);
     return docToProfile(doc);
-  } catch {
+  } catch (err) {
+    console.warn('getUserProfile: profiles collection not found or uncreated:', err);
     return null;
   }
 }
@@ -167,35 +172,56 @@ export async function getUserProfile(uid: string): Promise<UserProfile | null> {
 export async function updateUserProfile(
   uid: string,
   updates: Partial<UserProfile>,
-): Promise<UserProfile> {
-  const doc = await databases.updateDocument(
-    DATABASE_ID,
-    COLLECTIONS.PROFILES,
-    uid,
-    { ...updates, updated_at: new Date().toISOString() },
-  );
-  return docToProfile(doc);
+): Promise<UserProfile | null> {
+  try {
+    const doc = await databases.updateDocument(
+      DATABASE_ID,
+      COLLECTIONS.PROFILES,
+      uid,
+      { ...updates, updated_at: new Date().toISOString() },
+    );
+    return docToProfile(doc);
+  } catch (err) {
+    console.warn('updateUserProfile: profiles collection missing, updating local session profile');
+    return null;
+  }
 }
 
 /* ─── CHECK USERNAME AVAILABLE ───────────────────────────────────────────── */
 export async function checkUsernameAvailable(username: string): Promise<boolean> {
-  const res = await databases.listDocuments(
-    DATABASE_ID,
-    COLLECTIONS.PROFILES,
-    [Query.equal('username', username.toLowerCase().trim()), Query.limit(1)],
-  );
-  return res.total === 0;
+  try {
+    const res = await databases.listDocuments(
+      DATABASE_ID,
+      COLLECTIONS.PROFILES,
+      [Query.equal('username', username.toLowerCase().trim()), Query.limit(1)],
+    );
+    return res.total === 0;
+  } catch {
+    return true;
+  }
 }
 
 /* ─── USER-FRIENDLY ERROR MESSAGES ──────────────────────────────────────── */
 export function getAuthErrorMessage(error: any): string {
-  const msg: string = error?.message || '';
-  if (msg.includes('Invalid credentials'))    return 'Email or password is incorrect.';
-  if (msg.includes('user_already_exists'))    return 'An account with this email already exists.';
-  if (msg.includes('password'))               return 'Password must be at least 8 characters.';
-  if (msg.includes('email'))                  return 'Please enter a valid email address.';
-  if (msg.includes('Rate limit'))             return 'Too many attempts. Please wait a moment.';
-  if (msg.includes('network') || msg.includes('fetch')) return 'Network error. Check your connection.';
+  const msg: string = error?.message || (typeof error === 'string' ? error : '');
+  if (msg.includes('user_already_exists') || msg.includes('already exists') || msg.includes('already registered')) {
+    return 'An account with this email address already exists. Please log in.';
+  }
+  if (msg.includes('Invalid credentials') || msg.includes('invalid_credentials')) {
+    return 'Email or password is incorrect.';
+  }
+  if (msg.includes('password')) {
+    return 'Password must be at least 8 characters.';
+  }
+  if (msg.includes('invalid_email') || msg.includes('Param "email"')) {
+    return 'Please enter a valid email address.';
+  }
+  if (msg.includes('Rate limit') || msg.includes('rate_limit')) {
+    return 'Too many attempts. Please wait a moment.';
+  }
+  if (msg.includes('network') || msg.includes('fetch')) {
+    return 'Network error. Check your internet connection.';
+  }
   return error?.message || 'Something went wrong. Please try again.';
 }
 

@@ -44,7 +44,7 @@ const MiniAvatar: React.FC<{ url: string | null; name: string }> = ({ url, name 
 export const PostComposer: React.FC<PostComposerProps> = ({
   onClose, onSubmit, submitting = false, currentUserAvatar, currentUserName,
 }) => {
-  const { currentUser } = useAuth();
+  const { user: currentUser } = useAuth();
   const imageInputRef = useRef<HTMLInputElement>(null);
   const videoInputRef = useRef<HTMLInputElement>(null);
 
@@ -57,7 +57,7 @@ export const PostComposer: React.FC<PostComposerProps> = ({
   const [showSportPicker, setShowSportPicker] = useState(false);
   const [showLocationInput, setShowLocationInput] = useState(false);
 
-  const name = currentUserName || currentUser?.user_metadata?.full_name || 'You';
+  const name = currentUserName || currentUser?.name || 'You';
 
   const addFiles = useCallback((fileList: FileList | null) => {
     if (!fileList || fileList.length === 0) return;

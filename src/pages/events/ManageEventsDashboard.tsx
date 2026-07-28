@@ -1,13 +1,11 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion } from 'framer-motion';
 import { 
   Settings, Plus, Search, Calendar, MapPin, 
-  Users, Edit, Trash2, ArrowLeft, Trophy, BarChart3, AlertCircle, Activity, ChevronRight
+  Edit, Trash2, ArrowLeft, ChevronRight
 } from 'lucide-react';
 import { useEventStore } from '../../store/eventStore';
-import { SPORT_CATEGORIES } from '../../services/mockData';
-
 import { useAuthStore } from '../../store/authStore';
 
 export const ManageEventsDashboard: React.FC = () => {
@@ -80,7 +78,6 @@ export const ManageEventsDashboard: React.FC = () => {
       {/* ── EVENTS LIST ─────────────────────────────────────── */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         {filteredEvents.map(event => {
-          const pctFull = Math.round((event.participants.length / event.maxParticipants) * 100);
           return (
             <motion.div
               key={event.id}

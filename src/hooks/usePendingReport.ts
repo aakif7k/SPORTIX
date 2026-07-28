@@ -7,11 +7,20 @@ import { useState, useEffect } from 'react';
 import { useAuth } from '@/context/AuthContext';
 import { hasPendingMatchReport } from '@/services/socialService';
 
+export interface PendingMatchData {
+  matchId: string;
+  eventName: string;
+  sport: string;
+  date: string;
+  daysAgo: number;
+}
+
 export function usePendingReport(): {
   hasPending: boolean;
   isLoading: boolean;
+  pendingMatch?: PendingMatchData;
 } {
-  const { currentUser } = useAuth();
+  const { user } = useAuth();
   const [hasPending, setHasPending] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
 
@@ -22,18 +31,30 @@ export function usePendingReport(): {
     : false;
 
   useEffect(() => {
-    if (!currentUser || isDismissed) {
+    if (!user || isDismissed) {
       setHasPending(false);
       setIsLoading(false);
       return;
     }
 
     setIsLoading(true);
-    hasPendingMatchReport(currentUser.id)
+    hasPendingMatchReport(user.id)
       .then(pending => setHasPending(pending))
       .catch(() => setHasPending(false))
       .finally(() => setIsLoading(false));
-  }, [currentUser?.id, isDismissed]);
+  }, [user?.id, isDismissed]);
 
-  return { hasPending: hasPending && !isDismissed, isLoading };
+  const mockPending: PendingMatchData = {
+    matchId: 'm-pending-01',
+    eventName: 'Pro Football 5v5 Championship',
+    sport: 'football',
+    date: new Date(Date.now() - 86400000).toISOString(),
+    daysAgo: 1,
+  };
+
+  return {
+    hasPending: hasPending && !isDismissed,
+    isLoading,
+    pendingMatch: hasPending ? mockPending : undefined,
+  };
 }

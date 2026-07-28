@@ -1,8 +1,9 @@
 import {
   createContext, useContext, useEffect,
-  useState, ReactNode, useCallback
+  useState, useCallback
 } from 'react';
-import { account, databases } from '@/lib/appwrite';
+import type { ReactNode } from 'react';
+import { account } from '@/lib/appwrite';
 import { useAuthStore } from '@/store/authStore';
 // Appwrite SDK v26+ removed the Models namespace — use inline type
 type AppwriteUser = {
@@ -64,7 +65,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   // Load user profile from FastAPI backend with fail-fast 2s timeout
   const loadUserProfile = useCallback(async (
-    appwriteUid: string,
+    _appwriteUid: string,
     jwt: string
   ) => {
     try {

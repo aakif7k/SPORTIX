@@ -169,7 +169,7 @@ const DeleteConfirm: React.FC<{ onConfirm: () => void; onCancel: () => void }> =
 
 // ─── Post Card ────────────────────────────────────────────────────────────────
 export const PostCard: React.FC<PostCardProps> = ({ post, onLike, onDelete }) => {
-  const { currentUser } = useAuth();
+  const { user: currentUser } = useAuth();
   const [saved, setSaved] = useState(false);
   const [showDelete, setShowDelete] = useState(false);
   const [showMore, setShowMore] = useState(false);
@@ -201,7 +201,7 @@ export const PostCard: React.FC<PostCardProps> = ({ post, onLike, onDelete }) =>
           <div>
             <div className="flex items-center gap-1.5">
               <span className="text-white font-semibold text-[13px] leading-tight">{authorName}</span>
-              {authorSport && <SportBadge sport={authorSport} size="xs" />}
+              {authorSport && <SportBadge sport={authorSport as any} size="sm" />}
             </div>
             <div className="flex items-center gap-1.5 mt-0.5">
               {post.location_tag && (

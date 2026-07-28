@@ -15,7 +15,7 @@ import {
 } from '@/services/socialService';
 
 export function useStories() {
-  const { currentUser } = useAuth();
+  const { user: currentUser } = useAuth();
   const [storyGroups, setStoryGroups] = useState<DbStoryGroup[]>([]);
   const [loading, setLoading] = useState(true);
   const [uploading, setUploading] = useState(false);

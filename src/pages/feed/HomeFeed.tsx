@@ -1,18 +1,15 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { motion } from 'framer-motion';
 import { useAuth } from '@/context/AuthContext';
 import { useFeed } from '@/hooks/useFeed';
 import { PostComposer } from '@/components/social/PostComposer';
 import { PostCard } from '@/components/social/PostCard';
 
-// Social system (keep existing stories/reels - these will be fixed separately)
+// Social system
 import { StoryBar } from '@/components/social/StoryBar';
 import { StoryViewer } from '@/components/social/StoryViewer';
-import { StoryCreator } from '@/components/social/StoryCreator';
 import { useStories } from '@/hooks/useStories';
-import { Avatar } from '@/components/ui/Avatar';
-import { SportBadge } from '@/components/ui/Badge';
-import { BadgeIcon } from '@/components/gamification/BadgeIcon';
 
 const CATEGORIES = ['All', 'Training', 'Highlights', 'Achievements', 'Events'];
 
@@ -28,86 +25,55 @@ const UpcomingDropsRow: React.FC = () => (
       <div className="w-2 h-2 rounded-full bg-accent animate-pulse" />
       <span className="font-mono text-[10px] font-bold text-text-muted tracking-widest uppercase">UPCOMING · SCHEDULED DROPS</span>
     </div>
-    <div className="flex gap-3 overflow-x-auto pb-2 scrollbar-hide" style={{ scrollbarWidth: 'none' }}>
-      {UPCOMING_DROPS.map((drop, i) => (
-        <div key={drop.id} className="flex-shrink-0 flex items-center gap-3 px-4 py-2.5 rounded-[12px] cursor-pointer group"
-          style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.06)' }}
-        >
-          <div className="flex flex-col items-center">
-            <span className="font-display text-[16px] text-accent leading-none">{drop.time.split(':')[0]}</span>
-            <span className="font-mono text-[9px] text-[#666] leading-none">{drop.time.split(':')[1]}</span>
-          </div>
-          <div className="w-px h-6 bg-border-muted" />
-          <div className="flex flex-col">
-            <span className="font-condensed text-[14px] font-bold text-white group-hover:text-accent transition-colors">{drop.title}</span>
-            <span className="font-mono text-[9px] text-text-secondary">{drop.type}</span>
-          </div>
+    <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-none">
+      {UPCOMING_DROPS.map((drop) => (
+        <div key={drop.id} className="flex-shrink-0 bg-surface border border-border-muted/60 rounded-xl px-3 py-1.5 flex items-center gap-2 text-xs">
+          <span className="w-1.5 h-1.5 rounded-full bg-[#CCFF00] animate-pulse" />
+          <span className="font-mono text-[10px] text-text-muted uppercase">{drop.type}</span>
+          <span className="font-semibold text-white text-[11px]">{drop.title}</span>
+          <span className="font-mono text-[10px] text-text-muted ml-auto">{drop.time}</span>
         </div>
       ))}
     </div>
   </div>
 );
 
-// REELS PREVIEW ROW (keeping existing for now - will be updated separately)
-const REEL_THUMBS = [
-  { id: 'r1', thumb: 'https://images.unsplash.com/photo-1431324155629-1a6deb1dec8d?w=200&q=80', author: 'Marcus' },
-  { id: 'r2', thumb: 'https://images.unsplash.com/photo-1546519638-68e109498ffc?w=200&q=80', author: 'Priya' },
-  { id: 'r3', thumb: 'https://images.unsplash.com/photo-1487466365202-1afdb86c764e?w=200&q=80', author: 'Aisha' },
-  { id: 'r4', thumb: 'https://images.unsplash.com/photo-1574629810360-7efbbe195018?w=200&q=80', author: 'Zaid' },
+const MOCK_REELS_PREVIEW = [
+  { id: '1', title: 'Speed Drill', author: 'Marcus', bg: 'bg-[#1a2e05]' },
+  { id: '2', title: 'Top Corner Shot', author: 'Elena', bg: 'bg-[#0f242a]' },
+  { id: '3', title: 'Slam Dunk Highlight', author: 'Devon', bg: 'bg-[#2b1000]' },
 ];
 
 const ReelsPreviewRow: React.FC<{ onOpenReels: () => void }> = ({ onOpenReels }) => (
   <div className="mb-5">
-    <div className="flex items-center justify-between mb-3">
+    <div className="flex justify-between items-center mb-2">
       <div className="flex items-center gap-2">
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-[#CCFF00]">
-          <path d="M9 12h6"></path>
-          <path d="M12 9v6"></path>
-          <path d="M4 21.58A2 2 0 0 1 2.41 20L6 16h12l3.59 5.58A2 2 0 0 1 22 19.58V5a2 2 0 0 0-2-2h-3l-.99-.01A2 2 0 0 0 16 4H8a2 2 0 0 0-2 2v11a2 2 0 0 0 2 2z"></path>
-        </svg>
-        <span className="font-mono text-[10px] font-bold text-text-muted tracking-widest uppercase">REELS · HIGHLIGHTS</span>
+        <div className="w-2 h-2 rounded-full bg-[#00D4FF]" />
+        <span className="font-mono text-[10px] font-bold text-text-muted tracking-widest uppercase">HIGHLIGHT REELS</span>
       </div>
-      <button
-        onClick={onOpenReels}
-        className="text-[#CCFF00] text-[11px] font-bold hover:underline"
-      >
-        See All
+      <button onClick={onOpenReels} className="text-[#00D4FF] font-mono text-[11px] font-bold hover:underline">
+        See All →
       </button>
     </div>
-    <div className="flex gap-2.5 overflow-x-auto pb-2 scrollbar-hide" style={{ scrollbarWidth: 'none' }}>
-      {REEL_THUMBS.map((r, i) => (
+    <div className="flex gap-3 overflow-x-auto pb-2 scrollbar-none">
+      {MOCK_REELS_PREVIEW.map((r) => (
         <button
           key={r.id}
-          className="flex-shrink-0 relative w-24 h-36 rounded-xl overflow-hidden group"
           onClick={onOpenReels}
+          className={`flex-shrink-0 w-24 h-36 rounded-xl ${r.bg} border border-border-muted relative overflow-hidden flex flex-col justify-between p-2 text-left hover:border-[#00D4FF]/60 transition-all`}
         >
-          <img src={r.thumb} alt={r.author} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" />
-          <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-transparent to-transparent" />
-          <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
-            <div className="w-8 h-8 rounded-full bg-black/60 flex items-center justify-center">
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-white">
-                <path d="M8 5v14"></path>
-                <path d="M12 9h4"></path>
-              </svg>
-            </div>
-          </div>
-          <span className="absolute bottom-1.5 left-2 text-white text-[10px] font-bold">{r.author}</span>
+          <span className="font-mono text-[9px] text-[#00D4FF] font-bold uppercase">{r.title}</span>
+          <span className="text-white text-[10px] font-bold">{r.author}</span>
         </button>
       ))}
-      {/* Open full reel feed tile */}
-      <button
+      <motion.button
         whileHover={{ scale: 1.03 }}
         whileTap={{ scale: 0.97 }}
         onClick={onOpenReels}
         className="flex-shrink-0 w-24 h-36 rounded-xl border-2 border-dashed border-border-muted flex flex-col items-center justify-center gap-1.5 text-text-muted hover:border-[#CCFF00]/50 hover:text-[#CCFF00] transition-colors"
       >
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-white">
-          <path d="M9 12h6"></path>
-          <path d="M12 9v6"></path>
-          <path d="M4 21.58A2 2 0 0 1 2.41 20L6 16h12l3.59 5.58A2 2 0 0 1 22 19.58V5a2 2 0 0 0-2-2h-3l-.99-.01A2 2 0 0 0 16 4H8a2 2 0 0 0-2 2v11a2 2 0 0 0 2 2z"></path>
-        </svg>
         <span className="text-[9px] font-bold">View All</span>
-      </button>
+      </motion.button>
     </div>
   </div>
 );
@@ -117,23 +83,20 @@ export const HomeFeed: React.FC = () => {
   const { user } = useAuth();
   const currentUserId = user?.id;
 
-  // Stories system (keep existing for now)
-  const { myStories, othersGroups, addStory, markViewed } = useStories(currentUserId ?? '');
+  const { myGroup, othersGroups, viewStory } = useStories();
   const [activeStoryGroup, setActiveStoryGroup] = useState<any>(null);
   const [activeGroupIndex, setActiveGroupIndex] = useState(0);
-  const [showStoryCreator, setShowStoryCreator] = useState(false);
 
-  // Posts system - NEW: using useFeed hook
   const {
     posts, loading, hasMore, submitting,
     submitPost, likePost, deletePost,
-    loadMore, refresh,
+    loadMore,
   } = useFeed();
 
   const [activeCategory, setActiveCategory] = useState('All');
   const [isComposerOpen, setIsComposerOpen] = useState(false);
 
-  const handleOpenStoryViewer = (group: any, startIndex?: number) => {
+  const handleOpenStoryViewer = (group: any) => {
     const idx = othersGroups.findIndex((g: any) => g.author_id === group.author_id);
     setActiveGroupIndex(idx >= 0 ? idx : 0);
     setActiveStoryGroup(group);
@@ -174,24 +137,23 @@ export const HomeFeed: React.FC = () => {
       {/* Upcoming Drops Row */}
       <UpcomingDropsRow />
 
-      {/* ── STORY BAR (NEW) ───────────────────────────────────────────── */}
+      {/* ── STORY BAR ───────────────────────────────────────────── */}
       <div className="mb-5">
         <div className="flex items-center gap-2 mb-3">
           <div className="w-2 h-2 rounded-full bg-[#CCFF00] animate-pulse" />
           <span className="font-mono text-[10px] font-bold text-text-muted tracking-widest uppercase">FLEX · STORIES</span>
         </div>
         <StoryBar
-          currentUserId={currentUserId ?? ''}
           currentUserName={user?.name ?? 'You'}
-          currentUserAvatar={user?.avatar ?? 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=150'}
-          myStories={myStories}
+          currentUserAvatar={(user as any)?.avatar_url || (user as any)?.avatar || null}
+          myGroup={myGroup}
           othersGroups={othersGroups}
           onOpenViewer={handleOpenStoryViewer}
-          onOpenCreator={() => setShowStoryCreator(true)}
+          onOpenCreator={() => navigate('/app/reels')}
         />
       </div>
 
-      {/* ── REELS PREVIEW ROW (NEW) ───────────────────────────────────── */}
+      {/* ── REELS PREVIEW ROW ───────────────────────────────────── */}
       <ReelsPreviewRow onOpenReels={() => navigate('/app/reels')} />
 
       {/* Filter Bar */}
@@ -206,17 +168,15 @@ export const HomeFeed: React.FC = () => {
 
       {/* Posts */}
       <div className="space-y-4">
-        {/* New social posts at the top - using real posts from API */}
         {posts.map((post) => (
           <PostCard
             key={post.$id}
-            post={post}
+            post={post as any}
             onLike={likePost}
             onDelete={deletePost}
           />
         ))}
 
-        {/* Load More Indicator */}
         {!loading && hasMore && (
           <div className="flex items-center justify-center py-6">
             <button
@@ -245,43 +205,26 @@ export const HomeFeed: React.FC = () => {
       )}
 
       {/* Story Viewer */}
-      {/* ... keep existing story viewer portal ... */}
-      {true && (
+      {activeStoryGroup && (
         <div className="fixed inset-0 z-50 flex items-center justify-center pointer-events-none">
-          {activeStoryGroup && (
-            <div className="relative w-full max-w-md">
-              {/* Backdrop */}
-              <div onClick={() => setActiveStoryGroup(null)}
-                className="fixed inset-0 bg-black/50 backdrop-blur-sm pointer-events-auto"
+          <div className="relative w-full max-w-md">
+            <div onClick={() => setActiveStoryGroup(null)}
+              className="fixed inset-0 bg-black/50 backdrop-blur-sm pointer-events-auto"
+            />
+            <div className="relative z-10 p-4">
+              <StoryViewer
+                key={activeStoryGroup.author_id}
+                group={activeStoryGroup}
+                currentUserId={currentUserId ?? ''}
+                onClose={() => setActiveStoryGroup(null)}
+                onViewed={viewStory}
+                onNextGroup={activeGroupIndex < othersGroups.length - 1 ? handleNextGroup : undefined}
+                onPrevGroup={activeGroupIndex > 0 ? handlePrevGroup : undefined}
               />
-
-              {/* Viewer Card */}
-              <div className="relative z-10">
-                <div className="bg-surface border border-border-muted rounded-2xl overflow-hidden shadow-xl max-h-[90vh] overflow-y-auto">
-                  {/* Handle */}
-                  <div className="w-4 h-0.5 bg-border-muted mx-auto my-2 rounded-full" />
-
-                  {/* Viewer Content */}
-                  <div className="p-4">
-                    <StoryViewer
-                      key={activeStoryGroup.author_id}
-                      group={activeStoryGroup}
-                      currentUserId={currentUserId ?? ''}
-                      onClose={() => setActiveStoryGroup(null)}
-                      onViewed={markViewed}
-                      onNextGroup={activeGroupIndex < othersGroups.length - 1 ? handleNextGroup : undefined}
-                      onPrevGroup={activeGroupIndex > 0 ? handlePrevGroup : undefined}
-                    />
-                  </div>
-                </div>
-              </div>
             </div>
-          )}
+          </div>
         </div>
       )}
-
-      {/* Story Creator */}
-      {/* ... keep existing story creator portal ... */}
     </div>
   );
 };

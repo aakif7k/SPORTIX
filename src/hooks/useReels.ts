@@ -18,7 +18,7 @@ const PAGE_SIZE = 10;
 
 // ─── Main reels feed hook ─────────────────────────────────────────────────────
 export function useReels() {
-  const { currentUser } = useAuth();
+  const { user: currentUser } = useAuth();
   const [reels, setReels] = useState<DbReel[]>([]);
   const [loading, setLoading] = useState(true);
   const [uploading, setUploading] = useState(false);
@@ -131,7 +131,7 @@ export function useReels() {
 
 // ─── User-specific reels (for profile page) ───────────────────────────────────
 export function useUserReels(targetAuthUid?: string) {
-  const { currentUser } = useAuth();
+  const { user: currentUser } = useAuth();
   const [reels, setReels] = useState<DbReel[]>([]);
   const [loading, setLoading] = useState(true);
 

@@ -1,15 +1,12 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion } from 'framer-motion';
 import {
-  Settings as SettingsIcon, Moon, Sun, ShieldAlert, Bell, Lock, User,
-  Smartphone, EyeOff, Mail, CheckCircle2, Loader2, Trash2, Trophy,
-  Sparkles, ArrowLeft, Zap, Shield, Radio, Database, Wifi, WifiOff,
-  RefreshCw, AlertTriangle, MapPin, Check
+  Settings as SettingsIcon, Moon, Sun, Bell, User,
+  Smartphone, EyeOff, Sparkles, ArrowLeft, Zap, Shield, Check
 } from 'lucide-react';
 import { useAuthStore } from '../../store/authStore';
 import { useThemeStore } from '../../store/themeStore';
-import { useAISettingsStore } from '../../store/aiSettingsStore';
 import { testAIConnection } from '../../services/aiService';
 
 // ─── NEON TOGGLE ─────────────────────────────────────────────────────────────
@@ -99,7 +96,6 @@ export const SettingsPage: React.FC = () => {
   const navigate = useNavigate();
   const { user } = useAuthStore();
   const { theme, setTheme } = useThemeStore();
-  const aiSettings = useAISettingsStore();
 
   const [activeTab, setActiveTab] = useState('general');
   const [dataSaver, setDataSaver] = useState(false);

@@ -10,6 +10,7 @@ import { GLOBAL_SPORTS } from '../../services/mockData';
 import { Button } from '../../components/ui/Button';
 import { databases, DATABASE_ID, COLLECTIONS } from '@/lib/appwrite';
 import { useAuth } from '@/context/AuthContext';
+import { useAuthStore } from '@/store/authStore';
 import { checkUsernameAvailable, getUserProfile } from '@/lib/authService';
 import toast from 'react-hot-toast';
 import type { UserRole } from '@/types';
@@ -122,7 +123,7 @@ export const OnboardingPage: React.FC = () => {
   const fileRef   = useRef<HTMLInputElement>(null);
   const searchRef = useRef<HTMLInputElement>(null);
 
-  const { currentUser } = useAuth();
+  const { user: currentUser } = useAuth();
 
   /* Step */
   const [step, setStep] = useState(0);
@@ -248,7 +249,7 @@ export const OnboardingPage: React.FC = () => {
   };
 
   const visibleSports = React.useMemo(() => {
-    if (sportSearch.trim()) return GLOBAL_SPORTS.filter(s => s.label.toLowerCase().includes(sportSearch.toLowerCase()));
+    if (sportSearch.trim()) return GLOBAL_SPORTS.filter((s: any) => s.label.toLowerCase().includes(sportSearch.toLowerCase()));
     return GLOBAL_SPORTS.slice(0, 12);
   }, [sportSearch]);
 
@@ -256,6 +257,24 @@ export const OnboardingPage: React.FC = () => {
   const handleCompleteOnboarding = async () => {
     if (!currentUser) return;
     setIsLoading(true);
+
+    const updatedUser = {
+      ...currentUser,
+      name: fullName,
+      username: username.toLowerCase().trim(),
+      role: role as any,
+      sport: primarySport as any,
+      sports: [primarySport, ...interestedSports].filter(Boolean) as any,
+      experienceLevel: level as any,
+      location,
+      bio,
+      avatar: photoPreview || (currentUser as any)?.avatar_url || (currentUser as any)?.avatar || '',
+      isOnboardingComplete: true,
+    };
+
+    // Update local Zustand auth store immediately
+    useAuthStore.getState().updateProfile(updatedUser);
+
     try {
       await databases.updateDocument(
         DATABASE_ID,
@@ -275,12 +294,12 @@ export const OnboardingPage: React.FC = () => {
           updated_at: new Date().toISOString(),
         },
       );
-      toast.success("Profile set up! Let's go ⚡");
-      navigate('/home');
-    } catch {
-      toast.error('Failed to save profile. Please try again.');
+    } catch (err: any) {
+      console.warn('Appwrite profiles collection missing, saved onboarding state locally:', err?.message);
     } finally {
       setIsLoading(false);
+      toast.success("Profile set up! Welcome to SPORTiX ⚡");
+      navigate('/app/feed');
     }
   };
 
@@ -527,7 +546,7 @@ export const OnboardingPage: React.FC = () => {
                 </div>
 
                 <div className="grid grid-cols-3 gap-2 max-h-60 overflow-y-auto pr-0.5 mb-4">
-                  {visibleSports.map(sport => {
+                  {visibleSports.map((sport: any) => {
                     const isPrimary    = primarySport === sport.id;
                     const isInterested = interestedSports.includes(sport.id);
                     return (

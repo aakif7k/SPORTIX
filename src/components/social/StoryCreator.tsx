@@ -1,23 +1,19 @@
 import React, { useState, useRef } from 'react';
-import { X, Image, Video, Type, MapPin, Tag, Upload } from 'lucide-react';
+import { X, Image, Video, Type, Tag, Upload } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
-import type { Story } from '../../types/social.types';
 
 const SPORTS = ['Football', 'Basketball', 'Cricket', 'Athletics', 'Tennis', 'Swimming', 'Boxing', 'Rugby'];
 
 interface StoryCreatorProps {
-  currentUserId: string;
-  currentUserName: string;
-  currentUserAvatar: string | null;
+  currentUserId?: string;
+  currentUserName?: string;
+  currentUserAvatar?: string | null;
   currentUserSport?: string;
   onClose: () => void;
   onSubmit: (file: File, caption?: string, sportTag?: string) => Promise<void>;
 }
 
 export const StoryCreator: React.FC<StoryCreatorProps> = ({
-  currentUserId,
-  currentUserName,
-  currentUserAvatar,
   currentUserSport,
   onClose,
   onSubmit,

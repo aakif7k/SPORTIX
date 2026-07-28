@@ -1,15 +1,9 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import {
-  ArrowLeft, TrendingUp, TrendingDown, Minus, Brain, Trophy, Activity, Zap, Target
-} from 'lucide-react';
-import {
-  LineChart, Line, AreaChart, Area, XAxis, YAxis, Tooltip,
-  ResponsiveContainer, CartesianGrid, PieChart, Pie, Cell,
-} from 'recharts';
+import { ArrowLeft, TrendingUp, Brain } from 'lucide-react';
+import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts';
 import { useCareerStats } from '../../hooks/useCareerStats';
-import { useMatchReport } from '../../hooks/useMatchReport';
 import { CareerStatCard } from '../../components/performance/CareerStatCard';
 import { PerformanceRadar } from '../../components/performance/PerformanceRadar';
 
@@ -19,12 +13,6 @@ const PULSE_TREND = [
   { match: 'Match 3', pulse: 38, ssr: 89.1 },
   { match: 'Match 4', pulse: 74, ssr: 92.4 },
   { match: 'Match 5', pulse: 91, ssr: 94.8 },
-];
-
-const SPORT_DISTRIBUTION_DATA = [
-  { name: 'Football',   value: 5, color: '#CCFF00' },
-  { name: 'Basketball', value: 2, color: '#00D4FF' },
-  { name: 'Cricket',    value: 1, color: '#FF6B00' },
 ];
 
 const AI_INSIGHTS = [
@@ -54,7 +42,6 @@ export const PerformanceTracker: React.FC = () => {
   const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState('Overview');
   const careerStats = useCareerStats();
-  const { matchHistory } = useMatchReport();
 
   return (
     <div className="max-w-4xl mx-auto space-y-6 pb-24 text-white">

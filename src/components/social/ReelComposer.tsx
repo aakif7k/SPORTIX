@@ -24,7 +24,7 @@ export const ReelComposer: React.FC<ReelComposerProps> = ({
 }) => {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [preview, setPreview] = useState<string | null>(null);
-  const [thumbnailPreview, setThumbnailPreview] = useState<string | null>(null);
+  const [thumbnailPreview] = useState<string | null>(null);
   const [caption, setCaption] = useState('');
   const [sportTag, setSportTag] = useState(currentUserSport || '');
   const [musicLabel, setMusicLabel] = useState('');
@@ -38,11 +38,7 @@ export const ReelComposer: React.FC<ReelComposerProps> = ({
     setStep('edit');
   };
 
-  const handleThumbnailChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const f = e.target.files?.[0];
-    if (!f || !f.type.startsWith('image/')) return;
-    setThumbnailPreview(URL.createObjectURL(f));
-  };
+
 
   const handleSubmit = async () => {
     if (!caption.trim() && !preview) return;

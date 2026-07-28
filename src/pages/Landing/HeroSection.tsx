@@ -1,7 +1,7 @@
 import React, { Suspense, lazy, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
-import { Zap, Play, ArrowRight, Shield, Award, Users, Activity, Sparkles, X } from 'lucide-react';
+import { Zap, Play, ArrowRight, Users, Activity, Sparkles, X } from 'lucide-react';
 
 const AthleteCanvas = lazy(() => import('./AthleteCanvas'));
 

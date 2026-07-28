@@ -2,8 +2,7 @@ import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
-  Check, MapPin, Users, Zap, Upload, Trash2, ArrowLeft, Trophy, 
-  Calendar, Shield, Sparkles, Plus, AlertCircle 
+  Check, Upload, ArrowLeft, Trophy, Sparkles, Plus 
 } from 'lucide-react';
 import { useEventStore } from '../../store/eventStore';
 import { SPORT_CATEGORIES } from '../../services/mockData';
@@ -31,13 +30,9 @@ export const CreateEvent: React.FC = () => {
     rules: ['Must arrive 15 minutes before kick-off', 'Shin guards mandatory for all players'], 
     aiTeamAvailable: true,
     bannerImage: 'https://images.unsplash.com/photo-1574629810360-7efbbe195018?w=800&q=80', 
-    bannerAlignment: 'center' as 'top' | 'center' | 'bottom',
   });
 
   const update = (key: string, val: string | boolean) => setForm(f => ({ ...f, [key]: val }));
-  const addRule = () => setForm(f => ({ ...f, rules: [...f.rules, ''] }));
-  const updateRule = (i: number, val: string) => setForm(f => ({ ...f, rules: f.rules.map((r, ri) => ri === i ? val : r) }));
-  const removeRule = (i: number) => setForm(f => ({ ...f, rules: f.rules.filter((_, ri) => ri !== i) }));
 
   const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -54,15 +49,25 @@ export const CreateEvent: React.FC = () => {
   const publish = () => {
     const newEvent: Event = {
       id: `e_${Date.now()}`,
-      ...form,
+      title: form.title || 'Untitled Tournament',
+      sport: form.sport,
+      description: form.description || 'No description provided.',
+      date: form.date || new Date().toISOString(),
+      venue: form.venue || 'TBD',
+      location: form.location || 'Local Grounds',
+      format: form.format,
+      skillLevel: form.skillLevel,
+      maxParticipants: parseInt(form.maxParticipants, 10) || 32,
       participants: ['cu1'],
       teams: [],
       organizerId: 'cu1',
       status: 'upcoming',
+      aiTeamAvailable: form.aiTeamAvailable,
       aiGenerated: false,
       tags: [form.sport],
       rules: form.rules.filter(Boolean),
-      maxParticipants: parseInt(form.maxParticipants, 10) || 32,
+      prizePool: form.prizePool,
+      entryFee: form.entryFee,
       createdAt: new Date().toISOString(),
     };
     addEvent(newEvent);
@@ -72,7 +77,7 @@ export const CreateEvent: React.FC = () => {
   return (
     <div className="max-w-3xl mx-auto space-y-6 pb-24 text-white">
       
-      {/* ── HEADER ──────────────────────────────────────────────────────── */}
+      {/* HEADER */}
       <div className="flex items-center justify-between p-6 rounded-3xl bg-surface border border-border-muted shadow-xl">
         <div className="flex items-center gap-4">
           <button
@@ -88,16 +93,9 @@ export const CreateEvent: React.FC = () => {
             <h1 className="text-2xl sm:text-3xl font-black uppercase tracking-tight">Host Tournament</h1>
           </div>
         </div>
-
-        <button
-          onClick={() => navigate('/app/events/manage')}
-          className="hidden sm:flex px-4 py-2 rounded-xl bg-[#CCFF00]/10 border border-[#CCFF00]/30 text-[#CCFF00] font-mono text-xs font-bold uppercase tracking-wider"
-        >
-          My Events
-        </button>
       </div>
 
-      {/* ── STEP INDICATOR ──────────────────────────────────────────────── */}
+      {/* STEP INDICATOR */}
       <div className="grid grid-cols-4 gap-2 bg-surface p-2 rounded-2xl border border-border-muted">
         {STEPS.map((s, idx) => (
           <button
@@ -117,7 +115,7 @@ export const CreateEvent: React.FC = () => {
         ))}
       </div>
 
-      {/* ── FORM STEP CONTENT ───────────────────────────────────────────── */}
+      {/* FORM STEP CONTENT */}
       <div className="p-6 sm:p-8 rounded-3xl bg-surface border border-border-muted space-y-6 shadow-2xl">
         <AnimatePresence mode="wait">
           
@@ -148,7 +146,7 @@ export const CreateEvent: React.FC = () => {
                     className="w-full px-4 py-3 rounded-2xl bg-elevated border border-white/10 text-sm text-white focus:outline-none focus:border-[#FF6B00] capitalize"
                   >
                     {SPORT_CATEGORIES.map(s => (
-                      <option key={s.id} value={s.id} className="bg-surface">{s.name}</option>
+                      <option key={s.id} value={s.id} className="bg-surface">{s.label}</option>
                     ))}
                   </select>
                 </div>
@@ -223,39 +221,15 @@ export const CreateEvent: React.FC = () => {
                 </div>
 
                 <div className="space-y-1.5">
-                  <label className="font-mono text-xs font-bold text-text-muted uppercase">Entry Fee per Player/Team</label>
+                  <label className="font-mono text-xs font-bold text-text-muted uppercase">Entry Fee</label>
                   <input
                     type="text"
-                    placeholder="e.g. Free or €20"
+                    placeholder="e.g. €20 per team"
                     value={form.entryFee}
                     onChange={e => update('entryFee', e.target.value)}
                     className="w-full px-4 py-3 rounded-2xl bg-elevated border border-white/10 text-sm text-white placeholder:text-text-muted focus:outline-none focus:border-[#FF6B00]"
                   />
                 </div>
-              </div>
-
-              <div className="space-y-2">
-                <label className="font-mono text-xs font-bold text-text-muted uppercase">Tournament Rules</label>
-                {form.rules.map((rule, idx) => (
-                  <div key={idx} className="flex items-center gap-2">
-                    <input
-                      type="text"
-                      placeholder={`Rule ${idx + 1}`}
-                      value={rule}
-                      onChange={e => updateRule(idx, e.target.value)}
-                      className="flex-1 px-4 py-2.5 rounded-xl bg-elevated border border-white/10 text-xs text-white focus:outline-none focus:border-[#FF6B00]"
-                    />
-                    <button onClick={() => removeRule(idx)} className="p-2 text-red-400 hover:text-red-300">
-                      <Trash2 size={16} />
-                    </button>
-                  </div>
-                ))}
-                <button
-                  onClick={addRule}
-                  className="px-3 py-1.5 rounded-xl bg-elevated border border-white/10 text-xs font-mono font-bold text-[#CCFF00] flex items-center gap-1"
-                >
-                  <Plus size={14} /> Add Rule
-                </button>
               </div>
             </motion.div>
           )}
@@ -264,31 +238,18 @@ export const CreateEvent: React.FC = () => {
           {step === 2 && (
             <motion.div key="step2" initial={{ opacity: 0, x: 10 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -10 }} className="space-y-4">
               <h2 className="font-sans font-bold text-lg text-white uppercase tracking-wide flex items-center gap-2">
-                <Users size={18} className="text-[#00D4FF]" /> Step 3: Squad Limits & Format
+                <Plus size={18} className="text-[#00D4FF]" /> Step 3: Squad Limits & AI AutoSquad
               </h2>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div className="space-y-1.5">
-                  <label className="font-mono text-xs font-bold text-text-muted uppercase">Max Participants</label>
+                  <label className="font-mono text-xs font-bold text-text-muted uppercase">Max Teams</label>
                   <input
                     type="number"
                     value={form.maxParticipants}
                     onChange={e => update('maxParticipants', e.target.value)}
                     className="w-full px-4 py-3 rounded-2xl bg-elevated border border-white/10 text-sm text-white focus:outline-none focus:border-[#FF6B00]"
                   />
-                </div>
-
-                <div className="space-y-1.5">
-                  <label className="font-mono text-xs font-bold text-text-muted uppercase">Skill Level</label>
-                  <select
-                    value={form.skillLevel}
-                    onChange={e => update('skillLevel', e.target.value)}
-                    className="w-full px-4 py-3 rounded-2xl bg-elevated border border-white/10 text-sm text-white focus:outline-none focus:border-[#FF6B00] capitalize"
-                  >
-                    <option value="amateur" className="bg-surface">Amateur</option>
-                    <option value="semi-pro" className="bg-surface">Semi-Pro</option>
-                    <option value="pro" className="bg-surface">Pro</option>
-                  </select>
                 </div>
               </div>
             </motion.div>
@@ -312,7 +273,7 @@ export const CreateEvent: React.FC = () => {
 
         </AnimatePresence>
 
-        {/* Navigation Controls */}
+        {/* NAVIGATION CONTROLS */}
         <div className="flex items-center justify-between pt-4 border-t border-white/10">
           {step > 0 ? (
             <button

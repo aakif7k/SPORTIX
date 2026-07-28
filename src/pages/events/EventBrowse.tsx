@@ -1,13 +1,12 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion } from 'framer-motion';
 import { 
-  Calendar, MapPin, Zap, Search, Trophy, ArrowRight, Flame, Plus, 
-  Users, Activity, Sparkles, Filter, CheckCircle2, ChevronRight, Settings 
+  Calendar, MapPin, Search, Trophy, ArrowRight, Plus, 
+  Activity, Settings 
 } from 'lucide-react';
 import { useEventStore } from '../../store/eventStore';
 import { SPORT_CATEGORIES } from '../../services/mockData';
-import type { Event } from '../../types';
 import { PendingReportBanner } from '../../components/performance/PendingReportBanner';
 
 export const EventBrowse: React.FC = () => {
@@ -25,11 +24,11 @@ export const EventBrowse: React.FC = () => {
     
     if (!matchesSearch || !matchesSport) return false;
     if (filterTab === 'live') return event.status === 'live';
-    if (filterTab === 'featured') return event.isFeatured;
+    if (filterTab === 'featured') return (event as any).isFeatured;
     return true;
   });
 
-  const featuredEvent = events.find(e => e.isFeatured) || events[0];
+  const featuredEvent = events.find(e => (e as any).isFeatured) || events[0];
 
   return (
     <div className="max-w-5xl mx-auto space-y-8 pb-24">
@@ -196,7 +195,7 @@ export const EventBrowse: React.FC = () => {
                   : 'bg-surface border border-border-muted text-text-secondary hover:text-white'
               }`}
             >
-              {sport.emoji} {sport.name}
+              {sport.emoji} {sport.label}
             </button>
           ))}
         </div>

@@ -1,12 +1,11 @@
 import React, { useState, useRef } from 'react';
 import { NavLink, useNavigate } from 'react-router-dom';
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion } from 'framer-motion';
 import {
-  Home, Calendar, Search, MessageCircle, Bell, User, Zap,
-  LogOut, Settings, ShieldCheck, Flame, ChevronRight
+  Home, Calendar, Search, MessageCircle, User, Zap,
+  LogOut, Settings, Flame, ChevronRight
 } from 'lucide-react';
 import { useAuthStore } from '../../store/authStore';
-import { useNotificationStore } from '../../store/notificationStore';
 
 // ─── NAV CONFIG ──────────────────────────────────────────────────────────────
 const NAV_ITEMS = [
@@ -23,7 +22,6 @@ interface SidebarProps { className?: string; }
 export const Sidebar: React.FC<SidebarProps> = ({ className = '' }) => {
   const [expanded, setExpanded] = useState(false);
   const { user, setShowLogoutConfirm } = useAuthStore();
-  const { unreadCount } = useNotificationStore();
   const navigate = useNavigate();
   const hoverTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
 

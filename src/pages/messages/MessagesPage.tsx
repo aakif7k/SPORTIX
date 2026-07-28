@@ -1,13 +1,12 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion } from 'framer-motion';
 import { 
   Send, Image as ImageIcon, Smile, Search, Plus, ChevronLeft, 
-  Phone, Video, MoreVertical, Paperclip, Mic, CheckCheck, Sparkles, User
+  Phone, Video, MoreVertical, Paperclip, CheckCheck, Sparkles
 } from 'lucide-react';
 import { MOCK_CONVERSATIONS, MOCK_MESSAGES, CURRENT_USER } from '../../services/mockData';
-import type { Conversation, Message } from '../../types';
+import type { Message } from '../../types';
 import { Avatar } from '../../components/ui/Avatar';
-import { Input } from '../../components/ui/Input';
 
 const timeStr = (ts: string) => new Date(ts).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
 const timeAgo = (ts: string) => {

@@ -169,7 +169,7 @@ const LandingNavbar: React.FC = () => {
           </div>
 
           {/* Desktop CTA Buttons */}
-          <div className="hidden md:flex" style={{ gap: '12px', items: 'center' }}>
+          <div className="hidden md:flex" style={{ gap: '12px', alignItems: 'center' }}>
             <SignInButton onClick={() => navigate('/login')} />
             <GetStartedButton onClick={() => navigate('/signup')} />
           </div>

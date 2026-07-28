@@ -1,12 +1,11 @@
 import React, { useState } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion } from 'framer-motion';
 import { 
   CheckCheck, Trash2, Calendar, Brain, User2, Heart, Clock, Trophy, 
-  Bell, Sparkles, Filter, CheckCircle2, ArrowRight
+  Bell, CheckCircle2
 } from 'lucide-react';
 import { useNotificationStore } from '../../store/notificationStore';
 import type { Notification, NotificationType } from '../../types';
-import { Button } from '../../components/ui/Button';
 
 const UPCOMING_DROPS = [
   { id: 1, title: 'Summer Championship Bracket', time: '14:00', type: 'Tournament' },
@@ -44,7 +43,7 @@ const UpcomingDropsRow: React.FC = () => (
   </div>
 );
 
-const TYPE_CONFIG: Record<NotificationType, { icon: React.ElementType; color: string; bg: string }> = {
+const TYPE_CONFIG: Record<NotificationType, { icon: React.ComponentType<{ size?: number; className?: string }>; color: string; bg: string }> = {
   event_invite: { icon: Calendar, color: 'text-[#CCFF00]', bg: 'bg-[#CCFF00]/10 border-[#CCFF00]/30' },
   ai_match: { icon: Brain, color: 'text-[#00D4FF]', bg: 'bg-[#00D4FF]/10 border-[#00D4FF]/30' },
   connection_request: { icon: User2, color: 'text-purple-400', bg: 'bg-purple-500/10 border-purple-500/30' },

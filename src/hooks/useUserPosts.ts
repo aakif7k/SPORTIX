@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { api } from '@/lib/api';
-import { Post } from './useFeed';
+import type { Post } from './useFeed';
 
 export function useUserPosts(userId?: string) {
   const [posts, setPosts] = useState<Post[]>([]);

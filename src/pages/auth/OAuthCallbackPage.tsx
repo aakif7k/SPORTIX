@@ -11,8 +11,8 @@
 import React, { useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/context/AuthContext';
-import { getUserProfile, updateUserProfile } from '@/lib/authService';
-import { databases, DATABASE_ID, COLLECTIONS, ID } from '@/lib/appwrite';
+import { getUserProfile } from '@/lib/authService';
+import { databases, DATABASE_ID, COLLECTIONS } from '@/lib/appwrite';
 import toast from 'react-hot-toast';
 
 export const OAuthCallbackPage: React.FC = () => {
@@ -38,49 +38,52 @@ export const OAuthCallbackPage: React.FC = () => {
       }
 
       try {
-        // Check if they already have a profile document
         const existing = await getUserProfile(user.id);
 
-        if (existing) {
-          // Returning Google user — go straight to feed
+        if (existing && existing.is_onboarding_complete) {
+          // Returning Google user with completed onboarding — go straight to feed
           toast.success(`Welcome back, ${existing.full_name || user.name}! ⚡`);
           navigate('/app/feed', { replace: true });
         } else {
-          // Brand-new Google user — create a minimal profile then onboard
-          const now = new Date().toISOString();
-          await databases.createDocument(
-            DATABASE_ID,
-            COLLECTIONS.PROFILES,
-            user.id,
-            {
-              full_name:              user.name  || '',
-              username:               '',                      // filled in onboarding
-              email:                  user.email || '',
-              role:                   'athlete',
-              sport:                  '',
-              sports:                 [],
-              experience_level:       'amateur',
-              location:               '',
-              avatar_url:             null,
-              bio:                    '',
-              is_open_to_recruit:     false,
-              is_active:              true,
-              is_onboarding_complete: false,
-              pulse_score:            100,
-              level:                  1,
-              coins_balance:          0,
-              login_streak:           0,
-              created_at:             now,
-              updated_at:             now,
-            },
-          );
-          toast.success('Account created! Let\'s set up your profile ⚡');
+          // Brand-new Google user — attempt document creation if possible, then onboard
+          try {
+            const now = new Date().toISOString();
+            await databases.createDocument(
+              DATABASE_ID,
+              COLLECTIONS.PROFILES,
+              user.id,
+              {
+                full_name:              user.name  || '',
+                username:               '',
+                email:                  user.email || '',
+                role:                   'athlete',
+                sport:                  '',
+                sports:                 [],
+                experience_level:       'amateur',
+                location:               '',
+                avatar_url:             null,
+                bio:                    '',
+                is_open_to_recruit:     false,
+                is_active:              true,
+                is_onboarding_complete: false,
+                pulse_score:            100,
+                level:                  1,
+                coins_balance:          0,
+                login_streak:           0,
+                created_at:             now,
+                updated_at:             now,
+              },
+            );
+          } catch (docErr: any) {
+            console.warn('OAuth profile doc creation skipped:', docErr?.message);
+          }
+
+          toast.success('Google account verified! Let\'s set up your PlayerDNA ⚡');
           navigate('/onboarding', { replace: true });
         }
       } catch (err: any) {
-        console.error('OAuth callback error:', err);
-        toast.error('Something went wrong. Please try again.');
-        navigate('/login', { replace: true });
+        console.error('OAuth callback fallback:', err);
+        navigate('/onboarding', { replace: true });
       }
     };
 

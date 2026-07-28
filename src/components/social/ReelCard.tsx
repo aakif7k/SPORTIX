@@ -70,7 +70,7 @@ export const ReelCard: React.FC<ReelCardProps> = ({
         />
       ) : (
         <img
-          src={reel.thumbnail_url}
+          src={reel.thumbnail_url || undefined}
           alt="Reel"
           className="w-full h-full object-cover"
         />
@@ -113,7 +113,7 @@ export const ReelCard: React.FC<ReelCardProps> = ({
           >
             <MessageCircle size={22} className="text-white" />
           </motion.button>
-          <span className="text-white text-[11px] font-semibold">{formatCount(reel.comment_count)}</span>
+          <span className="text-white text-[11px] font-semibold">{formatCount(reel.comments_count)}</span>
         </div>
 
         {/* Share */}
@@ -169,12 +169,12 @@ export const ReelCard: React.FC<ReelCardProps> = ({
 
         {/* Music & view count */}
         <div className="flex items-center justify-between">
-          {reel.music_label && (
+          {(reel as any).music_label && (
             <div className="flex items-center gap-1.5">
               <div className="w-4 h-4 rounded-full bg-white/20 flex items-center justify-center">
                 <Music size={8} className="text-white" />
               </div>
-              <span className="text-white/70 text-[11px]">{reel.music_label}</span>
+              <span className="text-white/70 text-[11px]">{(reel as any).music_label}</span>
             </div>
           )}
           <span className="text-white/50 text-[10px] font-mono ml-auto">{formatCount(reel.views_count)} views</span>

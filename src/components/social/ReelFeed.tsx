@@ -4,7 +4,6 @@ import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { ReelCard } from './ReelCard';
 import { useReels } from '../../hooks/useReels';
-import { useAuth } from '@/context/AuthContext';
 
 // ─── Minimal inline ReelComposer for upload ───────────────────────────────────
 const UploadModal: React.FC<{
@@ -115,7 +114,6 @@ const EmptyReels: React.FC<{ onUpload: () => void }> = ({ onUpload }) => (
 // ─── ReelFeed ─────────────────────────────────────────────────────────────────
 export const ReelFeed: React.FC = () => {
   const navigate = useNavigate();
-  const { currentUser } = useAuth();
   const { reels, loading, uploading, toggleLike, recordView, uploadReel } = useReels();
 
   const [activeIndex, setActiveIndex] = useState(0);
