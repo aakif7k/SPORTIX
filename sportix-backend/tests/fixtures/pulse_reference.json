@@ -1,0 +1,938 @@
+{
+  "generated_by": "scripts/gen_pulse_reference.ts",
+  "source": "src/services/performanceService.ts",
+  "cases": [
+    {
+      "sport": "football",
+      "stats": {
+        "goals": 0,
+        "assists": 0,
+        "passes": 0,
+        "tackles": 0,
+        "saves": 0
+      },
+      "match_rating": 0,
+      "is_mvp": true,
+      "result": "win",
+      "expected": {
+        "pulse": 55,
+        "breakdown_total": 55,
+        "breakdown_rows": [
+          0,
+          40,
+          15
+        ],
+        "ssr_delta": 0.2,
+        "chemistry_delta": 5
+      }
+    },
+    {
+      "sport": "football",
+      "stats": {
+        "goals": 1,
+        "assists": 0,
+        "passes": 35,
+        "tackles": 4,
+        "saves": 0
+      },
+      "match_rating": 5,
+      "is_mvp": false,
+      "result": "loss",
+      "expected": {
+        "pulse": 40,
+        "breakdown_total": 40,
+        "breakdown_rows": [
+          25,
+          4,
+          1,
+          10
+        ],
+        "ssr_delta": 0.3,
+        "chemistry_delta": 1
+      }
+    },
+    {
+      "sport": "football",
+      "stats": {
+        "goals": 2,
+        "assists": 1,
+        "passes": 120,
+        "tackles": 9,
+        "saves": 0
+      },
+      "match_rating": 7.5,
+      "is_mvp": false,
+      "result": "draw",
+      "expected": {
+        "pulse": 98,
+        "breakdown_total": 98,
+        "breakdown_rows": [
+          50,
+          15,
+          10,
+          3,
+          15,
+          5
+        ],
+        "ssr_delta": 0.4,
+        "chemistry_delta": 2
+      }
+    },
+    {
+      "sport": "football",
+      "stats": {
+        "goals": 3,
+        "assists": 2,
+        "passes": 300,
+        "tackles": 45,
+        "saves": 0
+      },
+      "match_rating": 10,
+      "is_mvp": true,
+      "result": "win",
+      "expected": {
+        "pulse": 200,
+        "breakdown_total": 200,
+        "breakdown_rows": [
+          75,
+          30,
+          10,
+          10,
+          20,
+          40,
+          15
+        ],
+        "ssr_delta": 0.8,
+        "chemistry_delta": 7
+      }
+    },
+    {
+      "sport": "football",
+      "stats": {
+        "goals": 0,
+        "assists": 0,
+        "passes": 14,
+        "tackles": 7,
+        "saves": 5
+      },
+      "match_rating": 6,
+      "is_mvp": false,
+      "result": "loss",
+      "expected": {
+        "pulse": 56,
+        "breakdown_total": 55,
+        "breakdown_rows": [
+          1,
+          2,
+          40,
+          12
+        ],
+        "ssr_delta": 0.3,
+        "chemistry_delta": 1
+      }
+    },
+    {
+      "sport": "football",
+      "stats": {
+        "goals": 0,
+        "assists": 3,
+        "passes": 99,
+        "tackles": 2,
+        "saves": 0
+      },
+      "match_rating": 8.2,
+      "is_mvp": false,
+      "result": "draw",
+      "expected": {
+        "pulse": 77,
+        "breakdown_total": 77,
+        "breakdown_rows": [
+          45,
+          10,
+          1,
+          16,
+          5
+        ],
+        "ssr_delta": 0.4,
+        "chemistry_delta": 2
+      }
+    },
+    {
+      "sport": "football",
+      "stats": {
+        "goals": 5,
+        "assists": 0,
+        "passes": 51,
+        "tackles": 31,
+        "saves": 1
+      },
+      "match_rating": 9,
+      "is_mvp": true,
+      "result": "win",
+      "expected": {
+        "pulse": 221,
+        "breakdown_total": 221,
+        "breakdown_rows": [
+          125,
+          5,
+          10,
+          8,
+          18,
+          40,
+          15
+        ],
+        "ssr_delta": 0.8,
+        "chemistry_delta": 7
+      }
+    },
+    {
+      "sport": "football",
+      "stats": {
+        "goals": 1,
+        "assists": 1,
+        "passes": 100,
+        "tackles": 30,
+        "saves": 0
+      },
+      "match_rating": 3,
+      "is_mvp": false,
+      "result": "loss",
+      "expected": {
+        "pulse": 66,
+        "breakdown_total": 66,
+        "breakdown_rows": [
+          25,
+          15,
+          10,
+          10,
+          6
+        ],
+        "ssr_delta": 0.2,
+        "chemistry_delta": 1
+      }
+    },
+    {
+      "sport": "cricket",
+      "stats": {
+        "runs": 0,
+        "wickets": 0,
+        "catches": 0
+      },
+      "match_rating": 1,
+      "is_mvp": true,
+      "result": "loss",
+      "expected": {
+        "pulse": 42,
+        "breakdown_total": 42,
+        "breakdown_rows": [
+          2,
+          40
+        ],
+        "ssr_delta": 0.1,
+        "chemistry_delta": 3
+      }
+    },
+    {
+      "sport": "cricket",
+      "stats": {
+        "runs": 45,
+        "wickets": 1,
+        "catches": 1
+      },
+      "match_rating": 4,
+      "is_mvp": false,
+      "result": "draw",
+      "expected": {
+        "pulse": 66,
+        "breakdown_total": 66,
+        "breakdown_rows": [
+          23,
+          20,
+          10,
+          8,
+          5
+        ],
+        "ssr_delta": 0.3,
+        "chemistry_delta": 1
+      }
+    },
+    {
+      "sport": "cricket",
+      "stats": {
+        "runs": 100,
+        "wickets": 0,
+        "catches": 0
+      },
+      "match_rating": 6,
+      "is_mvp": false,
+      "result": "win",
+      "expected": {
+        "pulse": 77,
+        "breakdown_total": 77,
+        "breakdown_rows": [
+          50,
+          12,
+          15
+        ],
+        "ssr_delta": 0.6,
+        "chemistry_delta": 3
+      }
+    },
+    {
+      "sport": "cricket",
+      "stats": {
+        "runs": 250,
+        "wickets": 3,
+        "catches": 2
+      },
+      "match_rating": 10,
+      "is_mvp": false,
+      "result": "loss",
+      "expected": {
+        "pulse": 150,
+        "breakdown_total": 150,
+        "breakdown_rows": [
+          50,
+          60,
+          20,
+          20
+        ],
+        "ssr_delta": 0.6,
+        "chemistry_delta": 2
+      }
+    },
+    {
+      "sport": "cricket",
+      "stats": {
+        "runs": 99,
+        "wickets": 5,
+        "catches": 0
+      },
+      "match_rating": 7.7,
+      "is_mvp": true,
+      "result": "draw",
+      "expected": {
+        "pulse": 210,
+        "breakdown_total": 210,
+        "breakdown_rows": [
+          50,
+          100,
+          15,
+          40,
+          5
+        ],
+        "ssr_delta": 0.5,
+        "chemistry_delta": 5
+      }
+    },
+    {
+      "sport": "cricket",
+      "stats": {
+        "runs": 12,
+        "wickets": 0,
+        "catches": 4
+      },
+      "match_rating": 5.5,
+      "is_mvp": false,
+      "result": "win",
+      "expected": {
+        "pulse": 72,
+        "breakdown_total": 72,
+        "breakdown_rows": [
+          6,
+          40,
+          11,
+          15
+        ],
+        "ssr_delta": 0.6,
+        "chemistry_delta": 3
+      }
+    },
+    {
+      "sport": "cricket",
+      "stats": {
+        "runs": 7,
+        "wickets": 2,
+        "catches": 1
+      },
+      "match_rating": 8,
+      "is_mvp": false,
+      "result": "loss",
+      "expected": {
+        "pulse": 70,
+        "breakdown_total": 70,
+        "breakdown_rows": [
+          4,
+          40,
+          10,
+          16
+        ],
+        "ssr_delta": 0.5,
+        "chemistry_delta": 2
+      }
+    },
+    {
+      "sport": "cricket",
+      "stats": {
+        "runs": 100,
+        "wickets": 1,
+        "catches": 1
+      },
+      "match_rating": 2,
+      "is_mvp": false,
+      "result": "draw",
+      "expected": {
+        "pulse": 89,
+        "breakdown_total": 89,
+        "breakdown_rows": [
+          50,
+          20,
+          10,
+          4,
+          5
+        ],
+        "ssr_delta": 0.2,
+        "chemistry_delta": 0
+      }
+    },
+    {
+      "sport": "basketball",
+      "stats": {
+        "points": 0,
+        "assists": 0,
+        "rebounds": 0,
+        "steals": 0,
+        "blocks": 0
+      },
+      "match_rating": 0,
+      "is_mvp": true,
+      "result": "draw",
+      "expected": {
+        "pulse": 45,
+        "breakdown_total": 45,
+        "breakdown_rows": [
+          0,
+          40,
+          5
+        ],
+        "ssr_delta": 0,
+        "chemistry_delta": 3
+      }
+    },
+    {
+      "sport": "basketball",
+      "stats": {
+        "points": 12,
+        "assists": 4,
+        "rebounds": 6,
+        "steals": 1,
+        "blocks": 0
+      },
+      "match_rating": 6.4,
+      "is_mvp": false,
+      "result": "win",
+      "expected": {
+        "pulse": 107,
+        "breakdown_total": 107,
+        "breakdown_rows": [
+          12,
+          32,
+          30,
+          8,
+          10,
+          15
+        ],
+        "ssr_delta": 0.6,
+        "chemistry_delta": 3
+      }
+    },
+    {
+      "sport": "basketball",
+      "stats": {
+        "points": 40,
+        "assists": 10,
+        "rebounds": 11,
+        "steals": 3,
+        "blocks": 2
+      },
+      "match_rating": 10,
+      "is_mvp": true,
+      "result": "loss",
+      "expected": {
+        "pulse": 266,
+        "breakdown_total": 266,
+        "breakdown_rows": [
+          40,
+          80,
+          55,
+          24,
+          12,
+          15,
+          40
+        ],
+        "ssr_delta": 0.6,
+        "chemistry_delta": 5
+      }
+    },
+    {
+      "sport": "basketball",
+      "stats": {
+        "points": 62,
+        "assists": 2,
+        "rebounds": 3,
+        "steals": 0,
+        "blocks": 1
+      },
+      "match_rating": 8,
+      "is_mvp": false,
+      "result": "draw",
+      "expected": {
+        "pulse": 94,
+        "breakdown_total": 94,
+        "breakdown_rows": [
+          40,
+          16,
+          15,
+          6,
+          12,
+          5
+        ],
+        "ssr_delta": 0.5,
+        "chemistry_delta": 2
+      }
+    },
+    {
+      "sport": "basketball",
+      "stats": {
+        "points": 28,
+        "assists": 11,
+        "rebounds": 9,
+        "steals": 4,
+        "blocks": 3
+      },
+      "match_rating": 9.1,
+      "is_mvp": true,
+      "result": "win",
+      "expected": {
+        "pulse": 280,
+        "breakdown_total": 280,
+        "breakdown_rows": [
+          28,
+          88,
+          45,
+          32,
+          18,
+          14,
+          40,
+          15
+        ],
+        "ssr_delta": 0.8,
+        "chemistry_delta": 7
+      }
+    },
+    {
+      "sport": "basketball",
+      "stats": {
+        "points": 5,
+        "assists": 0,
+        "rebounds": 15,
+        "steals": 0,
+        "blocks": 6
+      },
+      "match_rating": 3.3,
+      "is_mvp": false,
+      "result": "loss",
+      "expected": {
+        "pulse": 121,
+        "breakdown_total": 121,
+        "breakdown_rows": [
+          5,
+          75,
+          36,
+          5
+        ],
+        "ssr_delta": 0.3,
+        "chemistry_delta": 1
+      }
+    },
+    {
+      "sport": "basketball",
+      "stats": {
+        "points": 33,
+        "assists": 7,
+        "rebounds": 2,
+        "steals": 5,
+        "blocks": 0
+      },
+      "match_rating": 7,
+      "is_mvp": true,
+      "result": "draw",
+      "expected": {
+        "pulse": 195,
+        "breakdown_total": 195,
+        "breakdown_rows": [
+          33,
+          56,
+          10,
+          40,
+          11,
+          40,
+          5
+        ],
+        "ssr_delta": 0.5,
+        "chemistry_delta": 4
+      }
+    },
+    {
+      "sport": "basketball",
+      "stats": {
+        "points": 40,
+        "assists": 0,
+        "rebounds": 0,
+        "steals": 0,
+        "blocks": 0
+      },
+      "match_rating": 5,
+      "is_mvp": false,
+      "result": "win",
+      "expected": {
+        "pulse": 63,
+        "breakdown_total": 63,
+        "breakdown_rows": [
+          40,
+          8,
+          15
+        ],
+        "ssr_delta": 0.6,
+        "chemistry_delta": 3
+      }
+    },
+    {
+      "sport": "running",
+      "stats": {},
+      "match_rating": 5,
+      "is_mvp": true,
+      "result": "win",
+      "expected": {
+        "pulse": 93,
+        "breakdown_total": 95,
+        "breakdown_rows": [
+          30,
+          10,
+          40,
+          15
+        ],
+        "ssr_delta": 0.5,
+        "chemistry_delta": 6
+      }
+    },
+    {
+      "sport": "running",
+      "stats": {
+        "personalBest": true,
+        "positionFinished": 1
+      },
+      "match_rating": 10,
+      "is_mvp": false,
+      "result": "loss",
+      "expected": {
+        "pulse": 135,
+        "breakdown_total": 140,
+        "breakdown_rows": [
+          30,
+          50,
+          40,
+          20
+        ],
+        "ssr_delta": 0.5,
+        "chemistry_delta": 2
+      }
+    },
+    {
+      "sport": "running",
+      "stats": {
+        "personalBest": false,
+        "positionFinished": 3
+      },
+      "match_rating": 8.8,
+      "is_mvp": false,
+      "result": "draw",
+      "expected": {
+        "pulse": 88,
+        "breakdown_total": 93,
+        "breakdown_rows": [
+          30,
+          40,
+          18,
+          5
+        ],
+        "ssr_delta": 0.4,
+        "chemistry_delta": 2
+      }
+    },
+    {
+      "sport": "running",
+      "stats": {
+        "personalBest": true,
+        "positionFinished": 4
+      },
+      "match_rating": 6,
+      "is_mvp": false,
+      "result": "win",
+      "expected": {
+        "pulse": 104,
+        "breakdown_total": 107,
+        "breakdown_rows": [
+          30,
+          50,
+          12,
+          15
+        ],
+        "ssr_delta": 0.5,
+        "chemistry_delta": 3
+      }
+    },
+    {
+      "sport": "running",
+      "stats": {
+        "personalBest": false,
+        "positionFinished": 99
+      },
+      "match_rating": 0,
+      "is_mvp": false,
+      "result": "loss",
+      "expected": {
+        "pulse": 30,
+        "breakdown_total": 30,
+        "breakdown_rows": [
+          30,
+          0
+        ],
+        "ssr_delta": 0,
+        "chemistry_delta": 0
+      }
+    },
+    {
+      "sport": "running",
+      "stats": {
+        "positionFinished": 2
+      },
+      "match_rating": 7.2,
+      "is_mvp": true,
+      "result": "draw",
+      "expected": {
+        "pulse": 126,
+        "breakdown_total": 129,
+        "breakdown_rows": [
+          30,
+          40,
+          14,
+          40,
+          5
+        ],
+        "ssr_delta": 0.4,
+        "chemistry_delta": 4
+      }
+    },
+    {
+      "sport": "running",
+      "stats": {
+        "personalBest": true
+      },
+      "match_rating": 9.9,
+      "is_mvp": false,
+      "result": "win",
+      "expected": {
+        "pulse": 110,
+        "breakdown_total": 115,
+        "breakdown_rows": [
+          30,
+          50,
+          20,
+          15
+        ],
+        "ssr_delta": 0.7,
+        "chemistry_delta": 4
+      }
+    },
+    {
+      "sport": "running",
+      "stats": {
+        "personalBest": 0,
+        "positionFinished": 3
+      },
+      "match_rating": 4,
+      "is_mvp": false,
+      "result": "loss",
+      "expected": {
+        "pulse": 76,
+        "breakdown_total": 78,
+        "breakdown_rows": [
+          30,
+          40,
+          8
+        ],
+        "ssr_delta": 0.2,
+        "chemistry_delta": 1
+      }
+    },
+    {
+      "sport": "volleyball",
+      "stats": {
+        "contribution": 0
+      },
+      "match_rating": 2,
+      "is_mvp": false,
+      "result": "loss",
+      "expected": {
+        "pulse": 4,
+        "breakdown_total": 4,
+        "breakdown_rows": [
+          0,
+          4
+        ],
+        "ssr_delta": 0.1,
+        "chemistry_delta": 0
+      }
+    },
+    {
+      "sport": "tennis",
+      "stats": {
+        "contribution": 5
+      },
+      "match_rating": 5,
+      "is_mvp": true,
+      "result": "draw",
+      "expected": {
+        "pulse": 80,
+        "breakdown_total": 80,
+        "breakdown_rows": [
+          25,
+          10,
+          40,
+          5
+        ],
+        "ssr_delta": 0.3,
+        "chemistry_delta": 4
+      }
+    },
+    {
+      "sport": "badminton",
+      "stats": {
+        "contribution": 12
+      },
+      "match_rating": 7,
+      "is_mvp": false,
+      "result": "win",
+      "expected": {
+        "pulse": 89,
+        "breakdown_total": 89,
+        "breakdown_rows": [
+          60,
+          14,
+          15
+        ],
+        "ssr_delta": 0.6,
+        "chemistry_delta": 3
+      }
+    },
+    {
+      "sport": "swimming",
+      "stats": {},
+      "match_rating": 10,
+      "is_mvp": false,
+      "result": "loss",
+      "expected": {
+        "pulse": 45,
+        "breakdown_total": 45,
+        "breakdown_rows": [
+          25,
+          20
+        ],
+        "ssr_delta": 0.5,
+        "chemistry_delta": 2
+      }
+    },
+    {
+      "sport": "hockey",
+      "stats": {
+        "contribution": 1
+      },
+      "match_rating": 8.4,
+      "is_mvp": true,
+      "result": "draw",
+      "expected": {
+        "pulse": 67,
+        "breakdown_total": 67,
+        "breakdown_rows": [
+          5,
+          17,
+          40,
+          5
+        ],
+        "ssr_delta": 0.4,
+        "chemistry_delta": 5
+      }
+    },
+    {
+      "sport": "rugby",
+      "stats": {
+        "contribution": 20
+      },
+      "match_rating": 6.6,
+      "is_mvp": false,
+      "result": "win",
+      "expected": {
+        "pulse": 128,
+        "breakdown_total": 128,
+        "breakdown_rows": [
+          100,
+          13,
+          15
+        ],
+        "ssr_delta": 0.5,
+        "chemistry_delta": 3
+      }
+    },
+    {
+      "sport": "esports",
+      "stats": {
+        "contribution": 3
+      },
+      "match_rating": 1,
+      "is_mvp": false,
+      "result": "loss",
+      "expected": {
+        "pulse": 17,
+        "breakdown_total": 17,
+        "breakdown_rows": [
+          15,
+          2
+        ],
+        "ssr_delta": 0.1,
+        "chemistry_delta": 0
+      }
+    },
+    {
+      "sport": "other",
+      "stats": {
+        "contribution": 7
+      },
+      "match_rating": 9,
+      "is_mvp": true,
+      "result": "draw",
+      "expected": {
+        "pulse": 98,
+        "breakdown_total": 98,
+        "breakdown_rows": [
+          35,
+          18,
+          40,
+          5
+        ],
+        "ssr_delta": 0.5,
+        "chemistry_delta": 5
+      }
+    }
+  ]
+}
