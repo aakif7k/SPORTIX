@@ -8,7 +8,22 @@ class Settings(BaseSettings):
     appwrite_project_id: str
     appwrite_api_key: str
     appwrite_database_id: str = "6a5faf43003e0b2d9f34"
-    appwrite_storage_bucket_id: str = "6a5faf1a000b5d9156b5"
+
+    # ── Storage buckets ───────────────────────────────────────────────────────
+    # Split by media class so limits, allowed extensions and access differ:
+    # images and videos are publicly readable, proofs are server-mediated only.
+    appwrite_bucket_images: str = "sportix-images"
+    appwrite_bucket_videos: str = "sportix-videos"
+    appwrite_bucket_proofs: str = "sportix-proofs"
+
+    @property
+    def appwrite_storage_bucket_id(self) -> str:
+        """
+        DEPRECATED alias for the images bucket, kept so upload_service and the
+        frontend keep working while call sites migrate to the explicit
+        appwrite_bucket_* settings. Remove once nothing references it.
+        """
+        return self.appwrite_bucket_images
 
     # ── Collection IDs ────────────────────────────────────────────────────────
     collection_users: str = "profiles"
