@@ -44,4 +44,6 @@ class StatValidate(BaseModel):
 
 
 class SquadRetentionVote(BaseModel):
+    """A voter's verdict on one specific teammate."""
+    target_id: str
     vote: RetentionVote

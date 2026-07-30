@@ -62,7 +62,6 @@ async def register_user(payload: UserCreate) -> dict:
             settings.collection_users,
             document_id=uid,
             data={
-                "auth_uid": uid,
                 "email": payload.email,
                 "username": payload.username.lower().strip(),
                 "full_name": payload.full_name,

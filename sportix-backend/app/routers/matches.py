@@ -64,5 +64,5 @@ async def validate_stat(match_id: str, stat_id: str, payload: StatValidate, user
 
 @router.post("/{match_id}/retention")
 async def retention_vote(match_id: str, payload: SquadRetentionVote, user=Depends(get_current_user)):
-    data = await match_service.retention_vote(match_id, user["id"], payload.vote)
+    data = await match_service.retention_vote(match_id, user["id"], payload.target_id, payload.vote.value)
     return {"success": True, "data": data}

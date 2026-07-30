@@ -1,4 +1,6 @@
+import logging
 from appwrite.id import ID
+from appwrite.exception import AppwriteException
 from appwrite.query import Query
 from app.core.appwrite import db
 from app.core.config import settings
@@ -8,26 +10,33 @@ DB = settings.appwrite_database_id
 POSTS = settings.collection_posts
 USERS = settings.collection_users
 
+logger = logging.getLogger(__name__)
+
 def get_user_info(user_id: str) -> dict:
-    """Get basic user info for denormalization."""
+    """
+    Author fields to denormalise onto a post.
+
+    A profiles document id IS the Appwrite auth user $id, so this is a direct
+    get_document. It previously queried Query.equal("auth_uid", ...) against an
+    attribute that only one of the two profile writers ever set, so the lookup
+    found nothing and every post was stored with just {author_id} -- no username,
+    no avatar, no sport.
+    """
     try:
-        users = db.list_documents(
-            DB, USERS,
-            queries=[Query.equal("auth_uid", [user_id])]
-        )
-        if users["documents"]:
-            u = users["documents"][0]
-            return {
-                "author_id": user_id,
-                "author_username": u.get("username", ""),
-                "author_full_name": u.get("full_name", ""),
-                "author_avatar_url": u.get("avatar_url"),
-                "author_sport": u.get("sport", ""),
-                "author_level": u.get("level", 1),
-            }
-    except:
-        pass
-    return {"author_id": user_id}
+        u = db.get_document(DB, USERS, user_id)
+        return {
+            "author_id": user_id,
+            "author_username": u.get("username", ""),
+            "author_full_name": u.get("full_name", ""),
+            "author_avatar_url": u.get("avatar_url"),
+            "author_sport": u.get("sport", ""),
+            "author_level": u.get("level", 1),
+        }
+    except AppwriteException:
+        # No profile yet (a brand-new OAuth user). The post is still valid; it
+        # just carries no denormalised author fields.
+        logger.warning("no profile document for %s; post will lack author fields", user_id)
+        return {"author_id": user_id}
 
 async def create(user_id: str, payload) -> dict:
     user_info = get_user_info(user_id)

@@ -1,7 +1,9 @@
+import json
 from appwrite.query import Query as Q
 from appwrite.id import ID
 from app.core.appwrite import db, DB_ID
 from app.core.config import settings
+from app.utils.formatters import now_iso
 from app.schemas.ai import AutoSquadRequest
 from datetime import date
 import random
@@ -22,7 +24,7 @@ async def generate(user_id: str, payload: AutoSquadRequest) -> dict:
     # Find compatible players
     queries = [
         Q.equal("sport", payload.sport),
-        Q.equal("experienceLevel", payload.skill_level.value),
+        Q.equal("experience_level", payload.skill_level.value),
         Q.not_equal("$id", user_id),
         Q.limit(50),
     ]
@@ -35,9 +37,9 @@ async def generate(user_id: str, payload: AutoSquadRequest) -> dict:
         try:
             pulse_res = db.list_documents(
                 DB_ID, settings.collection_pulse_scores,
-                queries=[Q.equal("userId", c["$id"]), Q.limit(1)],
+                queries=[Q.equal("user_id", c["$id"]), Q.limit(1)],
             )
-            pulse = pulse_res["documents"][0].get("totalPulse", 100) if pulse_res.get("documents") else 100
+            pulse = pulse_res["documents"][0].get("total_pulse", 100) if pulse_res.get("documents") else 100
         except Exception:
             pulse = 100
         scored.append({**c, "_pulse": pulse})
@@ -48,17 +50,22 @@ async def generate(user_id: str, payload: AutoSquadRequest) -> dict:
     suggested = scored[:squad_size]
 
     # Record the generation request
+    # entry_type and the suggested ids are request parameters, not columns; the
+    # collection carries a `params` JSON blob for exactly this. Storing them as
+    # attributes referenced fields that do not exist on autosquad_requests.
     request_doc = db.create_document(
         DB_ID, settings.collection_autosquad_requests, ID.unique(),
         data={
-            "userId": user_id,
+            "user_id": user_id,
             "sport": payload.sport,
-            "eventId": payload.event_id,
-            "entryType": payload.entry_type.value,
-            "skillLevel": payload.skill_level.value,
-            "suggestedPlayerIds": [s["$id"] for s in suggested],
+            "event_id": payload.event_id,
+            "skill_level": payload.skill_level.value,
+            "params": json.dumps({
+                "entry_type": payload.entry_type.value,
+                "suggested_player_ids": [s["$id"] for s in suggested],
+            }),
             "status": "pending",
-            "date": date.today().isoformat(),
+            "created_at": now_iso(),
         },
     )
 
@@ -73,15 +80,22 @@ async def generate(user_id: str, payload: AutoSquadRequest) -> dict:
 async def get_history(user_id: str) -> dict:
     return db.list_documents(
         DB_ID, settings.collection_autosquad_requests,
-        queries=[Q.equal("userId", user_id), Q.limit(20), Q.order_desc("$createdAt")],
+        queries=[Q.equal("user_id", user_id), Q.limit(20), Q.order_desc("$createdAt")],
     )
 
 
 async def get_remaining(user_id: str) -> dict:
+    # Counted with Q.equal("date", ...) against a non-existent column, so `used`
+    # was always 0 and the generation limit never actually applied. created_at is
+    # indexed on this collection, so a range query is the right tool.
     today = date.today().isoformat()
     res = db.list_documents(
         DB_ID, settings.collection_autosquad_requests,
-        queries=[Q.equal("userId", user_id), Q.equal("date", today), Q.limit(10)],
+        queries=[
+            Q.equal("user_id", user_id),
+            Q.greater_than_equal("created_at", f"{today}T00:00:00.000+00:00"),
+            Q.limit(100),
+        ],
     )
     used = res.get("total", 0)
     remaining = max(0, settings.max_autosquad_generations - used)
@@ -90,14 +104,14 @@ async def get_remaining(user_id: str) -> dict:
 
 async def accept(request_id: str, user_id: str) -> dict:
     doc = db.get_document(DB_ID, settings.collection_autosquad_requests, request_id)
-    if doc.get("userId") != user_id:
+    if doc.get("user_id") != user_id:
         raise PermissionError("Not your AutoSquad request")
     return db.update_document(DB_ID, settings.collection_autosquad_requests, request_id, {"status": "accepted"})
 
 
 async def reject(request_id: str, user_id: str):
     doc = db.get_document(DB_ID, settings.collection_autosquad_requests, request_id)
-    if doc.get("userId") != user_id:
+    if doc.get("user_id") != user_id:
         raise PermissionError("Not your AutoSquad request")
     db.update_document(DB_ID, settings.collection_autosquad_requests, request_id, {"status": "rejected"})
 

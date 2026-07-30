@@ -3,6 +3,7 @@ from appwrite.id import ID
 from app.core.appwrite import db, DB_ID
 from app.core.config import settings
 from app.schemas.match import StatsSubmission, StatValidate
+from app.utils.formatters import now_iso
 from typing import Optional
 
 
@@ -15,13 +16,13 @@ async def create(
     return db.create_document(
         DB_ID, settings.collection_matches, ID.unique(),
         data={
-            "eventId": event_id,
-            "homeSquadId": home_squad_id,
-            "awaySquadId": away_squad_id,
+            "event_id": event_id,
+            "home_squad_id": home_squad_id,
+            "away_squad_id": away_squad_id,
             "sport": sport,
             "result": "pending",
-            "scoreHome": None,
-            "scoreAway": None,
+            "score_home": None,
+            "score_away": None,
             "status": "active",
         },
     )
@@ -39,7 +40,7 @@ async def update_result(
 ) -> dict:
     return db.update_document(
         DB_ID, settings.collection_matches, match_id,
-        {"result": result, "scoreHome": score_home, "scoreAway": score_away, "status": "completed"},
+        {"result": result, "score_home": score_home, "score_away": score_away, "status": "completed"},
     )
 
 
@@ -48,16 +49,16 @@ async def submit_stats(match_id: str, user_id: str, payload: StatsSubmission) ->
     stat = db.create_document(
         DB_ID, settings.collection_player_stats, ID.unique(),
         data={
-            "matchId": match_id,
-            "userId": user_id,
+            "match_id": match_id,
+            "user_id": user_id,
             "sport": payload.sport,
-            "statsData": str(payload.stats_data),
-            "matchRating": payload.match_rating,
-            "isMvp": payload.is_mvp,
-            "mediaProofUrl": payload.media_proof_url,
-            "validationStatus": "pending",
-            "confirmVotes": 0,
-            "disputeVotes": 0,
+            "stats_data": str(payload.stats_data),
+            "match_rating": payload.match_rating,
+            "is_mvp": payload.is_mvp,
+            "media_proof_url": payload.media_proof_url,
+            "validation_status": "pending",
+            "confirm_votes": 0,
+            "dispute_votes": 0,
         },
     )
     # Update pulse score based on match rating
@@ -68,7 +69,7 @@ async def submit_stats(match_id: str, user_id: str, payload: StatsSubmission) ->
 async def get_stats(match_id: str) -> dict:
     return db.list_documents(
         DB_ID, settings.collection_player_stats,
-        queries=[Q.equal("matchId", match_id), Q.limit(50)],
+        queries=[Q.equal("match_id", match_id), Q.limit(50)],
     )
 
 
@@ -76,8 +77,8 @@ async def validate_stat(stat_id: str, validator_id: str, payload: StatValidate) 
     db.create_document(
         DB_ID, settings.collection_stat_validations, ID.unique(),
         data={
-            "statId": stat_id,
-            "validatorId": validator_id,
+            "stat_id": stat_id,
+            "validator_id": validator_id,
             "vote": payload.vote.value,
             "reason": payload.reason,
         },
@@ -86,23 +87,49 @@ async def validate_stat(stat_id: str, validator_id: str, payload: StatValidate) 
     stat = db.get_document(DB_ID, settings.collection_player_stats, stat_id)
     if payload.vote.value == "confirm":
         db.update_document(DB_ID, settings.collection_player_stats, stat_id,
-                           {"confirmVotes": stat.get("confirmVotes", 0) + 1})
+                           {"confirm_votes": stat.get("confirm_votes", 0) + 1})
     elif payload.vote.value == "dispute":
         db.update_document(DB_ID, settings.collection_player_stats, stat_id,
-                           {"disputeVotes": stat.get("disputeVotes", 0) + 1})
+                           {"dispute_votes": stat.get("dispute_votes", 0) + 1})
     # Auto-validate if 3+ confirms with no disputes
-    confirm_count = stat.get("confirmVotes", 0) + (1 if payload.vote.value == "confirm" else 0)
+    confirm_count = stat.get("confirm_votes", 0) + (1 if payload.vote.value == "confirm" else 0)
     if confirm_count >= 3:
         db.update_document(DB_ID, settings.collection_player_stats, stat_id,
-                           {"validationStatus": "validated"})
-        _award_pulse_for_validation(stat.get("userId", ""))
+                           {"validation_status": "validated"})
+        _award_pulse_for_validation(stat.get("user_id", ""))
     return db.get_document(DB_ID, settings.collection_player_stats, stat_id)
 
 
-async def retention_vote(match_id: str, user_id: str, vote: str) -> dict:
+async def retention_vote(match_id: str, voter_id: str, target_id: str, vote: str) -> dict:
+    """
+    Record one voter's verdict on one teammate.
+
+    Re-voting updates the existing row: unique(match_id, voter_id, target_id)
+    would otherwise reject the second write.
+    """
+    if voter_id == target_id:
+        raise ValueError("You cannot cast a retention vote on yourself")
+
+    existing = db.list_documents(
+        DB_ID, settings.collection_retention_votes,
+        queries=[
+            Q.equal("match_id", match_id), Q.equal("voter_id", voter_id),
+            Q.equal("target_id", target_id), Q.limit(1),
+        ],
+    ).get("documents", [])
+
+    now = now_iso()
+    if existing:
+        return db.update_document(
+            DB_ID, settings.collection_retention_votes, existing[0]["$id"],
+            {"vote": vote, "updated_at": now},
+        )
     return db.create_document(
         DB_ID, settings.collection_retention_votes, ID.unique(),
-        data={"matchId": match_id, "userId": user_id, "vote": vote},
+        data={
+            "match_id": match_id, "voter_id": voter_id, "target_id": target_id,
+            "vote": vote, "created_at": now,
+        },
     )
 
 
@@ -110,7 +137,7 @@ async def check_pending_report(user_id: str) -> dict:
     """Check if user has any pending (unvalidated) stat submissions."""
     res = db.list_documents(
         DB_ID, settings.collection_player_stats,
-        queries=[Q.equal("userId", user_id), Q.equal("validationStatus", "pending"), Q.limit(5)],
+        queries=[Q.equal("user_id", user_id), Q.equal("validation_status", "pending"), Q.limit(5)],
     )
     return {
         "has_pending": len(res.get("documents", [])) > 0,
@@ -125,14 +152,14 @@ def _update_pulse_from_match(user_id: str, rating: float):
     try:
         res = db.list_documents(
             DB_ID, settings.collection_pulse_scores,
-            queries=[Q.equal("userId", user_id), Q.limit(1)],
+            queries=[Q.equal("user_id", user_id), Q.limit(1)],
         )
         if res.get("documents"):
             doc = res["documents"][0]
-            current = doc.get("totalPulse", 100.0)
+            current = doc.get("total_pulse", 100.0)
             new_total = min(1000, current + pulse_award)
             db.update_document(DB_ID, settings.collection_pulse_scores, doc["$id"],
-                               {"totalPulse": new_total, "matchPerformance": doc.get("matchPerformance", 0) + pulse_award})
+                               {"total_pulse": new_total, "match_performance": doc.get("match_performance", 0) + pulse_award})
     except Exception:
         pass
 
@@ -142,12 +169,12 @@ def _award_pulse_for_validation(user_id: str):
     try:
         res = db.list_documents(
             DB_ID, settings.collection_pulse_scores,
-            queries=[Q.equal("userId", user_id), Q.limit(1)],
+            queries=[Q.equal("user_id", user_id), Q.limit(1)],
         )
         if res.get("documents"):
             doc = res["documents"][0]
             db.update_document(DB_ID, settings.collection_pulse_scores, doc["$id"],
-                               {"totalPulse": doc.get("totalPulse", 100) + 5,
+                               {"total_pulse": doc.get("total_pulse", 100) + 5,
                                 "reliability": doc.get("reliability", 0) + 2})
     except Exception:
         pass

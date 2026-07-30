@@ -35,9 +35,9 @@ async def update_profile(user_id: str, payload: UserUpdate) -> dict:
 async def get_profile_stats(user_id: str) -> dict:
     profile = await get_full_profile(user_id)
     return {
-        "followers_count": profile.get("followersCount", 0),
-        "following_count": profile.get("followingCount", 0),
-        "posts_count": profile.get("postsCount", 0),
+        "followers_count": profile.get("followers_count", 0),
+        "following_count": profile.get("following_count", 0),
+        "posts_count": profile.get("posts_count", 0),
     }
 
 
@@ -75,11 +75,11 @@ async def search_users(
     if role:
         queries.append(Q.equal("role", role))
     if experience_level:
-        queries.append(Q.equal("experienceLevel", experience_level))
+        queries.append(Q.equal("experience_level", experience_level))
     if city:
         queries.append(Q.equal("city", city))
     if is_open_to_recruit is not None:
-        queries.append(Q.equal("isOpenToRecruit", is_open_to_recruit))
+        queries.append(Q.equal("is_open_to_recruit", is_open_to_recruit))
     return db.list_documents(DB_ID, settings.collection_users, queries=queries)
 
 
@@ -87,7 +87,7 @@ async def get_suggested(user_id: str, limit: int = 10) -> dict:
     """Suggest users with similar sport/role that are not yet followed."""
     return db.list_documents(
         DB_ID, settings.collection_users,
-        queries=[Q.not_equal("$id", user_id), Q.limit(limit), Q.order_desc("followersCount")],
+        queries=[Q.not_equal("$id", user_id), Q.limit(limit), Q.order_desc("followers_count")],
     )
 
 
@@ -96,45 +96,45 @@ async def follow(follower_id: str, target_id: str):
         raise ValueError("Cannot follow yourself")
     # Create follower document
     db.create_document(DB_ID, settings.collection_followers, ID.unique(), {
-        "followerId": follower_id,
-        "followingId": target_id,
+        "follower_id": follower_id,
+        "following_id": target_id,
     })
     # Increment counters
-    _increment_count(follower_id, "followingCount", 1)
-    _increment_count(target_id, "followersCount", 1)
+    _increment_count(follower_id, "following_count", 1)
+    _increment_count(target_id, "followers_count", 1)
 
 
 async def unfollow(follower_id: str, target_id: str):
     res = db.list_documents(
         DB_ID, settings.collection_followers,
-        queries=[Q.equal("followerId", follower_id), Q.equal("followingId", target_id), Q.limit(1)],
+        queries=[Q.equal("follower_id", follower_id), Q.equal("following_id", target_id), Q.limit(1)],
     )
     for doc in res.get("documents", []):
         db.delete_document(DB_ID, settings.collection_followers, doc["$id"])
-    _increment_count(follower_id, "followingCount", -1)
-    _increment_count(target_id, "followersCount", -1)
+    _increment_count(follower_id, "following_count", -1)
+    _increment_count(target_id, "followers_count", -1)
 
 
 async def get_followers(user_id: str, page: int = 0) -> dict:
     return db.list_documents(
         DB_ID, settings.collection_followers,
-        queries=[Q.equal("followingId", user_id), Q.limit(20), Q.offset(page * 20)],
+        queries=[Q.equal("following_id", user_id), Q.limit(20), Q.offset(page * 20)],
     )
 
 
 async def get_following(user_id: str, page: int = 0) -> dict:
     return db.list_documents(
         DB_ID, settings.collection_followers,
-        queries=[Q.equal("followerId", user_id), Q.limit(20), Q.offset(page * 20)],
+        queries=[Q.equal("follower_id", user_id), Q.limit(20), Q.offset(page * 20)],
     )
 
 
 async def get_settings(user_id: str) -> dict:
     profile = await get_full_profile(user_id)
     return {
-        "notification_prefs": profile.get("notificationPrefs", {}),
+        "notification_prefs": profile.get("notification_prefs", {}),
         "privacy": profile.get("privacy", {}),
-        "sport_preferences": profile.get("sportPreferences", {}),
+        "sport_preferences": profile.get("sport_preferences", {}),
     }
 
 
@@ -146,7 +146,7 @@ def _check_following(follower_id: str, target_id: str) -> bool:
     try:
         res = db.list_documents(
             DB_ID, settings.collection_followers,
-            queries=[Q.equal("followerId", follower_id), Q.equal("followingId", target_id), Q.limit(1)],
+            queries=[Q.equal("follower_id", follower_id), Q.equal("following_id", target_id), Q.limit(1)],
         )
         return len(res.get("documents", [])) > 0
     except Exception:

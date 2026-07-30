@@ -1,3 +1,4 @@
+import logging
 from fastapi import APIRouter, Depends, UploadFile, File
 from app.core.dependencies import get_current_user
 from app.services.upload_service import (
@@ -11,6 +12,8 @@ from app.services.upload_service import (
 )
 
 router = APIRouter()
+
+logger = logging.getLogger(__name__)
 
 
 @router.post("/avatar")
@@ -29,24 +32,22 @@ async def upload_avatar(
     # Update user avatar_url in Appwrite DB
     from app.core.appwrite import db
     from app.core.config import settings
-    from appwrite.query import Query
 
+    # A profiles document id IS the Appwrite auth user $id, so this is a direct
+    # update. It previously searched for Query.equal("auth_uid", ...) -- an
+    # attribute only one of the two profile writers ever set -- so the lookup
+    # found nothing and an uploaded avatar was never written to the profile.
     try:
-        users = db.list_documents(
+        db.update_document(
             settings.appwrite_database_id,
             settings.collection_users,
-            queries=[Query.equal("auth_uid", [user["id"]])]
+            user["id"],
+            {"avatar_url": result["url"], "updated_at": now_iso()},
         )
-        if users["documents"]:
-            doc_id = users["documents"][0]["$id"]
-            db.update_document(
-                settings.appwrite_database_id,
-                settings.collection_users,
-                doc_id,
-                {"avatar_url": result["url"]}
-            )
-    except Exception as e:
-        print(f"Failed to update avatar in DB: {e}")
+    except Exception:
+        # The file is already stored; failing to attach it must not fail the
+        # upload, but it does need to be visible in the logs.
+        logger.exception("avatar uploaded but profile %s not updated", user["id"])
 
     return {
         "success": True,

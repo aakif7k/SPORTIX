@@ -2,6 +2,7 @@ from appwrite.query import Query as Q
 from appwrite.id import ID
 from app.core.appwrite import db, DB_ID
 from app.core.config import settings
+from app.utils.formatters import now_iso
 
 # Badge catalog — in production these would live in the badges collection
 BADGE_CATALOG = [
@@ -24,14 +25,14 @@ async def get_all() -> dict:
 async def get_user_badges(user_id: str) -> dict:
     return db.list_documents(
         DB_ID, settings.collection_user_badges,
-        queries=[Q.equal("userId", user_id), Q.order_desc("$createdAt"), Q.limit(50)],
+        queries=[Q.equal("user_id", user_id), Q.order_desc("$createdAt"), Q.limit(50)],
     )
 
 
 async def get_recent(user_id: str) -> dict:
     return db.list_documents(
         DB_ID, settings.collection_user_badges,
-        queries=[Q.equal("userId", user_id), Q.order_desc("$createdAt"), Q.limit(5)],
+        queries=[Q.equal("user_id", user_id), Q.order_desc("$createdAt"), Q.limit(5)],
     )
 
 
@@ -39,19 +40,21 @@ async def award_badge(user_id: str, badge_key: str) -> dict:
     """Award a badge if user doesn't already have it."""
     existing = db.list_documents(
         DB_ID, settings.collection_user_badges,
-        queries=[Q.equal("userId", user_id), Q.equal("badgeKey", badge_key), Q.limit(1)],
+        queries=[Q.equal("user_id", user_id), Q.equal("badge_key", badge_key), Q.limit(1)],
     )
     if existing.get("documents"):
         return existing["documents"][0]  # already awarded
-    badge_info = next((b for b in BADGE_CATALOG if b["key"] == badge_key), {})
+    # user_badges records the fact of the award only; name, description, icon and
+    # category are columns on `badges` and are joined on read. Copying them here
+    # meant every award write referenced attributes that do not exist, and would
+    # have gone stale the moment a badge was renamed.
+    now = now_iso()
     return db.create_document(
         DB_ID, settings.collection_user_badges, ID.unique(),
         data={
-            "userId": user_id,
-            "badgeKey": badge_key,
-            "name": badge_info.get("name", badge_key),
-            "description": badge_info.get("description", ""),
-            "icon": badge_info.get("icon", "🏅"),
-            "category": badge_info.get("category", "general"),
+            "user_id": user_id,
+            "badge_key": badge_key,
+            "earned_at": now,
+            "created_at": now,
         },
     )
