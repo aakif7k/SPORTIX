@@ -1,5 +1,5 @@
 /**
- * useReels.ts — Real Supabase reels hook
+ * useReels.ts — Appwrite-backed reels hook
  * Replaces the old in-memory DEMO_REELS implementation.
  */
 import { useState, useEffect, useCallback, useRef } from 'react';

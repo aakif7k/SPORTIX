@@ -1,5 +1,5 @@
 /**
- * useStories.ts — Real Supabase stories hook
+ * useStories.ts — Appwrite-backed stories hook
  * Replaces the old in-memory DEMO_STORIES implementation.
  * Stories are grouped by author, marked seen/unseen per current user.
  * Stories auto-expire after 24 hours (enforced by DB expires_at).

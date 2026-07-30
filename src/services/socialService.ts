@@ -2,7 +2,7 @@
  * socialService.ts — Appwrite backend
  * ─────────────────────────────────────────────────────────────────────────────
  * All social content (posts, stories, reels) reads from and writes to Appwrite.
- * NO Supabase. NO mock data. author_id is ALWAYS the Appwrite auth user $id.
+ * NO mock data. author_id is ALWAYS the Appwrite auth user $id.
  *
  * NOTE: Appwrite has no JOINs, so author info is denormalised into each document
  * at creation time (author_name, author_avatar_url, author_sport).
