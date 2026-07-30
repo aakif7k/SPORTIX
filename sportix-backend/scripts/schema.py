@@ -557,7 +557,13 @@ COLLECTIONS: list[Collection] = [
             ID_("event_id"), S("event_name", 140),
             S("last_message", 300), D("last_message_at"), D("created_at", required=True),
         ],
-        indexes=[KEY("participant_ids"), DESC("last_message_at")],
+        # The spec asked for key(participant_ids), but Appwrite rejects indexes on
+        # array attributes outright ("Creating indexes on array attributes is not
+        # currently supported"). Querying "conversations I am in" therefore has no
+        # index to use and must not be done with Query.contains on this column at
+        # scale. The fix is a conversation_members join collection mirroring
+        # squad_members; deferred to the messaging phase, which owns this feature.
+        indexes=[DESC("last_message_at")],
     ),
     Collection(
         "messages", "Messages", doc_security=True,
@@ -673,11 +679,18 @@ if __name__ == "__main__":
     print("\nduplicate collection ids:", sorted(set(dupes)) or "none")
     for c in COLLECTIONS:
         keys = [a.key for a in c.all_attrs]
+        arrays = {a.key for a in c.all_attrs if a.array}
         assert len(keys) == len(set(keys)), f"{c.id}: duplicate attribute keys"
         idx_keys = [i.key for i in c.indexes]
         assert len(idx_keys) == len(set(idx_keys)), f"{c.id}: duplicate index keys {idx_keys}"
         for i in c.indexes:
             for a in i.attributes:
                 assert a in keys, f"{c.id}: index {i.key} references unknown attribute {a}"
+                # Appwrite refuses to index an array column; catch it here rather
+                # than as a failed API call halfway through provisioning.
+                assert a not in arrays, (
+                    f"{c.id}: index {i.key} targets array attribute {a}; "
+                    f"Appwrite does not support indexes on arrays"
+                )
             assert len(i.key) <= 36, f"{c.id}: index key too long: {i.key}"
     print("self-check: OK")

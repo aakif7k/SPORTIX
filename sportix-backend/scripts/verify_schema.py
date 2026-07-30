@@ -26,14 +26,17 @@ from app.core.appwrite import db, storage_svc, DB_ID
 from app.core.config import settings
 from scripts.schema import BUCKETS, COLLECTIONS, Attr, Collection, summary
 
-# schema kind -> the `type`/`format` Appwrite reports back
+# schema kind -> the (type, format) pair Appwrite actually reports back.
+# Read off a live attribute of each kind rather than assumed: note that datetime
+# is its own top-level type with an empty format, while url/email/enum are
+# strings distinguished by format.
 EXPECTED_TYPE = {
     "string": ("string", None),
     "enum": ("string", "enum"),
     "int": ("integer", None),
     "float": ("double", None),
     "bool": ("boolean", None),
-    "datetime": ("string", "datetime"),
+    "datetime": ("datetime", None),
     "url": ("string", "url"),
     "email": ("string", "email"),
 }

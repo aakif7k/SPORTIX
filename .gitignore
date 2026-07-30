@@ -42,3 +42,7 @@ scratch/
 *.njsproj
 *.sln
 *.sw?
+
+# Build spec: contains the leaked Gemini key in its Phase 1 rotation notes,
+# so it must never enter git history. Keep it local.
+SPORTIX_BUILD_PROMPT.md

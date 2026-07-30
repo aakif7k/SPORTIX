@@ -61,6 +61,17 @@ class Settings(BaseSettings):
     collection_story_views: str = "story_views"
     collection_reel_likes: str = "reel_likes"
 
+    # Collections introduced with the canonical schema (scripts/schema.py).
+    # leadership_votes exists so squad leadership votes stop being written into
+    # squad_members, which corrupted every member query.
+    collection_event_comments: str = "event_comments"
+    collection_squad_messages: str = "squad_messages"
+    collection_leadership_votes: str = "leadership_votes"
+    collection_conversations: str = "conversations"
+    collection_messages: str = "messages"
+    collection_tournaments: str = "tournaments"
+    collection_tournament_matches: str = "tournament_matches"
+
     # ── App ───────────────────────────────────────────────────────────────────
     secret_key: str = "change-me-in-production"
     algorithm: str = "HS256"

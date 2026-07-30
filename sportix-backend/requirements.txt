@@ -3,7 +3,13 @@ uvicorn[standard]>=0.29.0
 python-multipart>=0.0.9
 pydantic>=2.9.0
 pydantic-settings>=2.5.0
-appwrite>=6.0.0
+# Pinned below 16.0.0 deliberately -- see app/core/appwrite.py for the full note.
+# 6.x sends a JSON body on GET requests, which Appwrite Cloud >= 1.8 rejects with
+# 400 "request cannot have request body". 16.0.0+ switched to typed pydantic
+# responses that nest document attributes under a "data" key instead of
+# flattening them, which every service here would have to be rewritten for.
+# 15.3.0 is the newest release that talks to current Cloud AND returns flat dicts.
+appwrite>=15.3.0,<16.0.0
 
 python-jose[cryptography]>=3.3.0
 passlib[bcrypt]>=1.7.4

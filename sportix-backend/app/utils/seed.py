@@ -212,6 +212,9 @@ def seed_demo() -> None:
                 "role": "captain" if m == 0 else "member",
                 "position": DEMO_PEOPLE[((i - 1) * 3 + m) % len(DEMO_PEOPLE)][3],
                 "readiness": "ready", "joined_at": _ago(days=40 - m),
+                # created_at is required on every collection by the schema, so it
+                # must be set even where a domain-specific timestamp exists.
+                "created_at": _ago(days=40 - m),
             }, f"  member {member_uid} -> {name}")
 
     print(f"\nDemo tournaments ({len(DEMO_TOURNAMENTS)})")

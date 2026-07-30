@@ -22,6 +22,7 @@ import time
 
 from appwrite.exception import AppwriteException
 from appwrite.permission import Permission
+from appwrite.query import Query
 from appwrite.role import Role
 from appwrite.enums.index_type import IndexType
 from appwrite.enums.compression import Compression
@@ -152,13 +153,34 @@ def ensure_attribute(c: Collection, a: Attr) -> None:
             _err(f"{label}: {e.message}")
 
 
+def _all_attributes(collection_id: str) -> list[dict]:
+    """
+    Every attribute, following pagination.
+
+    list_attributes defaults to 25 per page. profiles has 30 attributes and
+    events 27, so an unpaginated call silently omitted the tail and made those
+    attributes look like they had never been created.
+    """
+    out: list[dict] = []
+    offset = 0
+    page = 100  # Appwrite's maximum
+    while True:
+        batch = db.list_attributes(
+            DB_ID, collection_id, queries=[Query.limit(page), Query.offset(offset)]
+        )["attributes"]
+        out.extend(batch)
+        if len(batch) < page:
+            return out
+        offset += page
+
+
 def wait_for_attributes(c: Collection, timeout: int) -> bool:
     """Block until every attribute reports 'available'. Indexes need this."""
     wanted = {a.key for a in c.all_attrs}
     deadline = time.time() + timeout
     while True:
         try:
-            listed = db.list_attributes(DB_ID, c.id)["attributes"]
+            listed = _all_attributes(c.id)
         except AppwriteException as e:
             _err(f"{c.id}: cannot list attributes: {e.message}")
             return False
