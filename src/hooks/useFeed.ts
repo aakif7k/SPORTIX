@@ -36,6 +36,14 @@ export function useFeed(filters?: {
   const [hasMore, setHasMore] = useState(true);
   const [submitting, setSubmitting] = useState(false);
 
+  // Read the two fields we actually depend on up front. Referencing
+  // `filters?.post_type` inside the callback made the compiler infer the whole
+  // `filters` object as the dependency while the dep array named the two
+  // properties, so the manual memoization could not be preserved and the
+  // callback was deoptimized (react-hooks/preserve-manual-memoization).
+  const filterPostType = filters?.post_type;
+  const filterSport = filters?.sport;
+
   const loadPosts = useCallback(async (
     pageNum: number,
     reset = false
@@ -47,10 +55,10 @@ export function useFeed(filters?: {
         page: String(pageNum),
         limit: '20',
       });
-      if (filters?.post_type)
-        params.append('post_type', filters.post_type);
-      if (filters?.sport)
-        params.append('sport', filters.sport);
+      if (filterPostType)
+        params.append('post_type', filterPostType);
+      if (filterSport)
+        params.append('sport', filterSport);
 
       const res = await api.get<any>(
         `/api/posts/feed?${params}`
@@ -182,7 +190,7 @@ export function useFeed(filters?: {
     } finally {
       setLoading(false);
     }
-  }, [user, filters?.post_type, filters?.sport]);
+  }, [user, filterPostType, filterSport]);
 
   useEffect(() => {
     loadPosts(0, true);

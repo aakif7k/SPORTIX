@@ -1,61 +1,9 @@
-import {
-  createContext, useContext, useEffect,
-  useState, useCallback
-} from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import type { ReactNode } from 'react';
 import { account } from '@/lib/appwrite';
 import { useAuthStore } from '@/store/authStore';
-// Appwrite SDK v26+ removed the Models namespace — use inline type
-type AppwriteUser = {
-  $id: string;
-  email: string;
-  name: string;
-  emailVerification: boolean;
-  phoneVerification: boolean;
-  status: boolean;
-  labels: string[];
-  prefs: Record<string, unknown>;
-  registration: string;
-  accessedAt: string;
-};
-
-interface AuthUser {
-  id: string;
-  email: string;
-  name: string;
-  username?: string;
-  avatar_url?: string | null;
-  role?: string;
-  sport?: string;
-  level?: number;
-  pulse_score?: number;
-}
-
-interface AuthContextType {
-  user: AuthUser | null;
-  appwriteUser: AppwriteUser | null;
-  authLoading: boolean;
-  isAuthenticated: boolean;
-  login: (email: string, password: string) => Promise<void>;
-  register: (data: RegisterData) => Promise<void>;
-  logout: () => Promise<void>;
-  refreshUser: () => Promise<void>;
-}
-
-interface RegisterData {
-  email: string;
-  password: string;
-  fullName: string;
-  username: string;
-  role: string;
-  sport: string;
-  sports: string[];
-  experienceLevel: string;
-  location: string;
-  city: string;
-}
-
-const AuthContext = createContext<AuthContextType | null>(null);
+import { AuthContext } from '@/context/AuthContext';
+import type { AppwriteUser, AuthUser, RegisterData } from '@/context/AuthContext';
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<AuthUser | null>(null);
@@ -91,9 +39,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return null;
   }, []);
 
-  // Check existing session on app load
+  // Resolves the current session into auth state.
+  //
+  // Deliberately does not set authLoading=true up front: on mount that is
+  // already the initial state, and doing it synchronously inside the mount
+  // effect triggers a cascading render (react-hooks/set-state-in-effect).
+  // The login/register handlers below raise the flag themselves, which is
+  // allowed because they run from events rather than during render.
   const checkSession = useCallback(async () => {
-    setAuthLoading(true);
     try {
       // 1. Check if Appwrite session exists
       const appwriteAccount = await account.get();
@@ -149,9 +102,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     checkSession();
-  }, []);
+  }, [checkSession]);
 
   const login = async (email: string, password: string) => {
+    setAuthLoading(true);
+
     // Delete any existing session first
     try {
       await account.deleteSession('current');
@@ -201,6 +156,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       localStorage.setItem('sportix_jwt', result.data.jwt);
     }
 
+    setAuthLoading(true);
+
     // Now create Appwrite session for frontend
     await account.createEmailPasswordSession(
       data.email, data.password
@@ -244,10 +201,4 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       {children}
     </AuthContext.Provider>
   );
-}
-
-export function useAuth() {
-  const ctx = useContext(AuthContext);
-  if (!ctx) throw new Error('useAuth must be inside AuthProvider');
-  return ctx;
 }

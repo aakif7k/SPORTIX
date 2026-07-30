@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState, useCallback } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { motion, useInView } from 'framer-motion';
 
 /* ─── Types ──────────────────────────────────────────────── */
@@ -33,33 +33,33 @@ function useCountUp(
   const frameRef = useRef<number | null>(null);
   const startTimeRef = useRef<number | null>(null);
 
-  const animate = useCallback(
-    (timestamp: number) => {
+  // The loop lives inside the effect so it can recurse by name. As a useCallback
+  // it had to reference `animate` inside its own initializer, which reads the
+  // binding before it is assigned (react-hooks/immutability).
+  useEffect(() => {
+    if (!triggered) return;
+    startTimeRef.current = null;
+
+    const step = (timestamp: number) => {
       if (!startTimeRef.current) startTimeRef.current = timestamp;
       const elapsed = timestamp - startTimeRef.current;
       const progress = Math.min(elapsed / duration, 1);
-      const eased = easeOut(progress);
-      const current = eased * target;
+      const current = easeOut(progress) * target;
       setDisplay(
         decimals > 0
           ? current.toFixed(decimals)
           : Math.floor(current).toLocaleString()
       );
       if (progress < 1) {
-        frameRef.current = requestAnimationFrame(animate);
+        frameRef.current = requestAnimationFrame(step);
       }
-    },
-    [target, duration, decimals]
-  );
+    };
 
-  useEffect(() => {
-    if (!triggered) return;
-    startTimeRef.current = null;
-    frameRef.current = requestAnimationFrame(animate);
+    frameRef.current = requestAnimationFrame(step);
     return () => {
       if (frameRef.current !== null) cancelAnimationFrame(frameRef.current);
     };
-  }, [triggered, animate]);
+  }, [triggered, target, duration, decimals]);
 
   return display;
 }
