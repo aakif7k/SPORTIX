@@ -105,7 +105,7 @@ export const generateAIPulseSquad = async (
     const level = Math.max(1, Math.min(100, userLevel + lvlDelta));
     
     // Pulse Score based on level & category
-    let basePulse = 500;
+    let basePulse: number;
     if (gameplayCategory.toLowerCase() === 'amateur') basePulse = 450 + Math.floor(Math.random() * 150);
     else if (gameplayCategory.toLowerCase() === 'professional' || gameplayCategory.toLowerCase() === 'elite') basePulse = 800 + Math.floor(Math.random() * 180);
     else basePulse = 650 + Math.floor(Math.random() * 150); // Semi-Pro
@@ -173,7 +173,6 @@ export const generateAIPulseSquad = async (
   
   // 2. Query Google Gemini AI for team parameters if available, otherwise simulate
   let squadName = MOCK_TEAM_NAMES[Math.floor(Math.random() * MOCK_TEAM_NAMES.length)];
-  let reasoning = `Combines the veteran coordination of Zaid and Aisha's pace with the technical defense of Devon, creating a balanced setup around Alex's positioning.`;
   let formation = sport === 'Basketball' ? 'Motion' : '4-3-3';
   let tacticalNotes = `Use chemistry-based wing transitions. Alex and Aisha overlap on the wings, supported by Zaid's central distribution.`;
   let chemistry = {
@@ -229,7 +228,9 @@ Format your response as a strict JSON object (ensure it's valid JSON and contain
       if (jsonMatch) {
         const parsed: GeminiSquadResponse = JSON.parse(jsonMatch[0]);
         squadName = parsed.name || squadName;
-        reasoning = parsed.reasoning || reasoning;
+        // parsed.reasoning is intentionally not consumed: the Squad shape this
+        // function returns has no field to carry it. Kept on the response
+        // interface because Gemini is prompted to produce it.
         formation = parsed.formation || formation;
         tacticalNotes = parsed.tacticalNotes || tacticalNotes;
         emit(`> Squad name: "${squadName}" — Formation: ${formation}`);

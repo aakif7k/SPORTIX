@@ -45,7 +45,10 @@ export const StoryViewer: React.FC<StoryViewerProps> = ({
       setStoryIndex(i => i + 1);
       setProgress(0);
     } else {
-      onNextGroup?.() ?? onClose();
+      // `onNextGroup?.() ?? onClose()` also closed the viewer on every advance,
+      // because a void call evaluates to undefined and fell through to `??`.
+      if (onNextGroup) onNextGroup();
+      else onClose();
     }
   }, [storyIndex, totalStories, onNextGroup, onClose]);
 

@@ -15,7 +15,7 @@ export const PulseRing: React.FC<PulseRingProps> = ({
 
   useEffect(() => {
     if (animated) {
-      let start = 0;
+      const start = 0;
       const end = score;
       const duration = 1200; // ms
       const startTime = performance.now();

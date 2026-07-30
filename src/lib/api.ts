@@ -36,7 +36,7 @@ async function request<T>(
   } catch (err: any) {
     clearTimeout(timeoutId);
     if (err.name === 'AbortError') {
-      throw new Error('API request timed out (3s max)');
+      throw new Error('API request timed out (3s max)', { cause: err });
     }
     throw err;
   }

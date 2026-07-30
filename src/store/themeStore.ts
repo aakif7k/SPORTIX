@@ -49,7 +49,7 @@ export const useThemeStore = create<ThemeState>((set) => {
 
   try {
     mediaQuery.addEventListener('change', handleSystemChange);
-  } catch (e) {
+  } catch {
     mediaQuery.addListener(handleSystemChange);
   }
 
@@ -64,7 +64,6 @@ export const useThemeStore = create<ThemeState>((set) => {
       };
 
       // Check if View Transitions API is supported
-      // @ts-ignore - Document.startViewTransition is relatively new
       if (document.startViewTransition) {
         const x = coordinates?.x ?? window.innerWidth / 2;
         const y = coordinates?.y ?? window.innerHeight / 2;
@@ -73,7 +72,6 @@ export const useThemeStore = create<ThemeState>((set) => {
         document.documentElement.style.setProperty('--click-y', `${y}px`);
         document.documentElement.classList.add('theme-transitioning');
 
-        // @ts-ignore
         const transition = document.startViewTransition(updateTheme);
         transition.finished.then(() => {
           document.documentElement.classList.remove('theme-transitioning');

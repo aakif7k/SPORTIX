@@ -181,7 +181,7 @@ export async function updateUserProfile(
       { ...updates, updated_at: new Date().toISOString() },
     );
     return docToProfile(doc);
-  } catch (err) {
+  } catch {
     console.warn('updateUserProfile: profiles collection missing, updating local session profile');
     return null;
   }

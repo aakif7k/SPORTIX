@@ -33,7 +33,7 @@ export const PostMatchReview: React.FC = () => {
       const timer1 = setTimeout(() => setShowDeltas(true), 500);
 
       const timer2 = setTimeout(() => {
-        let current = 721;
+        const current = 721;
         const target = 732;
         const duration = 1000;
         const startTime = performance.now();

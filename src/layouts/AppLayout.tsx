@@ -29,7 +29,7 @@ export const AppLayout: React.FC = () => {
       await logout();
       toast.success("Logged out successfully.");
       navigate('/login');
-    } catch (err) {
+    } catch {
       toast.error("Failed to log out. Try again.");
     }
   };

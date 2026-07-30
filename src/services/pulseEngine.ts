@@ -1,16 +1,25 @@
 // Unused import removed
 
+export interface PulseBreakdown {
+  matchPerf: number;
+  consistency: number;
+  chemistry: number;
+  reliability: number;
+  activity: number;
+  leadership: number;
+}
+
+/**
+ * PLACEHOLDER — returns random deltas and ignores its input entirely.
+ *
+ * The real per-sport Pulse formula is a product decision and belongs on the
+ * server (see performanceService.calculatePulse for the coefficients that are
+ * being ported to pulse_service). Callers must not treat this as accurate.
+ * The parameter is prefixed to record that it is deliberately unread.
+ */
 export const calculateScoreDelta = (
-  breakdown: {
-    matchPerf: number;
-    consistency: number;
-    chemistry: number;
-    reliability: number;
-    activity: number;
-    leadership: number;
-  }
-): { deltas: typeof breakdown; totalDelta: number } => {
-  // Simulates calculation of deltas based on match details
+  _breakdown: PulseBreakdown
+): { deltas: PulseBreakdown; totalDelta: number } => {
   const deltas = {
     matchPerf: Math.floor(Math.random() * 8) + 2, // +2 to +9
     consistency: Math.floor(Math.random() * 5) - 2, // -2 to +2

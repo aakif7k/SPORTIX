@@ -85,7 +85,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         const data = await res.json();
         return data.data;
       }
-    } catch (err) {
+    } catch {
       console.warn('Backend loadUserProfile skipped or timed out, falling back to local session user');
     }
     return null;
@@ -134,7 +134,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setUser(basicUser as any);
         useAuthStore.getState().setUser(basicUser as any);
       }
-    } catch (err) {
+    } catch {
       // No active session
       setUser(null);
       setAppwriteUser(null);
@@ -155,7 +155,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     // Delete any existing session first
     try {
       await account.deleteSession('current');
-    } catch {}
+    } catch {
+      // No session to clear — proceed to create one.
+    }
 
     // Create new session
     await account.createEmailPasswordSession(email, password);
@@ -210,7 +212,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const logout = async () => {
     try {
       await account.deleteSession('current');
-    } catch {}
+    } catch {
+      // Already signed out server-side — still clear local state below.
+    }
     setUser(null);
     setAppwriteUser(null);
     localStorage.removeItem('sportix_jwt');

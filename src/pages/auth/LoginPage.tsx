@@ -45,7 +45,7 @@ export const LoginPage: React.FC = () => {
     try {
       const { loginWithGoogle } = await import('@/lib/authService');
       loginWithGoogle();
-    } catch (err) {
+    } catch {
       setError('Google sign-in unavailable');
     }
   };

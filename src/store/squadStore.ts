@@ -165,7 +165,7 @@ const loadLocalState = () => {
       squads: savedSquads ? JSON.parse(savedSquads) : null,
       chats: savedChats ? JSON.parse(savedChats) : null
     };
-  } catch (e) {
+  } catch {
     return {
       generatedSquads: [],
       dailyGenerationsCount: 0,
