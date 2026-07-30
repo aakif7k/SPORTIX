@@ -1,4 +1,4 @@
-from fastapi import APIRouter, HTTPException, status, Request
+from fastapi import APIRouter, HTTPException, status, Request, Response
 from app.core.rate_limit import limiter, AUTH_LIMIT
 from app.schemas.user import (
     UserCreate, UserLogin, ForgotPasswordRequest, ChangePasswordRequest,
@@ -12,7 +12,7 @@ router = APIRouter()
 
 @router.post("/register", status_code=status.HTTP_201_CREATED)
 @limiter.limit(AUTH_LIMIT)
-async def register(request: Request, payload: UserCreate):
+async def register(request: Request, response: Response, payload: UserCreate):
     """
     Register a new SPORTiX user.
     - Creates Appwrite Auth account
@@ -25,7 +25,7 @@ async def register(request: Request, payload: UserCreate):
 
 @router.post("/login")
 @limiter.limit(AUTH_LIMIT)
-async def login(request: Request, payload: UserLogin):
+async def login(request: Request, response: Response, payload: UserLogin):
     """
     Email/password login.
     Returns Appwrite session JWT — frontend stores this and sends it
@@ -56,7 +56,7 @@ async def get_me(current_user=Depends(get_current_user)):
 
 @router.post("/forgot-password")
 @limiter.limit(AUTH_LIMIT)
-async def forgot_password(request: Request, payload: ForgotPasswordRequest):
+async def forgot_password(request: Request, response: Response, payload: ForgotPasswordRequest):
     """
     Sends a password reset email.
 
@@ -69,7 +69,7 @@ async def forgot_password(request: Request, payload: ForgotPasswordRequest):
 
 @router.put("/change-password")
 @limiter.limit(AUTH_LIMIT)
-async def change_password(request: Request, 
+async def change_password(request: Request, response: Response, 
     payload: ChangePasswordRequest,
     current_user=Depends(get_current_user),
 ):

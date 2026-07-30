@@ -1,5 +1,5 @@
 import logging
-from fastapi import APIRouter, Depends, UploadFile, File, Request
+from fastapi import APIRouter, Depends, UploadFile, File, Request, Response
 from app.core.rate_limit import limiter, UPLOAD_LIMIT
 from app.core.dependencies import get_current_user
 from app.services.upload_service import (
@@ -19,7 +19,7 @@ logger = logging.getLogger(__name__)
 
 @router.post("/avatar")
 @limiter.limit(UPLOAD_LIMIT)
-async def upload_avatar(request: Request, 
+async def upload_avatar(request: Request, response: Response, 
     file: UploadFile = File(...),
     user=Depends(get_current_user)
 ):
@@ -62,7 +62,7 @@ async def upload_avatar(request: Request,
 
 @router.post("/post-media")
 @limiter.limit(UPLOAD_LIMIT)
-async def upload_post_media(request: Request, 
+async def upload_post_media(request: Request, response: Response, 
     file: UploadFile = File(...),
     user=Depends(get_current_user)
 ):
@@ -86,7 +86,7 @@ async def upload_post_media(request: Request,
 
 @router.post("/story-media")
 @limiter.limit(UPLOAD_LIMIT)
-async def upload_story_media(request: Request, 
+async def upload_story_media(request: Request, response: Response, 
     file: UploadFile = File(...),
     user=Depends(get_current_user)
 ):
@@ -108,7 +108,7 @@ async def upload_story_media(request: Request,
 
 @router.post("/reel-video")
 @limiter.limit(UPLOAD_LIMIT)
-async def upload_reel_video(request: Request, 
+async def upload_reel_video(request: Request, response: Response, 
     file: UploadFile = File(...),
     user=Depends(get_current_user)
 ):
@@ -130,7 +130,7 @@ async def upload_reel_video(request: Request,
 
 @router.post("/reel-thumbnail")
 @limiter.limit(UPLOAD_LIMIT)
-async def upload_reel_thumbnail(request: Request, 
+async def upload_reel_thumbnail(request: Request, response: Response, 
     file: UploadFile = File(...),
     user=Depends(get_current_user)
 ):
@@ -149,7 +149,7 @@ async def upload_reel_thumbnail(request: Request,
 
 @router.post("/stat-proof")
 @limiter.limit(UPLOAD_LIMIT)
-async def upload_stat_proof(request: Request, 
+async def upload_stat_proof(request: Request, response: Response, 
     file: UploadFile = File(...),
     user=Depends(get_current_user)
 ):
@@ -168,7 +168,7 @@ async def upload_stat_proof(request: Request,
 
 @router.delete("/delete")
 @limiter.limit(UPLOAD_LIMIT)
-async def delete_file(request: Request, 
+async def delete_file(request: Request, response: Response, 
     file_id: str,
     user=Depends(get_current_user)
 ):

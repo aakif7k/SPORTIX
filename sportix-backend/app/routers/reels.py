@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, Query, Request
+from fastapi import APIRouter, Depends, Query, Request, Response
 from app.core.rate_limit import limiter, WRITE_LIMIT
 from typing import Optional
 from app.core.dependencies import get_current_user
@@ -20,7 +20,7 @@ async def get_reels(
 
 @router.post("/", status_code=201)
 @limiter.limit(WRITE_LIMIT)
-async def create_reel(request: Request, payload: ReelCreate, user=Depends(get_current_user)):
+async def create_reel(request: Request, response: Response, payload: ReelCreate, user=Depends(get_current_user)):
     data = await reel_service.create(user["id"], payload)
     return {"success": True, "data": data}
 
