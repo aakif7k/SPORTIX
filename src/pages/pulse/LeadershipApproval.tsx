@@ -3,6 +3,21 @@ import { useSquad } from '../../hooks/useSquad';
 import { RoleBadge } from '../../components/pulse/RoleBadge';
 import { Sparkles, Check, X } from 'lucide-react';
 
+// Module scope keeps the component identity stable across renders; defined
+// inside LeadershipApproval it was a fresh type on every tick of the countdown
+// timer, remounting all five bars once a second.
+const BreakdownBar = ({ label, value }: { label: string; value: number }) => (
+  <div className="space-y-1">
+    <div className="flex justify-between font-mono text-[9px] text-text-secondary">
+      <span>{label.toUpperCase()}</span>
+      <span className="text-text-primary font-bold">{value}%</span>
+    </div>
+    <div className="w-full h-1 bg-elevated rounded-full overflow-hidden">
+      <div className="h-full bg-volt" style={{ width: `${value}%` }} />
+    </div>
+  </div>
+);
+
 export const LeadershipApproval: React.FC = () => {
   const { squad, isCaptain } = useSquad();
   const [hasVoted, setHasVoted] = useState<boolean>(false);
@@ -37,17 +52,6 @@ export const LeadershipApproval: React.FC = () => {
     setHasVoted(true);
   };
 
-  const BreakdownBar = ({ label, value }: { label: string; value: number }) => (
-    <div className="space-y-1">
-      <div className="flex justify-between font-mono text-[9px] text-text-secondary">
-        <span>{label.toUpperCase()}</span>
-        <span className="text-text-primary font-bold">{value}%</span>
-      </div>
-      <div className="w-full h-1 bg-elevated rounded-full overflow-hidden">
-        <div className="h-full bg-volt" style={{ width: `${value}%` }} />
-      </div>
-    </div>
-  );
 
   return (
     <div className="p-6 md:p-8 max-w-5xl mx-auto space-y-8">

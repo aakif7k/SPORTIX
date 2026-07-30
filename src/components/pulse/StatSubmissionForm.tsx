@@ -6,6 +6,36 @@ interface StatSubmissionFormProps {
   onSubmit: (stats: Record<string, number | string | boolean>) => void;
 }
 
+// Defined at module scope so its identity is stable across renders. When this
+// lived inside StatSubmissionForm, every render produced a new component type
+// and React remounted each stepper, discarding focus.
+const Stepper: React.FC<{ label: string; value: number; onChange: (v: number) => void }> = ({
+  label,
+  value,
+  onChange
+}) => (
+  <div className="flex items-center justify-between p-3.5 rounded-[12px] bg-base border border-border-muted">
+    <span className="font-mono text-[11px] text-text-secondary uppercase">{label}</span>
+    <div className="flex items-center gap-3">
+      <button
+        type="button"
+        onClick={() => onChange(Math.max(0, value - 1))}
+        className="w-8 h-8 rounded-[8px] bg-white/5 border border-white/5 flex items-center justify-center text-[#CCFF00] hover:bg-white/10"
+      >
+        <Minus size={14} />
+      </button>
+      <span className="font-mono text-[14px] font-bold text-white w-6 text-center">{value}</span>
+      <button
+        type="button"
+        onClick={() => onChange(value + 1)}
+        className="w-8 h-8 rounded-[8px] bg-white/5 border border-white/5 flex items-center justify-center text-[#CCFF00] hover:bg-white/10"
+      >
+        <Plus size={14} />
+      </button>
+    </div>
+  </div>
+);
+
 export const StatSubmissionForm: React.FC<StatSubmissionFormProps> = ({
   sport,
   onSubmit,
@@ -54,33 +84,6 @@ export const StatSubmissionForm: React.FC<StatSubmissionFormProps> = ({
 
     onSubmit(data);
   };
-
-  const Stepper: React.FC<{ label: string; value: number; onChange: (v: number) => void }> = ({
-    label,
-    value,
-    onChange
-  }) => (
-    <div className="flex items-center justify-between p-3.5 rounded-[12px] bg-base border border-border-muted">
-      <span className="font-mono text-[11px] text-text-secondary uppercase">{label}</span>
-      <div className="flex items-center gap-3">
-        <button
-          type="button"
-          onClick={() => onChange(Math.max(0, value - 1))}
-          className="w-8 h-8 rounded-[8px] bg-white/5 border border-white/5 flex items-center justify-center text-[#CCFF00] hover:bg-white/10"
-        >
-          <Minus size={14} />
-        </button>
-        <span className="font-mono text-[14px] font-bold text-white w-6 text-center">{value}</span>
-        <button
-          type="button"
-          onClick={() => onChange(value + 1)}
-          className="w-8 h-8 rounded-[8px] bg-white/5 border border-white/5 flex items-center justify-center text-[#CCFF00] hover:bg-white/10"
-        >
-          <Plus size={14} />
-        </button>
-      </div>
-    </div>
-  );
 
   return (
     <form onSubmit={handleSubmit} className="space-y-6">

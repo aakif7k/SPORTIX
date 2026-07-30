@@ -175,7 +175,7 @@ export const SquadFormation: React.FC = () => {
   const activeSquad = generatedSquads.find(s => s.squadId === selectedDraftId) || generatedSquads[0] || null;
 
   // ─── Tab: Generate ───────────────────────────────────────────────────────
-  const TabGenerate = () => (
+  const renderGenerate = () => (
     <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
       {/* Left: Config */}
       <div className="lg:col-span-4 space-y-5">
@@ -286,7 +286,7 @@ export const SquadFormation: React.FC = () => {
   );
 
   // ─── Tab: Results ────────────────────────────────────────────────────────
-  const TabResults = () => (
+  const renderResults = () => (
     <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
       {/* Left: Draft list */}
       <div className="lg:col-span-4 space-y-4">
@@ -459,7 +459,7 @@ export const SquadFormation: React.FC = () => {
   );
 
   // ─── Tab: Accepted Squads ────────────────────────────────────────────────
-  const TabAccepted = () => (
+  const renderAccepted = () => (
     <div className="space-y-5">
       {squads.length === 0 ? (
         <div className="p-12 text-center rounded-[24px] border border-dashed border-border-muted bg-surface shadow-card flex flex-col items-center gap-4 min-h-[300px] justify-center">
@@ -532,7 +532,7 @@ export const SquadFormation: React.FC = () => {
   );
 
   // ─── Tab: Invitations ────────────────────────────────────────────────────
-  const TabInvitations = () => (
+  const renderInvitations = () => (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
         <span className="font-mono text-[10px] text-text-secondary uppercase tracking-wider">Pending Invitations ({MOCK_INVITES.length})</span>
@@ -567,7 +567,7 @@ export const SquadFormation: React.FC = () => {
   );
 
   // ─── Tab: AI Insights ────────────────────────────────────────────────────
-  const TabInsights = () => {
+  const renderInsights = () => {
     const squad = squads[0] || generatedSquads[0];
     return (
       <div className="space-y-5">
@@ -646,7 +646,7 @@ export const SquadFormation: React.FC = () => {
   };
 
   // ─── Tab: Activity Feed ──────────────────────────────────────────────────
-  const TabActivity = () => (
+  const renderActivity = () => (
     <div className="space-y-3">
       <div className="font-mono text-[10px] text-text-muted uppercase tracking-wider mb-4">Squad Activity Feed</div>
       {MOCK_ACTIVITY.map((item, i) => (
@@ -685,7 +685,7 @@ export const SquadFormation: React.FC = () => {
   );
 
   // ─── Tab: Chemistry Overview ─────────────────────────────────────────────
-  const TabChemistry = () => {
+  const renderChemistry = () => {
     const squad = squads[0] || generatedSquads[0];
     if (!squad) return (
       <div className="p-10 text-center rounded-[24px] border border-dashed border-border-muted bg-surface shadow-card">
@@ -799,13 +799,13 @@ export const SquadFormation: React.FC = () => {
           <AILoader key="ai-loader" onComplete={() => {}} />
         ) : (
           <motion.div key={activeTab} initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }} transition={{ duration: 0.2 }}>
-            {activeTab === 'generate'    && <TabGenerate />}
-            {activeTab === 'results'     && <TabResults />}
-            {activeTab === 'accepted'    && <TabAccepted />}
-            {activeTab === 'invitations' && <TabInvitations />}
-            {activeTab === 'insights'    && <TabInsights />}
-            {activeTab === 'activity'    && <TabActivity />}
-            {activeTab === 'chemistry'   && <TabChemistry />}
+            {activeTab === 'generate'    && renderGenerate()}
+            {activeTab === 'results'     && renderResults()}
+            {activeTab === 'accepted'    && renderAccepted()}
+            {activeTab === 'invitations' && renderInvitations()}
+            {activeTab === 'insights'    && renderInsights()}
+            {activeTab === 'activity'    && renderActivity()}
+            {activeTab === 'chemistry'   && renderChemistry()}
           </motion.div>
         )}
       </AnimatePresence>

@@ -20,6 +20,25 @@ import {
 } from 'recharts';
 import { Zap, Calendar } from 'lucide-react';
 
+// Recharts compares the `content` element's type to decide whether to reuse the
+// tooltip; a component defined during render is a new type each time, so it was
+// remounted on every hover. Hoisted to keep the identity stable.
+const CustomTooltip = ({ active, payload, label }: any) => {
+  if (active && payload && payload.length) {
+    return (
+      <div className="bg-surface border border-border-muted rounded-[10px] p-3 font-mono text-[10px] space-y-1 shadow-card">
+        <p className="text-text-primary font-bold">{label}</p>
+        {payload.map((p: any, idx: number) => (
+          <p key={idx} style={{ color: p.color || 'var(--accent)' }}>
+            {p.name}: <strong className="text-text-primary">{p.value}%</strong>
+          </p>
+        ))}
+      </div>
+    );
+  }
+  return null;
+};
+
 export const SquadAnalytics: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
@@ -81,23 +100,6 @@ export const SquadAnalytics: React.FC = () => {
     { id: 'history', label: 'Match History', path: `/pulse/squad/${squad.squadId}/history` },
     { id: 'settings', label: 'Settings', path: `/pulse/squad/${squad.squadId}/settings` }
   ];
-
-  // Reusable custom tooltip
-  const CustomTooltip = ({ active, payload, label }: any) => {
-    if (active && payload && payload.length) {
-      return (
-        <div className="bg-surface border border-border-muted rounded-[10px] p-3 font-mono text-[10px] space-y-1 shadow-card">
-          <p className="text-text-primary font-bold">{label}</p>
-          {payload.map((p: any, idx: number) => (
-            <p key={idx} style={{ color: p.color || 'var(--accent)' }}>
-              {p.name}: <strong className="text-text-primary">{p.value}%</strong>
-            </p>
-          ))}
-        </div>
-      );
-    }
-    return null;
-  };
 
   return (
     <div className="p-6 md:p-8 max-w-7xl mx-auto space-y-8">
