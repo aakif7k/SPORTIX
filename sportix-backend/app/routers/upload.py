@@ -1,5 +1,6 @@
 import logging
-from fastapi import APIRouter, Depends, UploadFile, File
+from fastapi import APIRouter, Depends, UploadFile, File, Request
+from app.core.rate_limit import limiter, UPLOAD_LIMIT
 from app.core.dependencies import get_current_user
 from app.services.upload_service import (
     upload_to_appwrite,
@@ -17,7 +18,8 @@ logger = logging.getLogger(__name__)
 
 
 @router.post("/avatar")
-async def upload_avatar(
+@limiter.limit(UPLOAD_LIMIT)
+async def upload_avatar(request: Request, 
     file: UploadFile = File(...),
     user=Depends(get_current_user)
 ):
@@ -59,7 +61,8 @@ async def upload_avatar(
 
 
 @router.post("/post-media")
-async def upload_post_media(
+@limiter.limit(UPLOAD_LIMIT)
+async def upload_post_media(request: Request, 
     file: UploadFile = File(...),
     user=Depends(get_current_user)
 ):
@@ -82,7 +85,8 @@ async def upload_post_media(
 
 
 @router.post("/story-media")
-async def upload_story_media(
+@limiter.limit(UPLOAD_LIMIT)
+async def upload_story_media(request: Request, 
     file: UploadFile = File(...),
     user=Depends(get_current_user)
 ):
@@ -103,7 +107,8 @@ async def upload_story_media(
 
 
 @router.post("/reel-video")
-async def upload_reel_video(
+@limiter.limit(UPLOAD_LIMIT)
+async def upload_reel_video(request: Request, 
     file: UploadFile = File(...),
     user=Depends(get_current_user)
 ):
@@ -124,7 +129,8 @@ async def upload_reel_video(
 
 
 @router.post("/reel-thumbnail")
-async def upload_reel_thumbnail(
+@limiter.limit(UPLOAD_LIMIT)
+async def upload_reel_thumbnail(request: Request, 
     file: UploadFile = File(...),
     user=Depends(get_current_user)
 ):
@@ -142,7 +148,8 @@ async def upload_reel_thumbnail(
 
 
 @router.post("/stat-proof")
-async def upload_stat_proof(
+@limiter.limit(UPLOAD_LIMIT)
+async def upload_stat_proof(request: Request, 
     file: UploadFile = File(...),
     user=Depends(get_current_user)
 ):
@@ -160,7 +167,8 @@ async def upload_stat_proof(
 
 
 @router.delete("/delete")
-async def delete_file(
+@limiter.limit(UPLOAD_LIMIT)
+async def delete_file(request: Request, 
     file_id: str,
     user=Depends(get_current_user)
 ):

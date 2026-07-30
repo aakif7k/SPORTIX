@@ -1,4 +1,5 @@
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, Query, Request
+from app.core.rate_limit import limiter, WRITE_LIMIT
 from typing import Optional
 from app.core.dependencies import get_current_user
 from app.schemas.post import PostCreate, PostUpdate, CommentCreate
@@ -32,7 +33,8 @@ async def explore_feed(
 
 
 @router.post("/", status_code=201)
-async def create_post(payload: PostCreate, user=Depends(get_current_user)):
+@limiter.limit(WRITE_LIMIT)
+async def create_post(request: Request, payload: PostCreate, user=Depends(get_current_user)):
     data = await post_service.create(user["id"], payload)
     return {"success": True, "data": data}
 
@@ -74,7 +76,8 @@ async def get_comments(post_id: str, page: int = Query(0), user=Depends(get_curr
 
 
 @router.post("/{post_id}/comments", status_code=201)
-async def add_comment(post_id: str, payload: CommentCreate, user=Depends(get_current_user)):
+@limiter.limit(WRITE_LIMIT)
+async def add_comment(request: Request, post_id: str, payload: CommentCreate, user=Depends(get_current_user)):
     data = await post_service.add_comment(post_id, user["id"], payload.content)
     return {"success": True, "data": data}
 

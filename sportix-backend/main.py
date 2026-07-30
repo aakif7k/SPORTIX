@@ -3,13 +3,14 @@ import time
 
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
-from slowapi import Limiter, _rate_limit_exceeded_handler
-from slowapi.util import get_remote_address
+from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
+from slowapi.middleware import SlowAPIMiddleware
 
 from app.core.config import settings
 from app.core.exceptions import register_exception_handlers
 from app.core.logging_config import configure_logging, new_request_id, request_id_ctx
+from app.core.rate_limit import DEFAULT_LIMIT, limiter
 from app.routers import (
     auth, users, posts, stories, reels,
     events, squads, matches, pulse,
@@ -21,8 +22,6 @@ from app.routers import (
 configure_logging()
 logger = logging.getLogger("sportix")
 
-# ── Rate limiter ──────────────────────────────────────────────────────────────
-limiter = Limiter(key_func=get_remote_address)
 
 # ── App ───────────────────────────────────────────────────────────────────────
 app = FastAPI(
@@ -33,8 +32,12 @@ app = FastAPI(
     redoc_url="/redoc",
 )
 
+# ── Rate limiting ─────────────────────────────────────────────────────────────
+# The middleware applies the default tier to every route without touching 122
+# signatures; tighter per-route tiers are decorated in the routers themselves.
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+app.add_middleware(SlowAPIMiddleware)
 
 # ── CORS ──────────────────────────────────────────────────────────────────────
 # Origins come from the ALLOWED_ORIGINS env var (comma-separated) so a new

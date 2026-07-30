@@ -1,4 +1,5 @@
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Request
+from app.core.rate_limit import limiter, AI_LIMIT
 from app.core.dependencies import get_current_user
 from app.schemas.ai import AutoSquadRequest
 from app.services import ai_squad_service
@@ -7,7 +8,8 @@ router = APIRouter()
 
 
 @router.post("/generate")
-async def generate_squad(payload: AutoSquadRequest, user=Depends(get_current_user)):
+@limiter.limit(AI_LIMIT)
+async def generate_squad(request: Request, payload: AutoSquadRequest, user=Depends(get_current_user)):
     """
     AI AutoSquad — generates an optimal squad for the user based on
     their sport, skill level, and event requirements.
