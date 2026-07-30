@@ -11,32 +11,39 @@ export const PulseRing: React.FC<PulseRingProps> = ({
   size = 'md',
   animated = true,
 }) => {
-  const [animatedScore, setAnimatedScore] = useState(0);
+  const [tweenedScore, setTweenedScore] = useState(0);
 
   useEffect(() => {
-    if (animated) {
-      const start = 0;
-      const end = score;
-      const duration = 1200; // ms
-      const startTime = performance.now();
+    if (!animated) return;
 
-      const update = (now: number) => {
-        const elapsed = now - startTime;
-        const progress = Math.min(elapsed / duration, 1);
-        // Ease out quad
-        const ease = progress * (2 - progress);
-        setAnimatedScore(Math.round(start + ease * (end - start)));
+    const start = 0;
+    const end = score;
+    const duration = 1200; // ms
+    const startTime = performance.now();
+    let frame = 0;
 
-        if (progress < 1) {
-          requestAnimationFrame(update);
-        }
-      };
+    const update = (now: number) => {
+      const elapsed = now - startTime;
+      const progress = Math.min(elapsed / duration, 1);
+      // Ease out quad
+      const ease = progress * (2 - progress);
+      setTweenedScore(Math.round(start + ease * (end - start)));
 
-      requestAnimationFrame(update);
-    } else {
-      setAnimatedScore(score);
-    }
+      if (progress < 1) {
+        frame = requestAnimationFrame(update);
+      }
+    };
+
+    frame = requestAnimationFrame(update);
+
+    // Without this, a score change started a second loop while the first kept
+    // running, and the two fought over the same state until both finished.
+    return () => cancelAnimationFrame(frame);
   }, [score, animated]);
+
+  // With animation off the score is rendered directly rather than mirrored into
+  // state by the effect (react-hooks/set-state-in-effect).
+  const animatedScore = animated ? tweenedScore : score;
 
   // Dimensions based on size
   const dims = {

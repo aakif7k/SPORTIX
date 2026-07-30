@@ -23,7 +23,16 @@ const CATEGORY_OPTIONS = ['Amateur', 'Semi-Pro', 'Professional'] as const;
 
 
 
-export const EventJoinModal: React.FC<EventJoinModalProps> = ({ isOpen, onClose, onJoined, event }) => {
+export const EventJoinModal: React.FC<EventJoinModalProps> = (props) => {
+  // The body is unmounted whenever the modal is closed, so each open mounts it
+  // fresh and its useState initialisers reset step/logs/generatedSquad. That
+  // replaces an effect that reset them on the isOpen transition, which is a
+  // synchronous setState inside an effect (react-hooks/set-state-in-effect).
+  if (!props.isOpen) return null;
+  return <EventJoinModalBody {...props} />;
+};
+
+const EventJoinModalBody: React.FC<EventJoinModalProps> = ({ onClose, onJoined, event }) => {
   const { user } = useAuthStore();
   const { addGeneratedSquad, acceptGeneratedSquad, incrementGenerationsCount, dailyGenerationsCount } = useSquadStore();
   const { nearbyRadius } = useAISettingsStore();
@@ -46,15 +55,6 @@ export const EventJoinModal: React.FC<EventJoinModalProps> = ({ isOpen, onClose,
   const [generatedSquad, setGeneratedSquad] = useState<any>(null);
   const logRef = useRef<HTMLDivElement>(null);
   const remaining = Math.max(0, 3 - dailyGenerationsCount);
-
-  // Reset state when opened
-  useEffect(() => {
-    if (isOpen) {
-      setStep('choice');
-      setLogs([]);
-      setGeneratedSquad(null);
-    }
-  }, [isOpen]);
 
   // Auto-scroll logs
   useEffect(() => {
@@ -99,11 +99,9 @@ export const EventJoinModal: React.FC<EventJoinModalProps> = ({ isOpen, onClose,
     setTimeout(() => onJoined(), 1200);
   };
 
-  if (!isOpen) return null;
-
   return createPortal(
     <AnimatePresence>
-      {isOpen && (
+      {(
         <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
           className="fixed inset-0 z-[200] flex items-end md:items-center justify-center"
           style={{ background: 'rgba(0,0,0,0.7)', backdropFilter: 'blur(8px)' }}

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { X, ChevronLeft, ChevronRight, Eye, Send, Pause, Play } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import type { DbStoryGroup, DbStory } from '../../services/socialService';
@@ -41,19 +41,29 @@ export const StoryViewer: React.FC<StoryViewerProps> = ({
   onPrevGroup,
 }) => {
   const [storyIndex, setStoryIndex] = useState(0);
-  const [progress, setProgress] = useState(0);
   const [paused, setPaused] = useState(false);
   const [replyText, setReplyText] = useState('');
-  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  // Progress is stored against the story it belongs to so it can be derived.
+  // Resetting it from an effect meant unpausing restarted the story from zero,
+  // because that effect also depended on `paused`.
+  const [tick, setTick] = useState<{ storyId: string; value: number }>({
+    storyId: '',
+    value: 0,
+  });
 
   const currentStory: DbStory = group.stories[storyIndex];
   const isOwnStory = group.author_id === currentUserId;
   const totalStories = group.stories.length;
 
+  const storyId = currentStory?.id ?? '';
+  // A story change makes the stored key stale, which reads as 0% without any
+  // effect having to reset it.
+  const progress = tick.storyId === storyId ? tick.value : 0;
+
   const goNext = useCallback(() => {
     if (storyIndex < totalStories - 1) {
       setStoryIndex(i => i + 1);
-      setProgress(0);
     } else {
       // `onNextGroup?.() ?? onClose()` also closed the viewer on every advance,
       // because a void call evaluates to undefined and fell through to `??`.
@@ -65,7 +75,6 @@ export const StoryViewer: React.FC<StoryViewerProps> = ({
   const goPrev = useCallback(() => {
     if (storyIndex > 0) {
       setStoryIndex(i => i - 1);
-      setProgress(0);
     } else {
       onPrevGroup?.();
     }
@@ -80,21 +89,23 @@ export const StoryViewer: React.FC<StoryViewerProps> = ({
 
   // Progress timer
   useEffect(() => {
-    if (paused) return;
-    setProgress(0);
+    if (paused || !storyId) return;
+
     const step = 100 / (STORY_DURATION_MS / 50);
-    intervalRef.current = setInterval(() => {
-      setProgress(p => {
-        if (p >= 100) {
-          clearInterval(intervalRef.current!);
+    const interval = setInterval(() => {
+      setTick(prev => {
+        const base = prev.storyId === storyId ? prev.value : 0;
+        if (base >= 100) {
+          clearInterval(interval);
           goNext();
-          return 100;
+          return { storyId, value: 100 };
         }
-        return p + step;
+        return { storyId, value: base + step };
       });
     }, 50);
-    return () => clearInterval(intervalRef.current!);
-  }, [storyIndex, paused]);
+
+    return () => clearInterval(interval);
+  }, [storyId, paused, goNext]);
 
   const handleKeyDown = useCallback((e: KeyboardEvent) => {
     if (e.key === 'ArrowRight') goNext();

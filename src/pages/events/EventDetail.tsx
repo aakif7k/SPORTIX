@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence, useScroll, useTransform } from 'framer-motion';
 import {
@@ -161,7 +161,6 @@ export const EventDetail: React.FC = () => {
   const heroOpacity = useTransform(scrollY, [0, 250], [1, 0]);
 
   const [reminder, setReminder]       = useState(false);
-  const [bracket, setBracket]         = useState<BracketRound[]>([]);
   const [joinModalOpen, setJoinModalOpen] = useState(false);
   const [joined, setJoined]           = useState(false);
   const [activeTab, setActiveTab]     = useState<'overview' | 'schedule' | 'participants' | 'bracket'>('overview');
@@ -172,14 +171,15 @@ export const EventDetail: React.FC = () => {
   const sportData = SPORT_CATEGORIES.find(s => s.id === event?.sport);
   const pctFull  = event ? Math.round((event.participants.length / event.maxParticipants) * 100) : 0;
 
-  useEffect(() => {
-    if (event) {
-      const b = generateBracket(event.participants.length > 0
-        ? event.participants
-        : ['P1','P2','P3','P4','P5','P6','P7','P8']);
-      setBracket(b);
-    }
-  }, [event?.id]);
+  // Derived from the event, so computed during render instead of pushed into
+  // state by an effect (react-hooks/set-state-in-effect), which rendered the
+  // bracket tab empty on first paint.
+  const bracket = useMemo<BracketRound[]>(() => {
+    if (!event) return [];
+    return generateBracket(event.participants.length > 0
+      ? event.participants
+      : ['P1','P2','P3','P4','P5','P6','P7','P8']);
+  }, [event]);
 
   if (!event) return null;
 

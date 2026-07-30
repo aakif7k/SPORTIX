@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
@@ -24,11 +24,15 @@ export const AthleteProfile: React.FC = () => {
   const isMe = !uid || uid === 'me' || uid === authUser?.id;
   const targetId = isMe ? authUser?.id : uid;
 
-  const [profileUser, setProfileUser] = useState<User | null>(() => {
-    if (isMe) return authUser || null;
-    const found = MOCK_USERS.find(u => u.id === targetId || u.username === targetId);
-    return (found as unknown as User) || null;
-  });
+  // Purely derived from the route and the auth store — nothing in this page
+  // ever sets it from user interaction. It was state seeded by a useState
+  // initialiser and then re-synced by an effect, which meant an extra render on
+  // every navigation and a stale profile for one frame
+  // (react-hooks/set-state-in-effect).
+  const profileUser: User | null = isMe
+    ? (authUser || null)
+    : ((MOCK_USERS.find(u => u.id === targetId || u.username === targetId) as unknown as User) || null);
+
   const [activeTab, setActiveTab] = useState('Overview');
   const [isConnected, setIsConnected] = useState(false);
   const [editOpen, setEditOpen] = useState(false);
@@ -36,15 +40,6 @@ export const AthleteProfile: React.FC = () => {
 
   const { squads } = useSquadStore();
   const userSquad = squads[0] || null;
-
-  useEffect(() => {
-    if (isMe) {
-      if (authUser) setProfileUser(authUser);
-    } else if (targetId) {
-      const found = MOCK_USERS.find(u => u.id === targetId || u.username === targetId);
-      if (found) setProfileUser(found as unknown as User);
-    }
-  }, [uid, authUser, isMe, targetId]);
 
   if (!profileUser) {
     return (
