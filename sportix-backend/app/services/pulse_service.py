@@ -168,7 +168,10 @@ async def award_pulse(
         logger.warning("pulse_history write failed for %s (delta=%s source=%s)",
                        user_id, amount, source, exc_info=True)
 
-    level = await level_service.sync_level(user_id, new_total)
+    # Levels track lifetime earned, so only positive awards advance them and a
+    # deduction can never demote. The current score is passed for display only.
+    lifetime = await level_service.get_lifetime_pulse(user_id) + max(0.0, float(amount))
+    level = await level_service.sync_level(user_id, lifetime, new_total)
 
     return {
         "user_id": user_id,
@@ -177,6 +180,7 @@ async def award_pulse(
         "tier": pulse_math.tier_for(new_total),
         "level": level["level"],
         "leveled_up": level["leveled_up"],
+        "lifetime_pulse": lifetime,
     }
 
 

@@ -34,8 +34,21 @@ from __future__ import annotations
 import math
 from typing import Any, Mapping
 
-# pulseStore clamps the score to this range, and the tier thresholds below only
-# make sense on that scale.
+# ── Two different scales, deliberately ────────────────────────────────────────
+# The frontend conflated these, which broke the level system outright.
+#
+#   current score   0..1000, can go down as well as up. Drives the tier
+#                   (contender/elite/pulse_elite) and the /1000 Pulse ring.
+#                   Clamped by MIN_PULSE/MAX_PULSE below.
+#
+#   lifetime earned  monotonically increasing sum of every positive award.
+#                    Drives the level (1..150) and its title.
+#
+# Deriving level from the current score, as the frontend did, means the 1000 cap
+# limits users to 11 of the 150 defined levels and 2 of the 15 titles -- so every
+# account is permanently "Rookie" and can also be *demoted* by a bad match.
+# Levels therefore run off lifetime earned, which is what user_levels
+# .total_pulse_ever already exists to hold.
 MIN_PULSE = 0.0
 MAX_PULSE = 1000.0
 
@@ -299,18 +312,25 @@ def level_title(level: int) -> str:
     return "Supreme GOAT"
 
 
-def level_for_pulse(pulse: float) -> int:
-    """Port of gamificationStore.getLevelInfo: min(150, floor(pulse/100) + 1)."""
-    return min(MAX_LEVEL, math.floor(pulse / PULSE_PER_LEVEL) + 1)
-
-
-def level_progress(pulse: float) -> dict:
+def level_for_pulse(lifetime_pulse: float) -> int:
     """
-    Port of gamificationStore.getLevelProgress.
+    Port of gamificationStore.getLevelInfo: min(150, floor(pulse/100) + 1).
+
+    The argument is LIFETIME earned Pulse, not the current 0..1000 score -- see
+    the note on the two scales at the top of this module. Lifetime 0 is level 1,
+    so a brand-new account starts at level 1 with 0% progress.
+    """
+    return min(MAX_LEVEL, math.floor(max(0.0, lifetime_pulse) / PULSE_PER_LEVEL) + 1)
+
+
+def level_progress(lifetime_pulse: float) -> dict:
+    """
+    Port of gamificationStore.getLevelProgress, fed lifetime earned Pulse.
 
     Every level spans exactly 100 Pulse, so `required` is always 100 and
-    `percentage` equals the points earned inside the current level.
+    `progress_percent` equals the points earned inside the current level.
     """
+    pulse = max(0.0, lifetime_pulse)
     level = level_for_pulse(pulse)
     min_pulse = (level - 1) * PULSE_PER_LEVEL
     max_pulse = level * PULSE_PER_LEVEL

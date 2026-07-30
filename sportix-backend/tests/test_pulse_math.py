@@ -124,13 +124,39 @@ def test_pulse_is_clamped_to_zero_thousand():
     assert pm.clamp_pulse(450) == 450
 
 
-# ── Level curve ───────────────────────────────────────────────────────────────
-@pytest.mark.parametrize("pulse,level", [
+# ── Level curve (input is LIFETIME earned Pulse, not the current score) ───────
+@pytest.mark.parametrize("lifetime,level", [
     (0, 1), (99, 1), (100, 2), (199, 2), (250, 3),
     (1000, 11), (14900, 150), (15000, 150), (99999, 150),
+    (-50, 1),   # a negative can never be produced, but must not underflow
 ])
-def test_level_for_pulse(pulse, level):
-    assert pm.level_for_pulse(pulse) == level
+def test_level_for_lifetime_pulse(lifetime, level):
+    assert pm.level_for_pulse(lifetime) == level
+
+
+def test_new_account_starts_at_level_one():
+    """
+    A user who has earned nothing is level 1 at 0%.
+
+    Feeding the *current* score here instead of lifetime earned was the bug: the
+    starting score of 100 sits exactly on the level-2 boundary, so every new
+    account displayed as level 2.
+    """
+    p = pm.level_progress(0)
+    assert p["level"] == 1
+    assert p["progress_percent"] == 0
+    assert p["title"] == "Rookie"
+
+
+def test_all_levels_and_titles_are_reachable_on_the_lifetime_scale():
+    """
+    Regression for the scale conflation: when level came off the 0..1000 current
+    score, only 11 of 150 levels and 2 of 15 titles could ever be reached.
+    """
+    titles = {pm.level_title(lvl) for lvl in range(1, pm.MAX_LEVEL + 1)}
+    assert len(titles) == 15
+    assert pm.level_for_pulse(pm.MAX_LEVEL * pm.PULSE_PER_LEVEL) == pm.MAX_LEVEL
+    assert pm.level_title(pm.MAX_LEVEL) == "Supreme GOAT"
 
 
 @pytest.mark.parametrize("level,title", [

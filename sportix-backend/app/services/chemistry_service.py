@@ -5,10 +5,18 @@ calculate_delta is a straight port of performanceService.calculateChemistryDelta
 
 The composite `overall` score is NOT a port: the frontend never computed one.
 Every ChemistryData in the codebase carries hardcoded mock numbers (87, 92, 88),
-so there was no formula to carry over. The weighting below is therefore a new
-product decision, chosen so that trust dominates and the three pillars named in
-the ChemistryData interface are the only inputs. It is isolated here so it can be
-retuned in one place once there is real match data to calibrate against.
+so there was no formula to carry over.
+
+It is an equal-weighted mean of the three pillars named in the ChemistryData
+interface. Equal weighting is deliberate: any other split would assert a product
+claim -- that trust matters some specific amount more than communication -- which
+nothing in the codebase or the data supports, and it would be unexplainable to a
+user. "The average of your three chemistry pillars" needs no justification. It
+also reproduces the one internally consistent mock sample exactly
+(trust 94, coordination 90, communication 92 -> 92).
+
+Isolated in composite_overall so it can be retuned in one place once there is
+real match data to calibrate against.
 """
 from __future__ import annotations
 
@@ -26,10 +34,9 @@ logger = logging.getLogger(__name__)
 SQUADS = settings.collection_squads
 MEMBERS = settings.collection_squad_members
 
-# New product decision, not ported -- see the module docstring.
-WEIGHT_TRUST = 0.4
-WEIGHT_COORDINATION = 0.3
-WEIGHT_COMMUNICATION = 0.3
+# The three pillars contribute equally -- see the module docstring for why no
+# other split is defensible without data.
+PILLARS = ("trust", "coordination", "communication")
 
 
 def calculate_delta(is_mvp: bool, result: str, match_rating: float) -> int:
@@ -38,12 +45,8 @@ def calculate_delta(is_mvp: bool, result: str, match_rating: float) -> int:
 
 
 def composite_overall(trust: float, coordination: float, communication: float) -> int:
-    """Weighted mean of the three pillars, clamped to 0..100."""
-    raw = (
-        trust * WEIGHT_TRUST
-        + coordination * WEIGHT_COORDINATION
-        + communication * WEIGHT_COMMUNICATION
-    )
+    """Equal-weighted mean of the three pillars, clamped to 0..100."""
+    raw = (trust + coordination + communication) / len(PILLARS)
     return int(max(0, min(100, pulse_math.js_round(raw))))
 
 
