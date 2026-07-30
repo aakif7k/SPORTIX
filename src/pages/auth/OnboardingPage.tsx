@@ -139,7 +139,10 @@ export const OnboardingPage: React.FC = () => {
   const [bio,       setBio]       = useState('');
   const [isLocating, setIsLocating] = useState(false);
   const [showLocationInfo, setShowLocationInfo] = useState(false);
-  const [usernameAvailable,  setUsernameAvailable]  = useState<boolean | null>(null);
+  // The check result is stored with the username it was run against, so
+  // availability can be derived. A short username previously had to be reset to
+  // null synchronously inside the effect (react-hooks/set-state-in-effect).
+  const [usernameCheck, setUsernameCheck] = useState<{ username: string; available: boolean } | null>(null);
   const [checkingUsername,   setCheckingUsername]   = useState(false);
 
   /* Step 2 – Sports */
@@ -181,15 +184,22 @@ export const OnboardingPage: React.FC = () => {
 
   /* ── Username debounce ── */
   useEffect(() => {
-    if (username.length < 3) { setUsernameAvailable(null); return; }
+    if (username.length < 3) return;
     const t = setTimeout(async () => {
       setCheckingUsername(true);
       const ok = await checkUsernameAvailable(username);
-      setUsernameAvailable(ok);
+      setUsernameCheck({ username, available: ok });
       setCheckingUsername(false);
     }, 600);
     return () => clearTimeout(t);
   }, [username]);
+
+  // null while too short or while the stored result belongs to an older value,
+  // which also stops a stale verdict from being shown against a new username.
+  const usernameAvailable: boolean | null =
+    username.length >= 3 && usernameCheck?.username === username
+      ? usernameCheck.available
+      : null;
 
   /* ── GPS ── */
   const handleGPS = () => {

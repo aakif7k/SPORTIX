@@ -5,6 +5,33 @@ import { useAuthStore } from '@/store/authStore';
 import { AuthContext } from '@/context/AuthContext';
 import type { AppwriteUser, AuthUser, RegisterData } from '@/context/AuthContext';
 
+type SessionResult =
+  | { kind: 'authenticated'; appwriteUser: AppwriteUser; profile: any }
+  | { kind: 'anonymous' };
+
+/**
+ * Stand-in profile for an Appwrite session that has no profile document yet.
+ * The backend is the real source of these defaults; this only keeps the UI
+ * renderable until the profile exists.
+ */
+function buildProvisionalUser(appwriteAccount: AppwriteUser) {
+  return {
+    id: appwriteAccount.$id,
+    email: appwriteAccount.email,
+    name: appwriteAccount.name,
+    username: appwriteAccount.name
+      ? appwriteAccount.name.toLowerCase().replace(/\s+/g, '_')
+      : 'user',
+    role: 'athlete' as const,
+    sport: 'Football',
+    sports: ['Football'],
+    openToRecruit: false,
+    verified: false,
+    joinedDate: new Date().toISOString(),
+    performanceData: { speed: 80, strength: 75, endurance: 85, agility: 80, technique: 78, teamwork: 82 },
+  };
+}
+
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<AuthUser | null>(null);
   const [appwriteUser, setAppwriteUser] =
@@ -39,18 +66,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return null;
   }, []);
 
-  // Resolves the current session into auth state.
-  //
-  // Deliberately does not set authLoading=true up front: on mount that is
-  // already the initial state, and doing it synchronously inside the mount
-  // effect triggers a cascading render (react-hooks/set-state-in-effect).
-  // The login/register handlers below raise the flag themselves, which is
-  // allowed because they run from events rather than during render.
-  const checkSession = useCallback(async () => {
+  // Reading the session is separated from applying it so the mount effect can
+  // apply the result inside a promise continuation. Calling a single async
+  // checkSession() from the effect writes state while the effect body runs,
+  // which cascades an extra render pass (react-hooks/set-state-in-effect).
+  const resolveSession = useCallback(async (): Promise<SessionResult> => {
     try {
       // 1. Check if Appwrite session exists
       const appwriteAccount = await account.get();
-      setAppwriteUser(appwriteAccount);
 
       // 2. Get JWT from current session
       const session = await account.createJWT();
@@ -65,44 +88,44 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         appwriteAccount.$id, jwt
       );
 
-      if (profile) {
-        setUser(profile);
-        useAuthStore.getState().setUser(profile);
-      } else {
-        // Appwrite session exists but no profile yet
-        // This happens with new Google OAuth users
-        const basicUser = {
-          id: appwriteAccount.$id,
-          email: appwriteAccount.email,
-          name: appwriteAccount.name,
-          username: appwriteAccount.name ? appwriteAccount.name.toLowerCase().replace(/\s+/g, '_') : 'user',
-          role: 'athlete' as const,
-          sport: 'Football',
-          sports: ['Football'],
-          openToRecruit: false,
-          verified: false,
-          joinedDate: new Date().toISOString(),
-          performanceData: { speed: 80, strength: 75, endurance: 85, agility: 80, technique: 78, teamwork: 82 },
-        };
-        setUser(basicUser as any);
-        useAuthStore.getState().setUser(basicUser as any);
-      }
+      return { kind: 'authenticated', appwriteUser: appwriteAccount, profile };
     } catch {
+      return { kind: 'anonymous' };
+    }
+  }, [loadUserProfile]);
+
+  const applySession = useCallback((result: SessionResult) => {
+    if (result.kind === 'anonymous') {
       // No active session
       setUser(null);
       setAppwriteUser(null);
       useAuthStore.getState().setUser(null);
       localStorage.removeItem('sportix_jwt');
       localStorage.removeItem('sportix_uid');
-    } finally {
-      setAuthLoading(false);
-      useAuthStore.getState().setAuthLoading(false);
+    } else {
+      setAppwriteUser(result.appwriteUser);
+      // An Appwrite session can exist before a profile does — new Google OAuth
+      // users land here on their first sign-in.
+      const profile = result.profile ?? buildProvisionalUser(result.appwriteUser);
+      setUser(profile);
+      useAuthStore.getState().setUser(profile);
     }
-  }, [loadUserProfile]);
+
+    setAuthLoading(false);
+    useAuthStore.getState().setAuthLoading(false);
+  }, []);
+
+  const checkSession = useCallback(async () => {
+    applySession(await resolveSession());
+  }, [resolveSession, applySession]);
 
   useEffect(() => {
-    checkSession();
-  }, [checkSession]);
+    let cancelled = false;
+    resolveSession().then(result => {
+      if (!cancelled) applySession(result);
+    });
+    return () => { cancelled = true; };
+  }, [resolveSession, applySession]);
 
   const login = async (email: string, password: string) => {
     setAuthLoading(true);

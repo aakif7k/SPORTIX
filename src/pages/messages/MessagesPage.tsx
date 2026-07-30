@@ -18,7 +18,11 @@ const timeAgo = (ts: string) => {
 
 export const MessagesPage: React.FC = () => {
   const [activeConvId, setActiveConvId] = useState<string | null>(MOCK_CONVERSATIONS[0]?.id || null);
-  const [messages, setMessages] = useState<Message[]>([]);
+  // Only the locally composed messages are stored, keyed by conversation. The
+  // rendered thread is derived below, so switching conversations no longer needs
+  // an effect to copy the base thread into state
+  // (react-hooks/set-state-in-effect).
+  const [sentByConv, setSentByConv] = useState<Record<string, Message[]>>({});
   const [input, setInput] = useState('');
   const [searchQ, setSearchQ] = useState('');
   const [filterTab, setFilterTab] = useState<'all' | 'direct' | 'squad'>('all');
@@ -27,11 +31,19 @@ export const MessagesPage: React.FC = () => {
 
   const activeConv = MOCK_CONVERSATIONS.find(c => c.id === activeConvId);
 
+  const messages: Message[] = activeConvId
+    ? [...(MOCK_MESSAGES[activeConvId] || []), ...(sentByConv[activeConvId] || [])]
+    : [];
+
+  // Scrolling is a real DOM side effect, so it stays in an effect — but it no
+  // longer sets state, and the timeout is now cleared on change/unmount.
   useEffect(() => {
-    if (activeConvId) {
-      setMessages(MOCK_MESSAGES[activeConvId] || []);
-      setTimeout(() => endRef.current?.scrollIntoView({ behavior: 'smooth' }), 100);
-    }
+    if (!activeConvId) return;
+    const timer = setTimeout(
+      () => endRef.current?.scrollIntoView({ behavior: 'smooth' }),
+      100
+    );
+    return () => clearTimeout(timer);
   }, [activeConvId]);
 
   const openConv = (id: string) => {
@@ -49,7 +61,10 @@ export const MessagesPage: React.FC = () => {
       timestamp: new Date().toISOString(),
       read: true,
     };
-    setMessages(prev => [...prev, newMsg]);
+    setSentByConv(prev => ({
+      ...prev,
+      [activeConvId]: [...(prev[activeConvId] || []), newMsg],
+    }));
     setInput('');
     setTimeout(() => endRef.current?.scrollIntoView({ behavior: 'smooth' }), 50);
   };
