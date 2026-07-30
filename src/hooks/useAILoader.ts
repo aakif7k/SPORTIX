@@ -2,9 +2,12 @@ import { useState, useEffect } from 'react';
 
 export const useAILoader = (messages: string[], onComplete?: () => void, intervalTime: number = 750) => {
   const [currentIdx, setCurrentIdx] = useState(0);
-  const [displayedMessages, setDisplayedMessages] = useState<string[]>([]);
   const [progress, setProgress] = useState(0);
   const [isFinished, setIsFinished] = useState(false);
+
+  // Plain derived value. This used to be state written by an effect that ran on
+  // every currentIdx change, which cost an extra render per revealed message.
+  const displayedMessages = messages.slice(0, currentIdx + 1);
 
   useEffect(() => {
     if (messages.length === 0) return;
@@ -44,10 +47,6 @@ export const useAILoader = (messages: string[], onComplete?: () => void, interva
       clearInterval(progressTimer);
     };
   }, [messages, onComplete, intervalTime]);
-
-  useEffect(() => {
-    setDisplayedMessages(messages.slice(0, currentIdx + 1));
-  }, [currentIdx, messages]);
 
   return {
     displayedMessages,

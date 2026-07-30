@@ -16,35 +16,48 @@ import {
 
 export function useStories() {
   const { user: currentUser } = useAuth();
+  const userId = currentUser?.id;
   const [storyGroups, setStoryGroups] = useState<DbStoryGroup[]>([]);
-  const [loading, setLoading] = useState(true);
   const [uploading, setUploading] = useState(false);
+  // Which user the groups in state belong to. `loading` derives from this
+  // instead of being a flag the effect has to set synchronously
+  // (react-hooks/set-state-in-effect).
+  const [loadedFor, setLoadedFor] = useState<string | null>(null);
 
   const load = useCallback(async () => {
-    if (!currentUser) {
-      setLoading(false);
-      return;
-    }
+    if (!userId) return;
     try {
-      const groups = await getActiveStories(currentUser.id);
+      const groups = await getActiveStories(userId);
       setStoryGroups(groups);
     } catch {
       setStoryGroups([]);
     } finally {
-      setLoading(false);
+      setLoadedFor(userId);
     }
-  }, [currentUser?.id]);
+  }, [userId]);
 
+  // Fetched inline so the state writes happen in a promise continuation rather
+  // than during the effect body. load() remains for event-driven refreshes.
   useEffect(() => {
-    if (currentUser) {
-      setStoryGroups([]);
-      setLoading(true);
-      load();
-    } else {
-      setLoading(false);
-      setStoryGroups([]);
-    }
-  }, [currentUser?.id]);
+    if (!userId) return;
+
+    let cancelled = false;
+    getActiveStories(userId)
+      .then(groups => {
+        if (cancelled) return;
+        setStoryGroups(groups);
+        setLoadedFor(userId);
+      })
+      .catch(() => {
+        if (cancelled) return;
+        setStoryGroups([]);
+        setLoadedFor(userId);
+      });
+
+    return () => { cancelled = true; };
+  }, [userId]);
+
+  const loading = Boolean(userId) && loadedFor !== userId;
 
   const uploadStory = useCallback(async (
     file: File,

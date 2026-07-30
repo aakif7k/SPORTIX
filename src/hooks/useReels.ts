@@ -19,40 +19,62 @@ const PAGE_SIZE = 10;
 // ─── Main reels feed hook ─────────────────────────────────────────────────────
 export function useReels() {
   const { user: currentUser } = useAuth();
+  const userId = currentUser?.id;
   const [reels, setReels] = useState<DbReel[]>([]);
-  const [loading, setLoading] = useState(true);
   const [uploading, setUploading] = useState(false);
   const [page, setPage] = useState(0);
   const [hasMore, setHasMore] = useState(true);
+  // Which user the reels currently in state were fetched for. `loading` derives
+  // from this rather than being its own flag, so the mount effect does not have
+  // to call setState synchronously (react-hooks/set-state-in-effect).
+  const [loadedFor, setLoadedFor] = useState<string | null>(null);
   const viewedThisSession = useRef<Set<string>>(new Set());
 
   const load = useCallback(async (pageNum: number, reset: boolean) => {
-    if (!currentUser) { setLoading(false); return; }
-    if (reset) setLoading(true);
+    if (!userId) return;
 
     try {
-      const data = await getReels(currentUser.id, pageNum, PAGE_SIZE);
+      const data = await getReels(userId, pageNum, PAGE_SIZE);
       setReels(prev => reset ? data : [...prev, ...data]);
       setHasMore(data.length === PAGE_SIZE);
       setPage(pageNum + 1);
     } catch {
       setReels([]);
+      setHasMore(false);
     } finally {
-      setLoading(false);
+      setLoadedFor(userId);
     }
-  }, [currentUser?.id]);
+  }, [userId]);
 
+  // The first page is fetched inline rather than by calling load(), so every
+  // state write lands in a promise continuation instead of running while the
+  // effect body executes. load() is still used for pagination and for the
+  // post-upload refresh, both of which are driven by events.
   useEffect(() => {
-    if (currentUser) {
-      setReels([]);
-      setPage(0);
-      setHasMore(true);
-      load(0, true);
-    } else {
-      setLoading(false);
-      setReels([]);
-    }
-  }, [currentUser?.id]);
+    if (!userId) return;
+
+    let cancelled = false;
+    getReels(userId, 0, PAGE_SIZE)
+      .then(data => {
+        if (cancelled) return;
+        setReels(data);
+        setHasMore(data.length === PAGE_SIZE);
+        setPage(1);
+        setLoadedFor(userId);
+      })
+      .catch(() => {
+        if (cancelled) return;
+        setReels([]);
+        setHasMore(false);
+        setLoadedFor(userId);
+      });
+
+    return () => { cancelled = true; };
+  }, [userId]);
+
+  // A pending or stale load leaves loadedFor pointing at a different user, so
+  // the feed reads as loading until the current user's page arrives.
+  const loading = Boolean(userId) && loadedFor !== userId;
 
   const toggleLike = useCallback(async (reelId: string, currentlyLiked: boolean) => {
     if (!currentUser) return;
@@ -132,23 +154,27 @@ export function useReels() {
 // ─── User-specific reels (for profile page) ───────────────────────────────────
 export function useUserReels(targetAuthUid?: string) {
   const { user: currentUser } = useAuth();
-  const [reels, setReels] = useState<DbReel[]>([]);
-  const [loading, setLoading] = useState(true);
 
   const uid = targetAuthUid ?? currentUser?.id;
 
+  // Keyed by the uid it was fetched for, so `reels` and `loading` are derived
+  // and the effect performs no synchronous setState.
+  const [result, setResult] = useState<{ uid: string; reels: DbReel[] } | null>(null);
+
   useEffect(() => {
-    if (!uid) { setLoading(false); return; }
-    setLoading(true);
-    setReels([]);
-    getUserReels(uid).then(data => {
-      setReels(data);
-      setLoading(false);
-    }).catch(() => {
-      setReels([]);
-      setLoading(false);
-    });
+    if (!uid) return;
+
+    let cancelled = false;
+    getUserReels(uid)
+      .then(data => { if (!cancelled) setResult({ uid, reels: data }); })
+      .catch(() => { if (!cancelled) setResult({ uid, reels: [] }); });
+
+    return () => { cancelled = true; };
   }, [uid]);
+
+  const isFresh = result !== null && result.uid === uid;
+  const reels = isFresh ? result.reels : [];
+  const loading = Boolean(uid) && !isFresh;
 
   return { reels, loading };
 }
