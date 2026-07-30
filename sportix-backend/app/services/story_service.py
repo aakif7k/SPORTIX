@@ -2,6 +2,7 @@ from appwrite.query import Query as Q
 from appwrite.id import ID
 from app.core.appwrite import db, DB_ID
 from app.core.config import settings
+from app.utils.formatters import now_iso
 from app.schemas.post import StoryCreate
 from datetime import datetime, timedelta, timezone
 
@@ -44,6 +45,7 @@ async def create(user_id: str, payload: StoryCreate) -> dict:
     return db.create_document(
         DB_ID, settings.collection_stories, ID.unique(),
         data={
+            "created_at": now_iso(),
             "author_id": user_id,
             "media_url": payload.media_url,
             "media_type": payload.media_type,
@@ -62,7 +64,7 @@ async def mark_viewed(story_id: str, viewer_id: str):
     )
     if not existing.get("documents"):
         db.create_document(DB_ID, settings.collection_story_views, ID.unique(),
-                           {"story_id": story_id, "viewer_id": viewer_id})
+                           { "created_at": now_iso(),"story_id": story_id, "viewer_id": viewer_id})
         try:
             s = db.get_document(DB_ID, settings.collection_stories, story_id)
             db.update_document(DB_ID, settings.collection_stories, story_id,

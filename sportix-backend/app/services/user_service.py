@@ -2,6 +2,7 @@ from appwrite.query import Query as Q
 from appwrite.id import ID
 from app.core.appwrite import db, DB_ID
 from app.core.config import settings
+from app.utils.formatters import now_iso
 from app.schemas.user import UserUpdate
 from typing import Optional
 
@@ -96,6 +97,7 @@ async def follow(follower_id: str, target_id: str):
         raise ValueError("Cannot follow yourself")
     # Create follower document
     db.create_document(DB_ID, settings.collection_followers, ID.unique(), {
+        "created_at": now_iso(),
         "follower_id": follower_id,
         "following_id": target_id,
     })

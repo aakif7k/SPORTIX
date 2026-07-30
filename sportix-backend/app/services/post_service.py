@@ -88,6 +88,56 @@ async def get_feed(
         "has_more": (page + 1) * limit < result["total"],
     }
 
+async def get_explore(
+    viewer_id: str,
+    page: int = 0,
+    limit: int = 20,
+    sport: str = None,
+) -> dict:
+    """
+    Discovery feed: posts from authors the viewer does NOT already follow,
+    most-liked first, then most recent.
+
+    Referenced by GET /api/posts/explore since that route was written but never
+    implemented, so the endpoint raised AttributeError and returned 500.
+
+    Appwrite has no join and no NOT IN over a large set, so the exclusion is
+    applied in Python. Query.not_equal accepts a list, but only up to a bounded
+    length, hence FOLLOW_EXCLUSION_CAP: past that many follows the filter is
+    applied after fetching instead, trading a little over-fetch for correctness.
+    """
+    FOLLOW_EXCLUSION_CAP = 100
+
+    following = db.list_documents(
+        DB, settings.collection_followers,
+        queries=[Query.equal("follower_id", [viewer_id]), Query.limit(FOLLOW_EXCLUSION_CAP)],
+    )
+    excluded = {d.get("following_id") for d in following["documents"] if d.get("following_id")}
+    excluded.add(viewer_id)     # your own posts are not discovery
+
+    queries = [
+        Query.equal("is_deleted", [False]),
+        Query.order_desc("likes_count"),
+        Query.order_desc("$createdAt"),
+        # Over-fetch so that removing followed authors still fills the page.
+        Query.limit(limit * 3),
+        Query.offset(page * limit),
+    ]
+    if sport:
+        queries.append(Query.equal("sport_tag", [sport]))
+
+    result = db.list_documents(DB, POSTS, queries=queries)
+    fresh = [d for d in result["documents"] if d.get("author_id") not in excluded]
+
+    return {
+        "posts": fresh[:limit],
+        "total": result["total"],
+        "page": page,
+        "limit": limit,
+        "has_more": len(fresh) > limit or (page + 1) * limit < result["total"],
+    }
+
+
 async def get_by_user(
     author_id: str,
     page: int = 0,

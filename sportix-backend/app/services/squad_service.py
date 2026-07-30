@@ -28,6 +28,7 @@ async def create(user_id: str, payload: SquadCreate) -> dict:
     squad = db.create_document(
         DB_ID, settings.collection_squads, ID.unique(),
         data={
+            "created_at": now_iso(),
             "name": payload.name,
             "sport": payload.sport,
             "captain_id": user_id,
@@ -41,6 +42,8 @@ async def create(user_id: str, payload: SquadCreate) -> dict:
     )
     # Add creator as captain member
     db.create_document(DB_ID, settings.collection_squad_members, ID.unique(), {
+        "created_at": now_iso(),
+        "joined_at": now_iso(),
         "squad_id": squad["$id"],
         "user_id": user_id,
         "role": "captain",
@@ -88,7 +91,14 @@ async def add_member(squad_id: str, requester_id: str, payload: MemberAdd) -> di
         raise ValueError("User is already a squad member")
     member = db.create_document(
         DB_ID, settings.collection_squad_members, ID.unique(),
-        data={"squad_id": squad_id, "user_id": payload.user_id, "role": payload.role.value, "position": payload.position},
+        data={
+            "created_at": now_iso(),
+            "joined_at": now_iso(),
+            "squad_id": squad_id,
+            "user_id": payload.user_id,
+            "role": payload.role.value,
+            "position": payload.position,
+        },
     )
     db.update_document(DB_ID, settings.collection_squads, squad_id,
                        {"members_count": doc.get("members_count", 0) + 1})

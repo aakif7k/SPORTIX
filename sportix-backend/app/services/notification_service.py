@@ -2,6 +2,7 @@ from appwrite.query import Query as Q
 from appwrite.id import ID
 from app.core.appwrite import db, DB_ID
 from app.core.config import settings
+from app.utils.formatters import now_iso
 
 
 async def get_for_user(user_id: str, page: int, limit: int, unread_only: bool) -> dict:
@@ -30,6 +31,7 @@ async def create_notification(
     return db.create_document(
         DB_ID, settings.collection_notifications, ID.unique(),
         data={
+            "created_at": now_iso(),
             "user_id": user_id,
             "type": notif_type,
             "title": title,

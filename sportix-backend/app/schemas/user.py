@@ -54,6 +54,37 @@ class UserLogin(BaseModel):
     password: str
 
 
+class ForgotPasswordRequest(BaseModel):
+    """
+    Body, not a query parameter.
+
+    The endpoint previously declared `email: str`, which FastAPI binds as a query
+    parameter -- putting the address in the URL, the access log and any proxy log
+    along the way.
+    """
+    email: str
+
+
+class ChangePasswordRequest(BaseModel):
+    """
+    Body, not query parameters.
+
+    Both passwords were previously bare scalars on the handler, so FastAPI bound
+    them as query parameters: PUT /api/auth/change-password?old_password=...
+    &new_password=... . That writes plaintext credentials into server logs,
+    browser history and any intermediary.
+    """
+    old_password: str
+    new_password: str
+
+    @field_validator("new_password")
+    @classmethod
+    def strong_enough(cls, v: str) -> str:
+        if len(v) < 8:
+            raise ValueError("Password minimum 8 characters")
+        return v
+
+
 class UserUpdate(BaseModel):
     full_name: Optional[str] = None
     username: Optional[str] = None

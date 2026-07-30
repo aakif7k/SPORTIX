@@ -2,6 +2,7 @@ from appwrite.query import Query as Q
 from appwrite.id import ID
 from app.core.appwrite import db, DB_ID
 from app.core.config import settings
+from app.utils.formatters import now_iso
 from app.schemas.event import EventCreate
 from typing import Optional
 
@@ -33,6 +34,7 @@ async def create(user_id: str, payload: EventCreate) -> dict:
     return db.create_document(
         DB_ID, settings.collection_events, ID.unique(),
         data={
+            "created_at": now_iso(),
             "organizer_id": user_id,
             "title": payload.title,
             "description": payload.description,
@@ -98,11 +100,13 @@ async def join(event_id: str, user_id: str, squad_id: Optional[str], entry_type:
     doc = db.create_document(
         DB_ID, settings.collection_event_participants, ID.unique(),
         data={
+            "created_at": now_iso(),
             "event_id": event_id,
             "user_id": user_id,
             "squad_id": squad_id,
             "entry_type": entry_type,
             "status": "registered",
+            "joined_at": now_iso(),
         },
     )
     # Bump participants count

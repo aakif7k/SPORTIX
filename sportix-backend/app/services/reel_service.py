@@ -2,6 +2,7 @@ from appwrite.query import Query as Q
 from appwrite.id import ID
 from app.core.appwrite import db, DB_ID
 from app.core.config import settings
+from app.utils.formatters import now_iso
 from app.schemas.post import ReelCreate
 from typing import Optional
 
@@ -17,6 +18,7 @@ async def create(user_id: str, payload: ReelCreate) -> dict:
     return db.create_document(
         DB_ID, settings.collection_reels, ID.unique(),
         data={
+            "created_at": now_iso(),
             "author_id": user_id,
             "video_url": payload.video_url,
             "thumbnail_url": payload.thumbnail_url,
@@ -60,7 +62,7 @@ async def toggle_like(reel_id: str, user_id: str) -> dict:
         return {"liked": False}
     else:
         db.create_document(DB_ID, settings.collection_reel_likes, ID.unique(),
-                           {"reel_id": reel_id, "user_id": user_id})
+                           { "created_at": now_iso(),"reel_id": reel_id, "user_id": user_id})
         _bump_count(reel_id, "likes_count", 1)
         return {"liked": True}
 

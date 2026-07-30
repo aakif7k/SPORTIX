@@ -43,6 +43,11 @@ ALLOWED_NON_ATTRIBUTES = {
 
 ATTRS = {c.id: {a.key for a in c.all_attrs} | SYSTEM for c in COLLECTIONS}
 
+# Attributes Appwrite will reject a create for if they are absent. Checking the
+# positive case (is this key real?) is not enough: omitting a required column is
+# just as fatal, and only shows up as a 400 at runtime.
+REQUIRED = {c.id: {a.key for a in c.all_attrs if a.required} for c in COLLECTIONS}
+
 # settings attribute name -> collection id, e.g. collection_events -> "events"
 SETTING_TO_COLLECTION = {
     name: value
@@ -162,7 +167,32 @@ class Checker(ast.NodeVisitor):
                         f"{self.path}:{lineno}: {collection!r} has no attribute "
                         f"{key!r}{hint}"
                     )
+
+                if node.func.attr == "create_document":
+                    self._check_required(node, collection, args, kw)
         self.generic_visit(node)
+
+    def _check_required(self, node: ast.Call, collection: str,
+                        args: list, kw: dict) -> None:
+        """A create must supply every required attribute of its collection."""
+        payload = kw.get("data")
+        if payload is None:
+            for candidate in args[2:]:
+                if isinstance(candidate, ast.Dict):
+                    payload = candidate
+        if not isinstance(payload, ast.Dict):
+            return          # built dynamically; not statically checkable
+        if any(k is None for k in payload.keys):
+            return          # {**spread} could supply anything
+
+        provided = {k.value for k in payload.keys
+                    if isinstance(k, ast.Constant) and isinstance(k.value, str)}
+        missing = sorted(REQUIRED.get(collection, set()) - provided)
+        if missing:
+            self.problems.append(
+                f"{self.path}:{node.lineno}: create on {collection!r} omits required "
+                f"attribute(s): {', '.join(missing)}"
+            )
 
 
 def main() -> int:
