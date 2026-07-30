@@ -9,6 +9,15 @@ import { BarChart, Bar, XAxis, Tooltip, ResponsiveContainer } from 'recharts';
 
 const TABS = ['Athletes', 'ClashHub Events', 'The Arena Stats'];
 
+// Placeholder participation counts, generated once at module load. Rolling these
+// during render is impure and made the bar chart jump on every keystroke in the
+// search box. Replaced by real aggregates when the discover API lands.
+const SPORT_ANALYTICS = SPORT_CATEGORIES.slice(0, 6).map(s => ({
+  name: s.label,
+  count: Math.floor(Math.random() * 600 + 300),
+  emoji: s.emoji,
+}));
+
 export const SearchPage: React.FC = () => {
   const navigate = useNavigate();
 
@@ -24,11 +33,7 @@ export const SearchPage: React.FC = () => {
   const athletes = (query ? MOCK_USERS.filter(u => u.name.toLowerCase().includes(query.toLowerCase()) || u.sport.toLowerCase().includes(query.toLowerCase())) : MOCK_USERS);
   const events = (query ? MOCK_EVENTS.filter(e => e.title.toLowerCase().includes(query.toLowerCase())) : MOCK_EVENTS);
 
-  const sportAnalytics = SPORT_CATEGORIES.slice(0, 6).map(s => ({
-    name: s.label,
-    count: Math.floor(Math.random() * 600 + 300),
-    emoji: s.emoji,
-  }));
+  const sportAnalytics = SPORT_ANALYTICS;
 
   return (
     <div className="max-w-5xl mx-auto space-y-6 pb-24 text-white">

@@ -35,14 +35,22 @@ const CountUp: React.FC<{ target: number; suffix?: string; delay?: number }> = (
   return <>{current}{suffix}</>;
 };
 
+// Burst offsets are computed once at module load. Math.random() during render
+// is impure: React may re-render this on any parent update, which re-rolled
+// every particle's distance and made the burst jitter mid-animation.
+const BURST_PARTICLES = Array.from({ length: 20 }, (_, i) => {
+  const angle = (i / 20) * 360;
+  const dist  = 60 + Math.random() * 80;
+  return {
+    x: Math.cos((angle * Math.PI) / 180) * dist,
+    y: Math.sin((angle * Math.PI) / 180) * dist,
+  };
+});
+
 // Particle burst for level-up
 const ParticleBurst: React.FC = () => (
   <div className="absolute inset-0 pointer-events-none overflow-hidden">
-    {Array.from({ length: 20 }).map((_, i) => {
-      const angle = (i / 20) * 360;
-      const dist  = 60 + Math.random() * 80;
-      const x = Math.cos((angle * Math.PI) / 180) * dist;
-      const y = Math.sin((angle * Math.PI) / 180) * dist;
+    {BURST_PARTICLES.map(({ x, y }, i) => {
       return (
         <motion.div
           key={i}

@@ -62,28 +62,30 @@ interface ParticleData {
   speed: number;
 }
 
+const PARTICLE_COUNT = 100;
+
+// Built once at module load rather than in a useMemo. The field is a fixed
+// decorative point cloud, and Math.random() during render is impure — the
+// React Compiler is free to re-run a memo, which would visibly re-scatter it.
+const PARTICLES: ParticleData[] = Array.from({ length: PARTICLE_COUNT }, () => {
+  const theta = Math.random() * Math.PI * 2;
+  const phi = Math.acos(2 * Math.random() - 1);
+  const r = 1.2 + Math.random() * 1.3;
+  return {
+    pos: [
+      r * Math.sin(phi) * Math.cos(theta),
+      r * Math.sin(phi) * Math.sin(theta),
+      r * Math.cos(phi),
+    ],
+    offset: Math.random() * Math.PI * 2,
+    speed: 0.4 + Math.random() * 0.6,
+  };
+});
+
 const Particles: React.FC = () => {
   const meshRef = useRef<THREE.InstancedMesh>(null!);
-  const count = 100;
-
-  const particles = useMemo<ParticleData[]>(() => {
-    const arr: ParticleData[] = [];
-    for (let i = 0; i < count; i++) {
-      const theta = Math.random() * Math.PI * 2;
-      const phi = Math.acos(2 * Math.random() - 1);
-      const r = 1.2 + Math.random() * 1.3;
-      arr.push({
-        pos: [
-          r * Math.sin(phi) * Math.cos(theta),
-          r * Math.sin(phi) * Math.sin(theta),
-          r * Math.cos(phi),
-        ],
-        offset: Math.random() * Math.PI * 2,
-        speed: 0.4 + Math.random() * 0.6,
-      });
-    }
-    return arr;
-  }, []);
+  const count = PARTICLE_COUNT;
+  const particles = PARTICLES;
 
   const dummy = useMemo(() => new THREE.Object3D(), []);
 

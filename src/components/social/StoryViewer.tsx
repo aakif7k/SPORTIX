@@ -13,6 +13,16 @@ const StoryAuthorAvatar: React.FC<{ url: string | null; name: string }> = ({ url
 
 const STORY_DURATION_MS = 5000;
 
+// Module-level helper: reads the clock, so it must not be called from a
+// component body during render.
+const formatTimeAgo = (iso: string) => {
+  const diff = Date.now() - new Date(iso).getTime();
+  const h = Math.floor(diff / 3600000);
+  const m = Math.floor((diff % 3600000) / 60000);
+  if (h > 0) return `${h}h ago`;
+  return `${m}m ago`;
+};
+
 interface StoryViewerProps {
   group: DbStoryGroup;
   currentUserId: string;
@@ -96,14 +106,6 @@ export const StoryViewer: React.FC<StoryViewerProps> = ({
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [handleKeyDown]);
-
-  const formatTimeAgo = (iso: string) => {
-    const diff = Date.now() - new Date(iso).getTime();
-    const h = Math.floor(diff / 3600000);
-    const m = Math.floor((diff % 3600000) / 60000);
-    if (h > 0) return `${h}h ago`;
-    return `${m}m ago`;
-  };
 
   return (
     <AnimatePresence>
