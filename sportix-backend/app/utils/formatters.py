@@ -1,4 +1,15 @@
-from datetime import datetime
+from datetime import datetime, timezone
+
+
+def now_iso() -> str:
+    """
+    UTC timestamp for Appwrite datetime attributes.
+
+    The canonical schema makes created_at required on every collection, so every
+    create_document call must supply one. Use this rather than hand-rolling a
+    format per call site.
+    """
+    return datetime.now(timezone.utc).isoformat()
 
 
 def format_datetime(dt_str: str) -> str:
