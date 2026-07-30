@@ -12,6 +12,26 @@ dist
 dist-ssr
 *.local
 
+# Environment files — NEVER commit these. Use .env.example as the template.
+.env
+.env.*
+!.env.example
+sportix-backend/.env
+sportix-backend/.env.*
+!sportix-backend/.env.example
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Agent/skill scratch space — not part of the product
+scratch/
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json
