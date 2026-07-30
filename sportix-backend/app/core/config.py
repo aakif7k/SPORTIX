@@ -1,5 +1,7 @@
-from pydantic_settings import BaseSettings
 from functools import lru_cache
+
+from pydantic import model_validator
+from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class Settings(BaseSettings):
@@ -73,7 +75,9 @@ class Settings(BaseSettings):
     collection_tournament_matches: str = "tournament_matches"
 
     # ── App ───────────────────────────────────────────────────────────────────
-    secret_key: str = "change-me-in-production"
+    # No default: a missing SECRET_KEY must fail at startup rather than silently
+    # falling back to a value an attacker can read in the repository.
+    secret_key: str
     algorithm: str = "HS256"
     access_token_expire_minutes: int = 60
     environment: str = "development"
@@ -81,9 +85,40 @@ class Settings(BaseSettings):
     max_upload_size_mb: int = 50
     max_autosquad_generations: int = 3
 
-    class Config:
-        env_file = ".env"
-        extra = "ignore"
+    # Comma-separated. Replaces the hardcoded CORS list so deployments do not
+    # need a code change to add an origin.
+    allowed_origins: str = "http://localhost:5173,http://localhost:3000,http://127.0.0.1:5173"
+
+    # ── Google Gemini (server-side only) ──────────────────────────────────────
+    gemini_api_key: str = ""
+
+    @property
+    def cors_origins(self) -> list[str]:
+        origins = [o.strip() for o in self.allowed_origins.split(",") if o.strip()]
+        if self.frontend_url and self.frontend_url not in origins:
+            origins.append(self.frontend_url)
+        return origins
+
+    @property
+    def is_production(self) -> bool:
+        return self.environment.lower() in ("production", "prod")
+
+    @model_validator(mode="after")
+    def _reject_placeholder_secret_in_production(self) -> "Settings":
+        placeholders = {
+            "change-me-in-production",
+            "your-super-secret-key-change-in-production",
+            "",
+        }
+        if self.is_production and self.secret_key.strip() in placeholders:
+            raise ValueError(
+                "SECRET_KEY is still the placeholder value while ENVIRONMENT is "
+                "production. Generate one with: python -c "
+                "\"import secrets; print(secrets.token_urlsafe(48))\""
+            )
+        return self
+
+    model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
 
 @lru_cache()

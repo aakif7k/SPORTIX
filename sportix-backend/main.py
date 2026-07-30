@@ -1,4 +1,7 @@
-from fastapi import FastAPI
+import logging
+import time
+
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from slowapi import Limiter, _rate_limit_exceeded_handler
 from slowapi.util import get_remote_address
@@ -6,6 +9,7 @@ from slowapi.errors import RateLimitExceeded
 
 from app.core.config import settings
 from app.core.exceptions import register_exception_handlers
+from app.core.logging_config import configure_logging, new_request_id, request_id_ctx
 from app.routers import (
     auth, users, posts, stories, reels,
     events, squads, matches, pulse,
@@ -13,6 +17,9 @@ from app.routers import (
     leaderboard, autosquad, search,
     upload, settings as settings_router, admin,
 )
+
+configure_logging()
+logger = logging.getLogger("sportix")
 
 # ── Rate limiter ──────────────────────────────────────────────────────────────
 limiter = Limiter(key_func=get_remote_address)
@@ -30,18 +37,51 @@ app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
 # ── CORS ──────────────────────────────────────────────────────────────────────
+# Origins come from the ALLOWED_ORIGINS env var (comma-separated) so a new
+# deployment target does not need a code change.
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
-        settings.frontend_url,
-        "http://localhost:5173",
-        "http://localhost:3000",
-        "http://127.0.0.1:5173",
-    ],
+    allow_origins=settings.cors_origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
+    expose_headers=["X-Request-ID"],
 )
+
+
+# ── Request correlation ───────────────────────────────────────────────────────
+@app.middleware("http")
+async def request_id_middleware(request: Request, call_next):
+    """
+    Stamp every request with an id, echo it on the response, and log one line
+    per request. An inbound X-Request-ID is honoured so a trace can span the
+    proxy and the SPA.
+    """
+    incoming = request.headers.get("X-Request-ID", "").strip()
+    rid = incoming[:64] if incoming else new_request_id()
+    token = request_id_ctx.set(rid)
+    started = time.perf_counter()
+    # Both log calls must happen before the ContextVar is reset, or the line
+    # describing the request is emitted without the request's own id.
+    try:
+        response = await call_next(request)
+        elapsed_ms = (time.perf_counter() - started) * 1000
+        response.headers["X-Request-ID"] = rid
+        logger.info(
+            "%s %s -> %s in %.1fms",
+            request.method, request.url.path, response.status_code, elapsed_ms,
+        )
+        return response
+    except Exception:
+        # The exception handlers build the body; this only records timing, since
+        # call_next re-raises before a response exists.
+        logger.exception(
+            "%s %s failed after %.1fms",
+            request.method, request.url.path, (time.perf_counter() - started) * 1000,
+        )
+        raise
+    finally:
+        request_id_ctx.reset(token)
 
 # All uploads live in Appwrite Storage, so there is no local static mount.
 
