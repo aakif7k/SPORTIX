@@ -46,20 +46,12 @@ class Settings(BaseSettings):
     collection_story_views: str = "story_views"
     collection_reel_likes: str = "reel_likes"
 
-    # ── AWS S3 (optional — only needed if you switch to S3) ──────────────────
-    aws_access_key_id: str = ""
-    aws_secret_access_key: str = ""
-    aws_region: str = "ap-southeast-2"
-    aws_s3_bucket: str = "sportix-socialmedia"
-    aws_s3_base_url: str = ""
-
     # ── App ───────────────────────────────────────────────────────────────────
     secret_key: str = "change-me-in-production"
     algorithm: str = "HS256"
     access_token_expire_minutes: int = 60
     environment: str = "development"
     frontend_url: str = "http://localhost:5173"
-    upload_dir: str = "uploads"
     max_upload_size_mb: int = 50
     max_autosquad_generations: int = 3
 
