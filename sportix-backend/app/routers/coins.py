@@ -1,5 +1,6 @@
 from fastapi import APIRouter, Depends, Query
 from app.core.dependencies import get_current_user
+from app.schemas.coins import CoinAward, CoinSpend
 from app.services import coins_service
 
 router = APIRouter()
@@ -22,13 +23,17 @@ async def get_transactions(
 
 
 @router.post("/award")
-async def award_coins(user_id: str, amount: float, reason: str, user=Depends(get_current_user)):
+async def award_coins(payload: CoinAward, user=Depends(get_current_user)):
     """Admin/system endpoint to award coins to a user."""
-    data = await coins_service.award(user_id, amount, reason)
+    data = await coins_service.award(
+        payload.user_id, payload.amount, payload.reason, payload.source
+    )
     return {"success": True, "data": data}
 
 
 @router.post("/spend")
-async def spend_coins(amount: float, reason: str, user=Depends(get_current_user)):
-    data = await coins_service.spend(user["id"], amount, reason)
+async def spend_coins(payload: CoinSpend, user=Depends(get_current_user)):
+    data = await coins_service.spend(
+        user["id"], payload.amount, payload.reason, payload.source
+    )
     return {"success": True, "data": data}

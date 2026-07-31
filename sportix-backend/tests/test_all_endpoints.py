@@ -77,8 +77,18 @@ BODIES: dict[tuple[str, str], dict[str, Any]] = {
     ("POST", "/api/autosquad/generate"): {
         "sport": "football", "entry_type": "squad", "skill_level": "amateur",
     },
-    ("POST", "/api/coins/award"): {"amount": 10, "reason": "test"},
+    ("POST", "/api/coins/award"): {"user_id": "user123", "amount": 10, "reason": "test"},
     ("POST", "/api/coins/spend"): {"amount": 5, "reason": "test"},
+    ("PATCH", "/api/matches/{match_id}/result"): {
+        "result": "win", "score_home": 3, "score_away": 1,
+    },
+    ("PATCH", "/api/squads/{squad_id}/members/{target_user_id}/role"): {"role": "vice"},
+    ("PUT", "/api/squads/{squad_id}/tactics"): {
+        "formation": "4-3-3", "tactical_notes": "press high",
+    },
+    ("POST", "/api/squads/{squad_id}/leadership/vote"): {
+        "candidate_id": "user456", "vote": "approve",
+    },
 }
 
 

@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends
 from typing import Optional
 from app.core.dependencies import get_current_user
-from app.schemas.match import StatsSubmission, StatValidate, SquadRetentionVote
+from app.schemas.match import MatchResultUpdate, StatsSubmission, StatValidate, SquadRetentionVote
 from app.services import match_service
 
 router = APIRouter()
@@ -35,12 +35,12 @@ async def get_match(match_id: str, user=Depends(get_current_user)):
 @router.patch("/{match_id}/result")
 async def update_result(
     match_id: str,
-    result: str,
-    score_home: Optional[int] = None,
-    score_away: Optional[int] = None,
+    payload: MatchResultUpdate,
     user=Depends(get_current_user),
 ):
-    data = await match_service.update_result(match_id, result, score_home, score_away)
+    data = await match_service.update_result(
+        match_id, payload.result.value, payload.score_home, payload.score_away
+    )
     return {"success": True, "data": data}
 
 

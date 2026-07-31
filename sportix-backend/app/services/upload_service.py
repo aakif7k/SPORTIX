@@ -61,8 +61,10 @@ async def upload_to_appwrite(
     ext = allowed_types[file.content_type]
     filename = f"{user_id}_{uuid.uuid4().hex[:8]}.{ext}"
 
+    # The first parameter is positional-or-keyword `bytes` in the pinned SDK; it
+    # was `data` in 6.x, so this call raised TypeError after the version bump.
     input_file = InputFile.from_bytes(
-        data=content,
+        content,
         filename=filename,
         mime_type=file.content_type,
     )

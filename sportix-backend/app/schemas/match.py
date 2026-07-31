@@ -38,6 +38,19 @@ class StatsSubmission(BaseModel):
         return v
 
 
+class MatchResultUpdate(BaseModel):
+    """
+    Body, not query parameters.
+
+    `result: str` on the handler made FastAPI bind it from the query string, so
+    the endpoint was PATCH /matches/{id}/result?result=win&score_home=3 . Same
+    defect class as the two auth endpoints the audit listed; this one it missed.
+    """
+    result: MatchResult
+    score_home: Optional[int] = None
+    score_away: Optional[int] = None
+
+
 class StatValidate(BaseModel):
     vote: ValidationVote
     reason: Optional[str] = None

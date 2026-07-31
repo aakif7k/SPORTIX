@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends, Query
 from app.core.dependencies import get_current_user
-from app.schemas.squad import SquadCreate, SquadUpdate, MemberAdd
+from app.schemas.squad import SquadCreate, SquadUpdate, MemberAdd, RoleUpdate, TacticsUpdate, LeadershipVote
 from app.services import squad_service
 
 router = APIRouter()
@@ -55,8 +55,11 @@ async def remove_member(squad_id: str, target_user_id: str, user=Depends(get_cur
 
 
 @router.patch("/{squad_id}/members/{target_user_id}/role")
-async def update_role(squad_id: str, target_user_id: str, role: str, user=Depends(get_current_user)):
-    await squad_service.update_role(squad_id, target_user_id, role, user["id"])
+async def update_role(
+    squad_id: str, target_user_id: str, payload: RoleUpdate,
+    user=Depends(get_current_user),
+):
+    await squad_service.update_role(squad_id, target_user_id, payload.role.value, user["id"])
     return {"success": True, "message": "Role updated"}
 
 
@@ -75,15 +78,20 @@ async def get_analytics(squad_id: str, user=Depends(get_current_user)):
 @router.put("/{squad_id}/tactics")
 async def update_tactics(
     squad_id: str,
-    formation: str,
-    tactical_notes: str = None,
+    payload: TacticsUpdate,
     user=Depends(get_current_user),
 ):
-    data = await squad_service.update_tactics(squad_id, user["id"], formation, tactical_notes)
+    data = await squad_service.update_tactics(
+        squad_id, user["id"], payload.formation, payload.tactical_notes
+    )
     return {"success": True, "data": data}
 
 
 @router.post("/{squad_id}/leadership/vote")
-async def vote_leadership(squad_id: str, candidate_id: str, vote: str, user=Depends(get_current_user)):
-    data = await squad_service.vote_leadership(squad_id, candidate_id, user["id"], vote)
+async def vote_leadership(
+    squad_id: str, payload: LeadershipVote, user=Depends(get_current_user),
+):
+    data = await squad_service.vote_leadership(
+        squad_id, payload.candidate_id, user["id"], payload.vote
+    )
     return {"success": True, "data": data}
