@@ -20,6 +20,7 @@ from __future__ import annotations
 
 import ast
 import importlib
+import inspect
 import pathlib
 import sys
 
@@ -51,7 +52,50 @@ def check_service_references() -> tuple[list[str], int]:
                     f"{path.as_posix()}:{node.lineno}: "
                     f"{node.value.id}.{node.attr}() does not exist"
                 )
+    problems += _check_call_signatures()
     return sorted(set(problems)), checked
+
+
+def _check_call_signatures() -> list[str]:
+    """
+    Confirm each call actually FITS the function it targets.
+
+    Existence is not enough. routers/posts.py called
+    get_explore(user_id, page, sport) positionally against
+    get_explore(viewer_id, page, limit, sport), so `sport` landed in `limit` and
+    the endpoint died with a TypeError deep inside a query builder. Binding the
+    arguments the way Python will catches that statically.
+    """
+    problems: list[str] = []
+    for path in sorted(pathlib.Path("app/routers").rglob("*.py")):
+        tree = ast.parse(path.read_text(encoding="utf-8"))
+        for call in ast.walk(tree):
+            if not (isinstance(call, ast.Call)
+                    and isinstance(call.func, ast.Attribute)
+                    and isinstance(call.func.value, ast.Name)
+                    and call.func.value.id.endswith("_service")):
+                continue
+            try:
+                module = importlib.import_module(f"app.services.{call.func.value.id}")
+                target = getattr(module, call.func.attr)
+            except (ModuleNotFoundError, AttributeError):
+                continue        # reported by the existence pass
+            if not callable(target):
+                continue
+            if any(isinstance(a, ast.Starred) for a in call.args) or                     any(k.arg is None for k in call.keywords):
+                continue        # *args / **kwargs: cannot bind statically
+            try:
+                inspect.signature(target).bind(
+                    *[object()] * len(call.args),
+                    **{k.arg: object() for k in call.keywords if k.arg},
+                )
+            except TypeError as e:
+                problems.append(
+                    f"{path.as_posix()}:{call.lineno}: "
+                    f"{call.func.value.id}.{call.func.attr}() call does not fit its "
+                    f"signature -- {e}"
+                )
+    return problems
 
 
 def check_created_at() -> tuple[list[str], int]:

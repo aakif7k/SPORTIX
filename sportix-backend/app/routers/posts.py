@@ -28,7 +28,7 @@ async def explore_feed(
     user=Depends(get_current_user),
 ):
     """Explore feed — public posts from all users."""
-    data = await post_service.get_explore(user["id"], page, sport)
+    data = await post_service.get_explore(user["id"], page=page, sport=sport)
     return {"success": True, "data": data}
 
 
