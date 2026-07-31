@@ -80,6 +80,13 @@ async def unfollow_user(user_id: str, user=Depends(get_current_user)):
     return {"success": True, "message": "Unfollowed"}
 
 
+@router.get("/{user_id}/is-following")
+async def check_is_following(user_id: str, user=Depends(get_current_user)):
+    """Does the caller follow {user_id}? Drives the follow button's state."""
+    data = await user_service.is_following(user["id"], user_id)
+    return {"success": True, "data": data}
+
+
 @router.get("/{user_id}/followers")
 async def get_followers(user_id: str, page: int = Query(0), user=Depends(get_current_user)):
     data = await user_service.get_followers(user_id, page)

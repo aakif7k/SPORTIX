@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '@/context/AuthContext';
-import { api } from '@/lib/api';
+import { api, ApiError } from '@/lib/api';
 import toast from 'react-hot-toast';
 
 export interface Post {
@@ -25,77 +25,6 @@ export interface Post {
   $createdAt: string;
 }
 
-// TODO(phase-5): delete. Fabricated placeholder posts shown when the feed comes
-// back empty or the request fails, which makes a broken feed indistinguishable
-// from an empty one. Previously duplicated inline in two branches of loadPosts
-// with slightly different contents; consolidated here so there is one thing to
-// remove once the feed renders real empty and error states.
-const FALLBACK_POSTS: Post[] = [
-          {
-            $id: 'p1',
-            author_id: 'u1',
-            author_username: 'marcus_thiel',
-            author_full_name: 'Marcus Thielemann',
-            author_avatar_url: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150',
-            author_sport: 'Football',
-            author_level: 28,
-            content: 'Just wrapped up a 3-hour tactical session. Heat maps don\'t lie — we\'re covering 37% more pressing zones this season. The data never sleeps! 📊⚽',
-            media_urls: ['https://images.unsplash.com/photo-1574629810360-7efbbe195018?w=800&q=80'],
-            media_type: 'image',
-            post_type: 'training',
-            sport_tag: 'Football',
-            location_tag: 'Berlin, Germany',
-            likes_count: 42,
-            comments_count: 8,
-            is_liked: false,
-            is_deleted: false,
-            created_at: new Date(Date.now() - 3600000).toISOString(),
-            $createdAt: new Date(Date.now() - 3600000).toISOString(),
-          },
-          {
-            $id: 'p2',
-            author_id: 'u2',
-            author_username: 'priya_t',
-            author_full_name: 'Priya Krishnamurthy',
-            author_avatar_url: 'https://images.unsplash.com/photo-1517841905240-472988babdf9?w=150',
-            author_sport: 'Tennis',
-            author_level: 32,
-            content: 'Serve speed up to 198 km/h! Return accuracy at 84%. Form is peaking at the right time for championship matches. 🎾🔥',
-            media_urls: ['https://images.unsplash.com/photo-1595435934249-5df7ed86e1c0?w=800&q=80'],
-            media_type: 'image',
-            post_type: 'highlights',
-            sport_tag: 'Tennis',
-            location_tag: 'Chennai, India',
-            likes_count: 89,
-            comments_count: 14,
-            is_liked: true,
-            is_deleted: false,
-            created_at: new Date(Date.now() - 7200000).toISOString(),
-            $createdAt: new Date(Date.now() - 7200000).toISOString(),
-          },
-          {
-            $id: 'p3',
-            author_id: 'u3',
-            author_username: 'deshawn_w',
-            author_full_name: 'DeShawn Williams',
-            author_avatar_url: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150',
-            author_sport: 'Basketball',
-            author_level: 35,
-            content: '28 points. 11 assists. 9 rebounds. One bucket away from a triple-double. Next game in 48 hours. No days off! 🏀💯',
-            media_urls: ['https://images.unsplash.com/photo-1546519638-68e109498ffc?w=800&q=80'],
-            media_type: 'image',
-            post_type: 'achievements',
-            sport_tag: 'Basketball',
-            location_tag: 'Atlanta, USA',
-            likes_count: 124,
-            comments_count: 23,
-            is_liked: false,
-            is_deleted: false,
-            created_at: new Date(Date.now() - 14400000).toISOString(),
-            $createdAt: new Date(Date.now() - 14400000).toISOString(),
-          }
-];
-
 export function useFeed(filters?: {
   post_type?: string;
   sport?: string;
@@ -104,6 +33,9 @@ export function useFeed(filters?: {
   const [posts, setPosts] = useState<Post[]>([]);
   // Which user the posts in state belong to; `loading` derives from it.
   const [loadedFor, setLoadedFor] = useState<string | null>(null);
+  // Surfaced so the feed can show an error with a retry instead of silently
+  // rendering fabricated posts.
+  const [error, setError] = useState<ApiError | null>(null);
   const [page, setPage] = useState(0);
   const [hasMore, setHasMore] = useState(true);
   const [submitting, setSubmitting] = useState(false);
@@ -148,9 +80,7 @@ export function useFeed(filters?: {
     try {
       const { posts: fetched, hasMore: more } = await fetchPage(pageNum);
 
-      if (fetched.length === 0 && reset) {
-        setPosts(FALLBACK_POSTS);
-      } else if (reset) {
+      if (reset) {
         setPosts(fetched);
       } else {
         setPosts(prev => [...prev, ...fetched]);
@@ -158,8 +88,13 @@ export function useFeed(filters?: {
       setHasMore(more);
       setPage(pageNum);
     } catch (err) {
-      console.warn('Backend feed unavailable, providing default feed cards:', err);
-      if (reset) setPosts(FALLBACK_POSTS);
+      // An empty feed and a broken feed must look different. Fabricating posts
+      // here meant the feed could never appear broken, so nobody could tell that
+      // it was.
+      setError(err instanceof ApiError ? err : new ApiError({
+        status: 0, code: 'UNKNOWN', message: 'Could not load the feed.',
+      }));
+      if (reset) setPosts([]);
     } finally {
       setLoadedFor(user.id);
     }
@@ -174,15 +109,18 @@ export function useFeed(filters?: {
     fetchPage(0)
       .then(({ posts: fetched, hasMore: more }) => {
         if (cancelled) return;
-        setPosts(fetched.length === 0 ? FALLBACK_POSTS : fetched);
+        setPosts(fetched);
         setHasMore(more);
         setPage(0);
+        setError(null);
         setLoadedFor(userId);
       })
       .catch(err => {
         if (cancelled) return;
-        console.warn('Backend feed unavailable, providing default feed cards:', err);
-        setPosts(FALLBACK_POSTS);
+        setPosts([]);
+        setError(err instanceof ApiError ? err : new ApiError({
+          status: 0, code: 'UNKNOWN', message: 'Could not load the feed.',
+        }));
         setLoadedFor(userId);
       });
 
@@ -304,7 +242,7 @@ export function useFeed(filters?: {
   const refresh = () => loadPosts(0, true);
 
   return {
-    posts, loading, hasMore, submitting,
+    posts, loading, error, hasMore, submitting,
     submitPost, likePost, deletePost,
     loadMore, refresh,
   };

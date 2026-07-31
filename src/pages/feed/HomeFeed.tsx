@@ -88,9 +88,9 @@ export const HomeFeed: React.FC = () => {
   const [activeGroupIndex, setActiveGroupIndex] = useState(0);
 
   const {
-    posts, loading, hasMore, submitting,
+    posts, loading, error, hasMore, submitting,
     submitPost, likePost, deletePost,
-    loadMore,
+    loadMore, refresh,
   } = useFeed();
 
   const [activeCategory, setActiveCategory] = useState('All');
@@ -168,6 +168,65 @@ export const HomeFeed: React.FC = () => {
 
       {/* Posts */}
       <div className="space-y-4">
+        {/* Loading: three skeletons, only while there is nothing to show yet. A
+            refresh with posts on screen must not blank them out. */}
+        {loading && posts.length === 0 && (
+          <div className="space-y-4" aria-busy="true" aria-label="Loading feed">
+            {[0, 1, 2].map(i => (
+              <div key={i} className="rounded-2xl bg-surface border border-border-muted p-4 space-y-3">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-full bg-elevated animate-shimmer" />
+                  <div className="space-y-2 flex-1">
+                    <div className="h-3 w-32 rounded bg-elevated animate-shimmer" />
+                    <div className="h-2 w-20 rounded bg-elevated animate-shimmer" />
+                  </div>
+                </div>
+                <div className="h-3 w-full rounded bg-elevated animate-shimmer" />
+                <div className="h-3 w-4/5 rounded bg-elevated animate-shimmer" />
+                <div className="h-48 w-full rounded-xl bg-elevated animate-shimmer" />
+              </div>
+            ))}
+          </div>
+        )}
+
+        {/* Error: this used to be covered up with three fabricated Unsplash posts,
+            so a broken feed was indistinguishable from a working one. */}
+        {error && posts.length === 0 && (
+          <div className="rounded-2xl bg-surface border border-border-muted p-8 text-center space-y-3">
+            <p className="font-display text-[15px] tracking-wider text-text-primary uppercase">
+              Could not load your feed
+            </p>
+            <p className="font-mono text-[11px] text-text-secondary">
+              {error.isNetwork
+                ? 'The server is unreachable. Check your connection.'
+                : error.message}
+            </p>
+            {error.requestId && (
+              <p className="font-mono text-[9px] text-text-muted">
+                Reference: {error.requestId}
+              </p>
+            )}
+            <button
+              onClick={() => refresh()}
+              className="px-4 py-2 rounded-full bg-accent text-black font-mono text-[11px] font-bold uppercase tracking-wider hover:bg-accent/90 transition-all"
+            >
+              Try again
+            </button>
+          </div>
+        )}
+
+        {/* Empty: a genuinely empty feed, which is a normal state for a new account. */}
+        {!loading && !error && posts.length === 0 && (
+          <div className="rounded-2xl bg-surface border border-dashed border-border-muted p-10 text-center space-y-2">
+            <p className="font-display text-[15px] tracking-wider text-text-primary uppercase">
+              Your feed is quiet
+            </p>
+            <p className="font-mono text-[11px] text-text-secondary">
+              Follow some athletes, or share the first post yourself.
+            </p>
+          </div>
+        )}
+
         {posts.map((post) => (
           <PostCard
             key={post.$id}
@@ -177,7 +236,7 @@ export const HomeFeed: React.FC = () => {
           />
         ))}
 
-        {!loading && hasMore && (
+        {!loading && !error && hasMore && posts.length > 0 && (
           <div className="flex items-center justify-center py-6">
             <button
               onClick={loadMore}

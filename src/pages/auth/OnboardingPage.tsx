@@ -8,10 +8,9 @@ import {
 } from 'lucide-react';
 import { GLOBAL_SPORTS } from '../../services/mockData';
 import { Button } from '../../components/ui/Button';
-import { databases, DATABASE_ID, COLLECTIONS } from '@/lib/appwrite';
 import { useAuth } from '@/context/AuthContext';
 import { useAuthStore } from '@/store/authStore';
-import { checkUsernameAvailable, getUserProfile } from '@/lib/authService';
+import { checkUsernameAvailable, getUserProfile, updateUserProfile } from '@/lib/authService';
 import toast from 'react-hot-toast';
 import type { UserRole } from '@/types';
 
@@ -286,24 +285,21 @@ export const OnboardingPage: React.FC = () => {
     useAuthStore.getState().updateProfile(updatedUser);
 
     try {
-      await databases.updateDocument(
-        DATABASE_ID,
-        COLLECTIONS.PROFILES,
-        currentUser.id,
-        {
-          role,
-          full_name: fullName,
-          username: username.toLowerCase().trim(),
-          location,
-          bio,
-          sport:            primarySport,
-          sports:           [primarySport, ...interestedSports].filter(Boolean),
-          experience_level: level,
-          avatar_url:       photoPreview || null,
-          is_onboarding_complete: true,
-          updated_at: new Date().toISOString(),
-        },
-      );
+      // Writes go through the API; clients hold no write permission on any
+      // collection, so the direct databases.updateDocument this replaces was
+      // rejected and onboarding never actually saved.
+      await updateUserProfile(currentUser.id, {
+        role,
+        full_name: fullName,
+        username: username.toLowerCase().trim(),
+        location,
+        bio,
+        sport: primarySport,
+        sports: [primarySport, ...interestedSports].filter(Boolean),
+        experience_level: level,
+        avatar_url: photoPreview || null,
+        is_onboarding_complete: true,
+      } as never);
     } catch (err: any) {
       console.warn('Appwrite profiles collection missing, saved onboarding state locally:', err?.message);
     } finally {

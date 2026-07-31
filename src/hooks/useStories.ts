@@ -6,7 +6,6 @@
  */
 import { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '@/context/AuthContext';
-import { useAuthStore } from '@/store/authStore';
 import {
   getActiveStories,
   createStory,
@@ -65,18 +64,10 @@ export function useStories() {
     sportTag?: string
   ) => {
     if (!currentUser) return;
-    const storeUser = useAuthStore.getState().user;
     setUploading(true);
     try {
-      await createStory(
-        currentUser.id,
-        storeUser?.name     ?? currentUser.name,
-        storeUser?.username ?? '',
-        storeUser?.avatar   ?? null,
-        file,
-        caption,
-        sportTag,
-      );
+      // Author fields are derived from the JWT server-side.
+      await createStory(file, caption, sportTag);
       await load();
     } finally {
       setUploading(false);

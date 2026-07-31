@@ -11,8 +11,7 @@
 import React, { useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/context/AuthContext';
-import { getUserProfile } from '@/lib/authService';
-import { databases, DATABASE_ID, COLLECTIONS } from '@/lib/appwrite';
+import { getUserProfile, updateUserProfile } from '@/lib/authService';
 import toast from 'react-hot-toast';
 
 export const OAuthCallbackPage: React.FC = () => {
@@ -46,36 +45,19 @@ export const OAuthCallbackPage: React.FC = () => {
           navigate('/app/feed', { replace: true });
         } else {
           // Brand-new Google user — attempt document creation if possible, then onboard
+          // The server owns profile creation. PUT /api/users/me upserts, so an
+          // OAuth account that arrives with a session but no profile gets one
+          // created server-side with the same defaults register uses. This used to
+          // be a databases.createDocument straight from the browser — a third
+          // profile writer, and one permissions now reject, which left Google
+          // sign-ups with no profile at all.
           try {
-            const now = new Date().toISOString();
-            await databases.createDocument(
-              DATABASE_ID,
-              COLLECTIONS.PROFILES,
-              user.id,
-              {
-                full_name:              user.name  || '',
-                username:               '',
-                email:                  user.email || '',
-                role:                   'athlete',
-                sport:                  '',
-                sports:                 [],
-                experience_level:       'amateur',
-                location:               '',
-                avatar_url:             null,
-                bio:                    '',
-                is_open_to_recruit:     false,
-                is_active:              true,
-                is_onboarding_complete: false,
-                pulse_score:            100,
-                level:                  1,
-                coins_balance:          0,
-                login_streak:           0,
-                created_at:             now,
-                updated_at:             now,
-              },
-            );
-          } catch (docErr: any) {
-            console.warn('OAuth profile doc creation skipped:', docErr?.message);
+            await updateUserProfile(user.id, {
+              full_name: user.name || '',
+              email: user.email || '',
+            } as never);
+          } catch (err) {
+            console.error('Could not initialise the profile for this OAuth account:', err);
           }
 
           toast.success('Google account verified! Let\'s set up your PlayerDNA ⚡');

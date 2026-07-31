@@ -4,7 +4,6 @@
  */
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useAuth } from '@/context/AuthContext';
-import { useAuthStore } from '@/store/authStore';
 import {
   getReels,
   getUserReels,
@@ -118,20 +117,11 @@ export function useReels() {
     sportTag?: string
   ) => {
     if (!currentUser) return;
-    const storeUser = useAuthStore.getState().user;
     setUploading(true);
     try {
-      await createReel(
-        currentUser.id,
-        storeUser?.name     ?? currentUser.name,
-        storeUser?.username ?? '',
-        storeUser?.avatar   ?? null,
-        storeUser?.sport    ?? '',
-        videoFile,
-        thumbnailFile,
-        caption,
-        sportTag,
-      );
+      // Author fields are derived from the JWT server-side.
+      await createReel(videoFile, thumbnailFile, caption, sportTag);
+
       // Refresh from top
       load(0, true);
     } finally {

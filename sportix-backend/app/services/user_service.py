@@ -1,6 +1,7 @@
+from appwrite.exception import AppwriteException
 from appwrite.query import Query as Q
 from appwrite.id import ID
-from app.core.appwrite import db, DB_ID
+from app.core.appwrite import db, users_svc, DB_ID
 from app.core.config import settings
 from app.utils.formatters import now_iso
 from app.schemas.user import UserUpdate
@@ -29,8 +30,59 @@ async def get_by_username(username: str, viewer_id: str) -> dict:
 
 
 async def update_profile(user_id: str, payload: UserUpdate) -> dict:
+    """
+    Update the caller's profile, creating it first if it does not exist.
+
+    The upsert exists for OAuth: Appwrite creates the auth account during the
+    Google flow, so the user arrives with a session but no profile document, and
+    /api/auth/register has no part to play. Previously the OAuth callback page
+    created that document from the browser -- a THIRD profile writer, and one that
+    permissions now reject outright, leaving the account profile-less.
+
+    Collapsing it here keeps the server the single owner of profile creation, with
+    two entry points: register for email signup, and this upsert for a session
+    that has no profile yet.
+    """
     data = payload.model_dump(exclude_none=True)
-    return db.update_document(DB_ID, settings.collection_users, user_id, data)
+    data["updated_at"] = now_iso()
+
+    try:
+        return db.update_document(DB_ID, settings.collection_users, user_id, data)
+    except AppwriteException as e:
+        if getattr(e, "code", 0) != 404:
+            raise
+
+    auth_user = users_svc.get(user_id=user_id)
+    now = now_iso()
+    # Defaults mirror auth_service.register_user so a profile created either way
+    # starts identical.
+    seeded = {
+        "email": auth_user.get("email", ""),
+        "full_name": auth_user.get("name") or "",
+        "username": data.get("username") or f"user_{user_id[:8]}",
+        "role": "athlete",
+        "experience_level": "amateur",
+        "bio": "",
+        "is_open_to_recruit": False,
+        "is_verified": False,
+        "is_active": True,
+        "is_onboarding_complete": False,
+        "level": 1,
+        "pulse_score": 100.0,
+        "coins_balance": 0,
+        "login_streak": 0,
+        "followers_count": 0,
+        "following_count": 0,
+        "posts_count": 0,
+        "created_at": now,
+        **data,
+    }
+    profile = db.create_document(DB_ID, settings.collection_users, user_id, seeded)
+
+    # Give the new account the same Pulse/level/coins/streak rows register creates.
+    from app.services.auth_service import _init_gamification_rows
+    _init_gamification_rows(DB_ID, user_id, now)
+    return profile
 
 
 async def get_profile_stats(user_id: str) -> dict:
@@ -162,3 +214,8 @@ def _increment_count(user_id: str, field: str, delta: int):
         db.update_document(DB_ID, settings.collection_users, user_id, {field: max(0, current + delta)})
     except Exception:
         pass
+
+
+async def is_following(follower_id: str, target_id: str) -> dict:
+    """Whether follower_id follows target_id. Wraps the existing private check."""
+    return {"is_following": _check_following(follower_id, target_id)}

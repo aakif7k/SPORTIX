@@ -43,6 +43,13 @@ async def toggle_like(reel_id: str, user=Depends(get_current_user)):
     return {"success": True, "data": data}
 
 
+@router.post("/{reel_id}/view")
+async def record_reel_view(reel_id: str, user=Depends(get_current_user)):
+    """Count a view. Clients suppress repeats within a session."""
+    data = await reel_service.record_view(reel_id)
+    return {"success": True, "data": {"views_count": data.get("views_count", 0)}}
+
+
 @router.get("/user/{user_id}")
 async def get_user_reels(user_id: str, page: int = Query(0), user=Depends(get_current_user)):
     data = await reel_service.get_by_user(user_id, page)

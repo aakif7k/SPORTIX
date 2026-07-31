@@ -39,7 +39,9 @@ class CommentCreate(BaseModel):
 
 
 class ReelCreate(BaseModel):
-    title: str
+    # No `title`: the reels collection stores a caption, and the required title
+    # was discarded by the service, so the API rejected valid requests for a
+    # field it had no column for.
     video_url: str
     thumbnail_url: Optional[str] = None
     caption: Optional[str] = None

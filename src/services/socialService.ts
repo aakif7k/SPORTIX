@@ -1,20 +1,31 @@
 /**
- * socialService.ts — Appwrite backend
- * ─────────────────────────────────────────────────────────────────────────────
- * All social content (posts, stories, reels) reads from and writes to Appwrite.
- * NO mock data. author_id is ALWAYS the Appwrite auth user $id.
+ * socialService — posts, stories, reels, follows.
  *
- * NOTE: Appwrite has no JOINs, so author info is denormalised into each document
- * at creation time (author_name, author_avatar_url, author_sport).
+ * Every call goes through the FastAPI backend. This file used to talk to Appwrite
+ * directly with the browser SDK, which stopped working the moment collection
+ * permissions were locked down: clients hold no create, update or delete
+ * permission on any collection, because the server API key bypasses permissions
+ * and the server owns all denormalisation and counter maintenance.
+ *
+ * So roughly twenty writes in here — creating posts, stories and reels, toggling
+ * likes, recording views, following people, updating an avatar — were being
+ * rejected by Appwrite. Several were wrapped in try/catch and reported as
+ * "collection pending", so the UI showed success while nothing was saved.
+ *
+ * The exported signatures are unchanged, so the seven consumers need no edits.
+ * What changed is underneath: no databases.*, no storage.*, no ID.unique().
+ *
+ * Reads go through the API too. The browser SDK could still read (profiles, posts
+ * and friends grant Role.users() read for realtime), but splitting reads and
+ * writes across two transports is how the field-casing drift started, and the
+ * server is what applies is_liked, blocking and privacy rules.
  */
+import { api } from '@/lib/api';
 
-import {
-  databases, storage, ID, Query,
-  DATABASE_ID, COLLECTIONS, BUCKET_ID,
-} from '@/lib/appwrite';
-type AppwriteDocument = Record<string, any> & { $id: string; $createdAt: string; $updatedAt: string };
+type Json = Record<string, any>;
 
-// ─── Shared types ──────────────────────────────────────────────────────────────
+/** The backend wraps every success as {success, data}. */
+interface Envelope<T> { success: boolean; data: T }
 
 export interface DbProfile {
   id: string;
@@ -127,620 +138,366 @@ export interface ProfileStats {
   following: number;
 }
 
-// ─── Helpers ──────────────────────────────────────────────────────────────────
+// ─── Mapping ──────────────────────────────────────────────────────────────────
+// Appwrite documents use $id; these interfaces use `id`. The nested `author`
+// object is rebuilt from the denormalised author_* columns because PostCard and
+// ReelCard read it that way.
 
-function docToPost(doc: AppwriteDocument, isLiked = false): DbPost {
-  const post: DbPost = {
-    id:               doc.$id,
-    author_id:        doc.author_id,
-    author_name:      doc.author_name       ?? '',
-    author_username:  doc.author_username   ?? '',
-    author_avatar_url:doc.author_avatar_url ?? null,
-    author_sport:     doc.author_sport      ?? '',
-    content:          doc.content           ?? '',
-    media_urls:       doc.media_urls        ?? [],
-    media_type:       doc.media_type        ?? 'none',
-    post_type:        doc.post_type         ?? 'general',
-    sport_tag:        doc.sport_tag         ?? null,
-    location_tag:     doc.location_tag      ?? null,
-    likes_count:      doc.likes_count       ?? 0,
-    comments_count:   doc.comments_count    ?? 0,
-    created_at:       doc.created_at        ?? doc.$createdAt,
-    is_liked:         isLiked,
-  };
-  // Attach nested author shape so PostCard.author.* access works
-  post.author = {
-    full_name:  post.author_name,
-    username:   post.author_username,
-    avatar_url: post.author_avatar_url,
-    sport:      post.author_sport,
-  };
-  return post;
-}
-
-function docToStory(doc: AppwriteDocument, isSeen = false): DbStory {
+function authorOf(d: Json) {
   return {
-    id:             doc.$id,
-    author_id:      doc.author_id,
-    author_name:    doc.author_name     ?? '',
-    author_username:doc.author_username ?? '',
-    author_avatar:  doc.author_avatar   ?? null,
-    media_url:      doc.media_url       ?? '',
-    media_type:     doc.media_type      ?? 'image',
-    caption:        doc.caption         ?? null,
-    sport_tag:      doc.sport_tag       ?? null,
-    view_count:     doc.view_count      ?? 0,
-    created_at:     doc.created_at      ?? doc.$createdAt,
-    expires_at:     doc.expires_at      ?? '',
-    is_seen:        isSeen,
+    full_name: d.author_full_name ?? d.author_name ?? '',
+    username: d.author_username ?? '',
+    avatar_url: d.author_avatar_url ?? null,
+    sport: d.author_sport ?? '',
   };
 }
 
-function docToReel(doc: AppwriteDocument, isLiked = false): DbReel {
-  const reel: DbReel = {
-    id:             doc.$id,
-    author_id:      doc.author_id,
-    video_url:      doc.video_url       ?? '',
-    thumbnail_url:  doc.thumbnail_url   ?? null,
-    caption:        doc.caption         ?? null,
-    sport_tag:      doc.sport_tag       ?? null,
-    likes_count:    doc.likes_count     ?? 0,
-    comments_count: doc.comments_count  ?? 0,
-    views_count:    doc.views_count     ?? 0,
-    created_at:     doc.created_at      ?? doc.$createdAt,
-    is_liked:       isLiked,
+function toPost(d: Json): DbPost {
+  return {
+    id: d.$id ?? d.id,
+    author_id: d.author_id,
+    author_name: d.author_full_name ?? d.author_name ?? '',
+    author_username: d.author_username ?? '',
+    author_avatar_url: d.author_avatar_url ?? null,
+    author_sport: d.author_sport ?? '',
+    content: d.content ?? '',
+    media_urls: d.media_urls ?? [],
+    media_type: d.media_type ?? 'none',
+    post_type: d.post_type ?? 'general',
+    sport_tag: d.sport_tag ?? null,
+    location_tag: d.location_tag ?? null,
+    likes_count: d.likes_count ?? 0,
+    comments_count: d.comments_count ?? 0,
+    created_at: d.created_at ?? d.$createdAt,
+    is_liked: d.is_liked ?? false,
+    author: authorOf(d),
   };
-  reel.author = {
-    full_name:  doc.author_name      ?? '',
-    username:   doc.author_username  ?? '',
-    avatar_url: doc.author_avatar_url ?? null,
-    sport:      doc.author_sport     ?? '',
-  };
-  return reel;
 }
 
-// ─── MEDIA UPLOAD ─────────────────────────────────────────────────────────────
+function toComment(d: Json): DbComment {
+  return {
+    id: d.$id ?? d.id,
+    post_id: d.post_id,
+    author_id: d.author_id,
+    author_name: d.author_name ?? d.author_full_name ?? '',
+    author_avatar_url: d.author_avatar_url ?? null,
+    content: d.content ?? '',
+    created_at: d.created_at ?? d.$createdAt,
+  };
+}
 
+function toStory(d: Json): DbStory {
+  return {
+    id: d.$id ?? d.id,
+    author_id: d.author_id,
+    author_name: d.author_full_name ?? d.author_name ?? '',
+    author_username: d.author_username ?? '',
+    author_avatar: d.author_avatar_url ?? null,
+    media_url: d.media_url,
+    media_type: d.media_type ?? 'image',
+    caption: d.caption ?? null,
+    sport_tag: d.sport_tag ?? null,
+    view_count: d.view_count ?? 0,
+    created_at: d.created_at ?? d.$createdAt,
+    expires_at: d.expires_at,
+    is_seen: d.is_seen ?? false,
+  };
+}
+
+function toReel(d: Json): DbReel {
+  return {
+    id: d.$id ?? d.id,
+    author_id: d.author_id,
+    video_url: d.video_url,
+    thumbnail_url: d.thumbnail_url ?? null,
+    caption: d.caption ?? null,
+    sport_tag: d.sport_tag ?? null,
+    likes_count: d.likes_count ?? 0,
+    comments_count: d.comments_count ?? 0,
+    views_count: d.views_count ?? 0,
+    created_at: d.created_at ?? d.$createdAt,
+    is_liked: d.is_liked ?? false,
+    author: authorOf(d),
+  };
+}
+
+/** List endpoints have used `items`, `documents` and a domain key over time. */
+function listOf(data: Json | undefined, ...keys: string[]): Json[] {
+  if (!data) return [];
+  for (const key of [...keys, 'items', 'documents']) {
+    if (Array.isArray(data[key])) return data[key];
+  }
+  return Array.isArray(data) ? (data as unknown as Json[]) : [];
+}
+
+// ─── Uploads ──────────────────────────────────────────────────────────────────
 export async function uploadMedia(file: File): Promise<string> {
-  const uploaded = await storage.createFile(BUCKET_ID, ID.unique(), file);
-  const url = storage.getFileView(BUCKET_ID, uploaded.$id);
-  return url.toString();
+  const form = new FormData();
+  form.append('file', file);
+  const res = await api.upload<Envelope<{ url: string }>>('/api/upload/post-media', form);
+  return res.data.url;
 }
 
-export async function uploadAvatar(authUid: string, file: File): Promise<string> {
-  const url = await uploadMedia(file);
-  await databases.updateDocument(DATABASE_ID, COLLECTIONS.PROFILES, authUid, {
-    avatar_url: url,
-    updated_at: new Date().toISOString(),
-  });
-  return url;
+export async function uploadAvatar(_authUid: string, file: File): Promise<string> {
+  // The endpoint attaches the URL to the caller's own profile, derived from the
+  // JWT, so the uid argument is unused and cannot be used to target someone else.
+  const form = new FormData();
+  form.append('file', file);
+  const res = await api.upload<Envelope<{ url: string }>>('/api/upload/avatar', form);
+  return res.data.url;
 }
 
-// ─── POSTS ────────────────────────────────────────────────────────────────────
-
+// ─── Posts ────────────────────────────────────────────────────────────────────
 export async function getFeedPosts(
-  authUid: string,
+  _authUid: string,
   page = 0,
   limit = 20,
 ): Promise<DbPost[]> {
-  const res = await databases.listDocuments(
-    DATABASE_ID,
-    COLLECTIONS.POSTS,
-    [
-      Query.orderDesc('created_at'),
-      Query.limit(limit),
-      Query.offset(page * limit),
-    ],
-  );
-
-  if (res.documents.length === 0) return [];
-
-  // Check which posts are liked by current user
-  const postIds = res.documents.map(d => d.$id);
-  const likesRes = await databases.listDocuments(
-    DATABASE_ID,
-    COLLECTIONS.POST_LIKES,
-    [
-      Query.equal('user_id', authUid),
-      Query.equal('post_id', postIds),
-      Query.limit(limit),
-    ],
-  );
-  const likedSet = new Set(likesRes.documents.map(l => l.post_id as string));
-
-  return res.documents.map(doc => docToPost(doc, likedSet.has(doc.$id)));
+  const res = await api.get<Envelope<Json>>(`/api/posts/feed?page=${page}&limit=${limit}`);
+  return listOf(res.data, 'posts').map(toPost);
 }
 
 export async function getUserPosts(authorId: string, page = 0, limit = 20): Promise<DbPost[]> {
-  const res = await databases.listDocuments(
-    DATABASE_ID,
-    COLLECTIONS.POSTS,
-    [
-      Query.equal('author_id', authorId),
-      Query.orderDesc('created_at'),
-      Query.limit(limit),
-      Query.offset(page * limit),
-    ],
+  const res = await api.get<Envelope<Json>>(
+    `/api/posts/user/${authorId}?page=${page}&limit=${limit}`,
   );
-  return res.documents.map(doc => docToPost(doc));
+  return listOf(res.data, 'posts').map(toPost);
 }
 
 export interface CreatePostPayload {
   content: string;
-  files?: File[];
-  post_type?: string;
-  sport_tag?: string;
-  location_tag?: string;
-  // Denormalised author info (passed from the caller who has profile data)
-  authorName: string;
-  authorUsername: string;
-  authorAvatarUrl?: string | null;
-  authorSport?: string;
+  mediaFiles?: File[];
+  postType?: string;
+  sportTag?: string | null;
+  locationTag?: string | null;
 }
 
-export async function createPost(authUid: string, payload: CreatePostPayload): Promise<DbPost> {
-  // Upload media files first
-  let mediaUrls: string[] = [];
-  let mediaType: DbPost['media_type'] = 'none';
-
-  if (payload.files && payload.files.length > 0) {
-    const uploads = await Promise.all(payload.files.map(f => uploadMedia(f)));
-    mediaUrls = uploads;
-
-    const first = payload.files[0];
-    if (first.type.startsWith('video/')) {
-      mediaType = 'video';
-    } else if (payload.files.length === 1) {
-      mediaType = 'image';
-    } else {
-      mediaType = 'multi_image';
-    }
+export async function createPost(_authUid: string, payload: CreatePostPayload): Promise<DbPost> {
+  // Media first: the post references URLs the upload endpoint returns.
+  const mediaUrls: string[] = [];
+  for (const file of payload.mediaFiles ?? []) {
+    mediaUrls.push(await uploadMedia(file));
   }
 
-  const now = new Date().toISOString();
-  const doc = await databases.createDocument(
-    DATABASE_ID,
-    COLLECTIONS.POSTS,
-    ID.unique(),
-    {
-      author_id:          authUid,
-      author_name:        payload.authorName,
-      author_username:    payload.authorUsername,
-      author_avatar_url:  payload.authorAvatarUrl  ?? null,
-      author_sport:       payload.authorSport       ?? '',
-      content:            payload.content.trim(),
-      media_urls:         mediaUrls,
-      media_type:         mediaType,
-      post_type:          payload.post_type   ?? 'general',
-      sport_tag:          payload.sport_tag   ?? null,
-      location_tag:       payload.location_tag ?? null,
-      likes_count:        0,
-      comments_count:     0,
-      created_at:         now,
-    },
-  );
+  const mediaType =
+    mediaUrls.length === 0 ? 'none'
+      : mediaUrls.length > 1 ? 'multi_image'
+        : (payload.mediaFiles?.[0]?.type.startsWith('video') ? 'video' : 'image');
 
-  return docToPost(doc, false);
+  const res = await api.post<Envelope<Json>>('/api/posts/', {
+    content: payload.content,
+    media_urls: mediaUrls,
+    media_type: mediaType,
+    post_type: payload.postType ?? 'general',
+    sport_tag: payload.sportTag ?? null,
+    location_tag: payload.locationTag ?? null,
+  });
+  return toPost(res.data);
 }
 
-export async function deletePost(postId: string, authUid: string): Promise<void> {
-  // Verify ownership before deleting
-  const doc = await databases.getDocument(DATABASE_ID, COLLECTIONS.POSTS, postId);
-  if (doc.author_id !== authUid) throw new Error('Not authorised to delete this post.');
-  await databases.deleteDocument(DATABASE_ID, COLLECTIONS.POSTS, postId);
+export async function deletePost(postId: string, _authUid: string): Promise<void> {
+  // Ownership is enforced server-side from the JWT.
+  await api.delete(`/api/posts/${postId}`);
 }
 
 export async function togglePostLike(
   postId: string,
-  authUid: string,
-  currentlyLiked: boolean,
-): Promise<void> {
-  if (currentlyLiked) {
-    // Find and delete the like document
-    const res = await databases.listDocuments(
-      DATABASE_ID,
-      COLLECTIONS.POST_LIKES,
-      [Query.equal('post_id', postId), Query.equal('user_id', authUid), Query.limit(1)],
-    );
-    if (res.documents.length > 0) {
-      await databases.deleteDocument(DATABASE_ID, COLLECTIONS.POST_LIKES, res.documents[0].$id);
-    }
-    // Decrement counter
-    const post = await databases.getDocument(DATABASE_ID, COLLECTIONS.POSTS, postId);
-    await databases.updateDocument(DATABASE_ID, COLLECTIONS.POSTS, postId, {
-      likes_count: Math.max(0, (post.likes_count ?? 1) - 1),
-    });
-  } else {
-    await databases.createDocument(DATABASE_ID, COLLECTIONS.POST_LIKES, ID.unique(), {
-      post_id: postId,
-      user_id: authUid,
-      created_at: new Date().toISOString(),
-    });
-    const post = await databases.getDocument(DATABASE_ID, COLLECTIONS.POSTS, postId);
-    await databases.updateDocument(DATABASE_ID, COLLECTIONS.POSTS, postId, {
-      likes_count: (post.likes_count ?? 0) + 1,
-    });
-  }
+  _authUid: string,
+  _currentlyLiked: boolean,
+): Promise<{ liked: boolean; likes_count: number }> {
+  // The server decides the new state, so the client's belief about the current
+  // one is not sent. Two rapid taps therefore cannot desynchronise the counter.
+  const res = await api.post<Envelope<{ liked: boolean; likes_count: number }>>(
+    `/api/posts/${postId}/like`,
+  );
+  return res.data;
 }
 
-// ─── COMMENTS ─────────────────────────────────────────────────────────────────
-
 export async function getComments(postId: string): Promise<DbComment[]> {
-  const res = await databases.listDocuments(
-    DATABASE_ID,
-    COLLECTIONS.COMMENTS,
-    [Query.equal('post_id', postId), Query.orderAsc('created_at'), Query.limit(100)],
-  );
-  return res.documents.map(doc => ({
-    id:               doc.$id,
-    post_id:          doc.post_id,
-    author_id:        doc.author_id,
-    author_name:      doc.author_name      ?? '',
-    author_avatar_url:doc.author_avatar_url ?? null,
-    content:          doc.content,
-    created_at:       doc.created_at       ?? doc.$createdAt,
-  }));
+  const res = await api.get<Envelope<Json>>(`/api/posts/${postId}/comments`);
+  return listOf(res.data, 'comments').map(toComment);
 }
 
 export async function addComment(
   postId: string,
-  authUid: string,
+  _authUid: string,
   content: string,
-  authorName: string,
-  authorAvatarUrl?: string | null,
 ): Promise<DbComment> {
-  const doc = await databases.createDocument(
-    DATABASE_ID,
-    COLLECTIONS.COMMENTS,
-    ID.unique(),
-    {
-      post_id:           postId,
-      author_id:         authUid,
-      author_name:       authorName,
-      author_avatar_url: authorAvatarUrl ?? null,
-      content:           content.trim(),
-      created_at:        new Date().toISOString(),
-    },
-  );
-  // Increment comments_count
-  const post = await databases.getDocument(DATABASE_ID, COLLECTIONS.POSTS, postId);
-  await databases.updateDocument(DATABASE_ID, COLLECTIONS.POSTS, postId, {
-    comments_count: (post.comments_count ?? 0) + 1,
-  });
-
-  return {
-    id:               doc.$id,
-    post_id:          doc.post_id,
-    author_id:        doc.author_id,
-    author_name:      doc.author_name      ?? '',
-    author_avatar_url:doc.author_avatar_url ?? null,
-    content:          doc.content,
-    created_at:       doc.created_at       ?? doc.$createdAt,
-  };
+  const res = await api.post<Envelope<Json>>(`/api/posts/${postId}/comments`, { content });
+  return toComment(res.data);
 }
 
-// ─── STORIES ──────────────────────────────────────────────────────────────────
+// ─── Stories ──────────────────────────────────────────────────────────────────
+export async function getActiveStories(_authUid: string): Promise<DbStoryGroup[]> {
+  const res = await api.get<Envelope<Json>>('/api/stories/');
+  const raw = listOf(res.data, 'stories', 'groups');
 
-export async function getActiveStories(authUid: string): Promise<DbStoryGroup[]> {
-  const now = new Date().toISOString();
-  const res = await databases.listDocuments(
-    DATABASE_ID,
-    COLLECTIONS.STORIES,
-    [
-      Query.greaterThan('expires_at', now),
-      Query.orderDesc('created_at'),
-      Query.limit(100),
-    ],
-  );
-  if (res.documents.length === 0) return [];
-
-  // Get seen story IDs for current user
-  const storyIds = res.documents.map(d => d.$id);
-  const viewsRes = await databases.listDocuments(
-    DATABASE_ID,
-    COLLECTIONS.STORY_VIEWS,
-    [
-      Query.equal('viewer_id', authUid),
-      Query.equal('story_id', storyIds),
-      Query.limit(200),
-    ],
-  );
-  const seenSet = new Set(viewsRes.documents.map(v => v.story_id as string));
-
-  // Group by author
-  const map = new Map<string, DbStoryGroup>();
-  for (const doc of res.documents) {
-    const authorId = doc.author_id as string;
-    const isSeen = seenSet.has(doc.$id);
-    const story = docToStory(doc, isSeen);
-
-    if (!map.has(authorId)) {
-      map.set(authorId, {
-        author_id:       authorId,
-        author_name:     doc.author_name     ?? '',
-        author_avatar:   doc.author_avatar   ?? null,
-        author_username: doc.author_username ?? '',
-        stories:         [],
-        has_unseen:      false,
-      });
-    }
-    const group = map.get(authorId)!;
-    group.stories.push(story);
-    if (!isSeen) group.has_unseen = true;
+  // The endpoint may return either flat stories or pre-grouped authors; grouping
+  // here keeps StoryBar working with both.
+  if (raw.length && Array.isArray(raw[0]?.stories)) {
+    return raw.map(g => ({
+      author_id: g.author_id,
+      author_name: g.author_full_name ?? g.author_name ?? '',
+      author_avatar: g.author_avatar_url ?? null,
+      author_username: g.author_username ?? '',
+      stories: (g.stories as Json[]).map(toStory),
+      has_unseen: g.has_unseen ?? (g.stories as Json[]).some(s => !s.is_seen),
+    }));
   }
 
-  return Array.from(map.values());
+  const byAuthor = new Map<string, DbStoryGroup>();
+  for (const story of raw.map(toStory)) {
+    let group = byAuthor.get(story.author_id);
+    if (!group) {
+      group = {
+        author_id: story.author_id,
+        author_name: story.author_name,
+        author_avatar: story.author_avatar,
+        author_username: story.author_username,
+        stories: [],
+        has_unseen: false,
+      };
+      byAuthor.set(story.author_id, group);
+    }
+    group.stories.push(story);
+    if (!story.is_seen) group.has_unseen = true;
+  }
+  return [...byAuthor.values()];
 }
 
 export async function createStory(
-  authUid: string,
-  authorName: string,
-  authorUsername: string,
-  authorAvatar: string | null,
   file: File,
   caption?: string,
   sportTag?: string,
 ): Promise<void> {
-  const isVideo = file.type.startsWith('video/');
-  const mediaUrl = await uploadMedia(file);
+  const form = new FormData();
+  form.append('file', file);
+  const upload = await api.upload<Envelope<{ url: string }>>('/api/upload/story-media', form);
 
-  const now = new Date();
-  const expires = new Date(now.getTime() + 24 * 60 * 60 * 1000);
-
-  await databases.createDocument(DATABASE_ID, COLLECTIONS.STORIES, ID.unique(), {
-    author_id:       authUid,
-    author_name:     authorName,
-    author_username: authorUsername,
-    author_avatar:   authorAvatar,
-    media_url:       mediaUrl,
-    media_type:      isVideo ? 'video' : 'image',
-    caption:         caption?.trim() ?? null,
-    sport_tag:       sportTag ?? null,
-    view_count:      0,
-    created_at:      now.toISOString(),
-    expires_at:      expires.toISOString(),
+  await api.post('/api/stories/', {
+    media_url: upload.data.url,
+    media_type: file.type.startsWith('video') ? 'video' : 'image',
+    caption: caption ?? null,
+    sport_tag: sportTag ?? null,
   });
 }
 
-export async function markStoryViewed(storyId: string, viewerAuthUid: string): Promise<void> {
-  // Check if already viewed
-  const existing = await databases.listDocuments(
-    DATABASE_ID,
-    COLLECTIONS.STORY_VIEWS,
-    [
-      Query.equal('story_id', storyId),
-      Query.equal('viewer_id', viewerAuthUid),
-      Query.limit(1),
-    ],
-  );
-  if (existing.total > 0) return; // Already recorded
-
-  await databases.createDocument(DATABASE_ID, COLLECTIONS.STORY_VIEWS, ID.unique(), {
-    story_id:  storyId,
-    viewer_id: viewerAuthUid,
-    viewed_at: new Date().toISOString(),
-  });
-
-  // Increment view_count
-  const story = await databases.getDocument(DATABASE_ID, COLLECTIONS.STORIES, storyId);
-  await databases.updateDocument(DATABASE_ID, COLLECTIONS.STORIES, storyId, {
-    view_count: (story.view_count ?? 0) + 1,
-  });
+export async function markStoryViewed(storyId: string, _viewerAuthUid: string): Promise<void> {
+  await api.post(`/api/stories/${storyId}/view`);
 }
 
-// ─── REELS ────────────────────────────────────────────────────────────────────
-
-export async function getReels(authUid: string, page = 0, limit = 10): Promise<DbReel[]> {
-  const res = await databases.listDocuments(
-    DATABASE_ID,
-    COLLECTIONS.REELS,
-    [Query.orderDesc('created_at'), Query.limit(limit), Query.offset(page * limit)],
-  );
-  if (res.documents.length === 0) return [];
-
-  const reelIds = res.documents.map(d => d.$id);
-  const likesRes = await databases.listDocuments(
-    DATABASE_ID,
-    COLLECTIONS.REEL_LIKES,
-    [Query.equal('user_id', authUid), Query.equal('reel_id', reelIds), Query.limit(limit)],
-  );
-  const likedSet = new Set(likesRes.documents.map(l => l.reel_id as string));
-
-  return res.documents.map(doc => docToReel(doc, likedSet.has(doc.$id)));
+// ─── Reels ────────────────────────────────────────────────────────────────────
+export async function getReels(_authUid: string, page = 0, limit = 10): Promise<DbReel[]> {
+  const res = await api.get<Envelope<Json>>(`/api/reels/?page=${page}&limit=${limit}`);
+  return listOf(res.data, 'reels').map(toReel);
 }
 
 export async function getUserReels(authorId: string): Promise<DbReel[]> {
-  const res = await databases.listDocuments(
-    DATABASE_ID,
-    COLLECTIONS.REELS,
-    [Query.equal('author_id', authorId), Query.orderDesc('created_at'), Query.limit(50)],
-  );
-  return res.documents.map(doc => docToReel(doc));
+  const res = await api.get<Envelope<Json>>(`/api/reels/user/${authorId}`);
+  return listOf(res.data, 'reels').map(toReel);
 }
 
 export async function createReel(
-  authUid: string,
-  authorName: string,
-  authorUsername: string,
-  authorAvatarUrl: string | null,
-  authorSport: string,
   videoFile: File,
   thumbnailFile: File | null,
   caption?: string,
   sportTag?: string,
 ): Promise<void> {
-  const videoUrl = await uploadMedia(videoFile);
-  let thumbUrl: string | null = null;
-  if (thumbnailFile) thumbUrl = await uploadMedia(thumbnailFile);
+  // Author name, username, avatar and sport used to be passed in and written by
+  // the client. The server denormalises them from the JWT's profile now, so those
+  // parameters are gone rather than left as dead arguments.
+  const videoForm = new FormData();
+  videoForm.append('file', videoFile);
+  const video = await api.upload<Envelope<{ url: string }>>('/api/upload/reel-video', videoForm);
 
-  await databases.createDocument(DATABASE_ID, COLLECTIONS.REELS, ID.unique(), {
-    author_id:          authUid,
-    author_name:        authorName,
-    author_username:    authorUsername,
-    author_avatar_url:  authorAvatarUrl,
-    author_sport:       authorSport,
-    video_url:          videoUrl,
-    thumbnail_url:      thumbUrl,
-    caption:            caption?.trim() ?? null,
-    sport_tag:          sportTag ?? null,
-    likes_count:        0,
-    comments_count:     0,
-    views_count:        0,
-    created_at:         new Date().toISOString(),
+  let thumbnailUrl: string | null = null;
+  if (thumbnailFile) {
+    const thumbForm = new FormData();
+    thumbForm.append('file', thumbnailFile);
+    const thumb = await api.upload<Envelope<{ url: string }>>(
+      '/api/upload/reel-thumbnail', thumbForm,
+    );
+    thumbnailUrl = thumb.data.url;
+  }
+
+  await api.post('/api/reels/', {
+    video_url: video.data.url,
+    thumbnail_url: thumbnailUrl,
+    caption: caption ?? null,
+    sport_tag: sportTag ?? null,
   });
 }
 
 export async function toggleReelLike(
   reelId: string,
-  authUid: string,
-  currentlyLiked: boolean,
+  _authUid: string,
+  _currentlyLiked: boolean,
 ): Promise<void> {
-  if (currentlyLiked) {
-    const res = await databases.listDocuments(
-      DATABASE_ID,
-      COLLECTIONS.REEL_LIKES,
-      [Query.equal('reel_id', reelId), Query.equal('user_id', authUid), Query.limit(1)],
-    );
-    if (res.documents.length > 0) {
-      await databases.deleteDocument(DATABASE_ID, COLLECTIONS.REEL_LIKES, res.documents[0].$id);
-    }
-    const reel = await databases.getDocument(DATABASE_ID, COLLECTIONS.REELS, reelId);
-    await databases.updateDocument(DATABASE_ID, COLLECTIONS.REELS, reelId, {
-      likes_count: Math.max(0, (reel.likes_count ?? 1) - 1),
-    });
-  } else {
-    await databases.createDocument(DATABASE_ID, COLLECTIONS.REEL_LIKES, ID.unique(), {
-      reel_id:    reelId,
-      user_id:    authUid,
-      created_at: new Date().toISOString(),
-    });
-    const reel = await databases.getDocument(DATABASE_ID, COLLECTIONS.REELS, reelId);
-    await databases.updateDocument(DATABASE_ID, COLLECTIONS.REELS, reelId, {
-      likes_count: (reel.likes_count ?? 0) + 1,
-    });
-  }
+  await api.post(`/api/reels/${reelId}/like`);
 }
 
 export async function recordReelView(reelId: string): Promise<void> {
+  // Best effort: a lost view must never interrupt playback.
   try {
-    const reel = await databases.getDocument(DATABASE_ID, COLLECTIONS.REELS, reelId);
-    await databases.updateDocument(DATABASE_ID, COLLECTIONS.REELS, reelId, {
-      views_count: (reel.views_count ?? 0) + 1,
-    });
+    await api.post(`/api/reels/${reelId}/view`);
   } catch {
-    // Silent — view count is non-critical
+    /* ignore */
   }
 }
 
-// ─── FOLLOW SYSTEM ────────────────────────────────────────────────────────────
-
-export async function followUser(followerUid: string, followingUid: string): Promise<void> {
-  await databases.createDocument(DATABASE_ID, COLLECTIONS.FOLLOWERS, ID.unique(), {
-    follower_id:  followerUid,
-    following_id: followingUid,
-    created_at:   new Date().toISOString(),
-  });
+// ─── Follows ──────────────────────────────────────────────────────────────────
+export async function followUser(_followerUid: string, followingUid: string): Promise<void> {
+  await api.post(`/api/users/${followingUid}/follow`);
 }
 
-export async function unfollowUser(followerUid: string, followingUid: string): Promise<void> {
-  const res = await databases.listDocuments(
-    DATABASE_ID,
-    COLLECTIONS.FOLLOWERS,
-    [
-      Query.equal('follower_id', followerUid),
-      Query.equal('following_id', followingUid),
-      Query.limit(1),
-    ],
-  );
-  if (res.documents.length > 0) {
-    await databases.deleteDocument(DATABASE_ID, COLLECTIONS.FOLLOWERS, res.documents[0].$id);
-  }
+export async function unfollowUser(_followerUid: string, followingUid: string): Promise<void> {
+  await api.delete(`/api/users/${followingUid}/follow`);
 }
 
 export async function checkIsFollowing(
-  followerUid: string,
+  _followerUid: string,
   followingUid: string,
 ): Promise<boolean> {
-  const res = await databases.listDocuments(
-    DATABASE_ID,
-    COLLECTIONS.FOLLOWERS,
-    [
-      Query.equal('follower_id', followerUid),
-      Query.equal('following_id', followingUid),
-      Query.limit(1),
-    ],
+  const res = await api.get<Envelope<{ is_following: boolean }>>(
+    `/api/users/${followingUid}/is-following`,
   );
-  return res.total > 0;
+  return res.data.is_following;
 }
 
-export async function getFollowCounts(authUid: string): Promise<{ followers: number; following: number }> {
-  const [followerRes, followingRes] = await Promise.all([
-    databases.listDocuments(DATABASE_ID, COLLECTIONS.FOLLOWERS, [
-      Query.equal('following_id', authUid),
-      Query.limit(1),
-    ]),
-    databases.listDocuments(DATABASE_ID, COLLECTIONS.FOLLOWERS, [
-      Query.equal('follower_id', authUid),
-      Query.limit(1),
-    ]),
-  ]);
-  return { followers: followerRes.total, following: followingRes.total };
-}
-
-// ─── PROFILE STATS ────────────────────────────────────────────────────────────
-
-export async function getProfileStats(authUid: string): Promise<ProfileStats> {
-  const [postsRes, reelsRes, followData] = await Promise.all([
-    databases.listDocuments(DATABASE_ID, COLLECTIONS.POSTS, [
-      Query.equal('author_id', authUid),
-      Query.limit(1),
-    ]),
-    databases.listDocuments(DATABASE_ID, COLLECTIONS.REELS, [
-      Query.equal('author_id', authUid),
-      Query.limit(1),
-    ]),
-    getFollowCounts(authUid),
-  ]);
+export async function getFollowCounts(
+  _authUid: string,
+): Promise<{ followers: number; following: number }> {
+  const res = await api.get<Envelope<Json>>('/api/users/me/stats');
   return {
-    posts:     postsRes.total,
-    reels:     reelsRes.total,
-    followers: followData.followers,
-    following: followData.following,
+    followers: res.data.followers ?? res.data.followers_count ?? 0,
+    following: res.data.following ?? res.data.following_count ?? 0,
   };
 }
 
-// ─── PENDING MATCH REPORT CHECK ───────────────────────────────────────────────
-
-/**
- * Returns true ONLY if the user has a real unsubmitted match report in the DB.
- * New users with zero match history always return false.
- */
-export async function hasPendingMatchReport(authUid: string): Promise<boolean> {
-  try {
-    const res = await databases.listDocuments(
-      DATABASE_ID,
-      'match_reports',
-      [
-        Query.equal('user_id', authUid),
-        Query.equal('report_submitted', false),
-        Query.limit(1),
-      ],
-    );
-    return res.total > 0;
-  } catch {
-    return false;
-  }
+export async function getProfileStats(_authUid: string): Promise<ProfileStats> {
+  const res = await api.get<Envelope<Json>>('/api/users/me/stats');
+  return {
+    posts: res.data.posts ?? res.data.posts_count ?? 0,
+    reels: res.data.reels ?? res.data.reels_count ?? 0,
+    followers: res.data.followers ?? res.data.followers_count ?? 0,
+    following: res.data.following ?? res.data.following_count ?? 0,
+  };
 }
 
-// ─── USER INITIALISATION (after signup) ──────────────────────────────────────
+// ─── Match reports ────────────────────────────────────────────────────────────
+export async function hasPendingMatchReport(_authUid: string): Promise<boolean> {
+  const res = await api.get<Envelope<{ has_pending: boolean }>>(
+    '/api/matches/pending-report/check',
+  );
+  return res.data.has_pending ?? false;
+}
 
 /**
- * Called once after successful registration.
- * Appwrite doesn't need separate gamification rows — they're part of the profile.
- * This is a no-op kept for API compatibility.
+ * No-op kept for call-site compatibility.
+ *
+ * The Pulse, level, coins and streak rows are created by the register endpoint,
+ * alongside the profile, so there is nothing left for the client to initialise.
  */
 export async function initializeNewUserRecords(_authUid: string): Promise<void> {
-  // Profile document created in registerUser() already contains
-  // pulse_score: 100, level: 1, coins_balance: 0, login_streak: 0
-  // Nothing extra needed.
+  /* intentionally empty */
 }

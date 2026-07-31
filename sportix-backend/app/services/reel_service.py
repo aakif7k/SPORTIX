@@ -85,3 +85,18 @@ def _bump_count(reel_id: str, field: str, delta: int):
                            {field: max(0, r.get(field, 0) + delta)})
     except Exception:
         pass
+
+
+async def record_view(reel_id: str) -> dict:
+    """
+    Increment the view counter.
+
+    Deliberately not deduplicated server-side: the client suppresses repeat views
+    within a session, and a per-viewer table for reels would cost a row per view
+    for a number nobody audits.
+    """
+    reel = db.get_document(DB_ID, settings.collection_reels, reel_id)
+    return db.update_document(
+        DB_ID, settings.collection_reels, reel_id,
+        {"views_count": int(reel.get("views_count", 0)) + 1, "updated_at": now_iso()},
+    )
