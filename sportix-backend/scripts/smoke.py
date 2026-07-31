@@ -149,6 +149,21 @@ def main() -> int:
     check("profile carries the username we registered",
           me.get("username") == author["payload"]["username"],
           f"got {me.get('username')!r}")
+    # The frontend's OnboardingRoute gates on this flag, so a fresh account must
+    # report False -- if it were absent or True, onboarding would be skipped.
+    check("a new account reports is_onboarding_complete = False",
+          me.get("is_onboarding_complete") is False,
+          f"got {me.get('is_onboarding_complete')!r}")
+
+    # The path authService.updateUserProfile now takes, having stopped writing to
+    # Appwrite directly (clients hold no write permission on any collection).
+    r = client.put("/api/users/me", headers=auth_header, json={"bio": "Updated by smoke"})
+    check("PUT /api/users/me updates the profile", r.status_code < 300,
+          f"{r.status_code} {body(r)}")
+    r = client.get("/api/users/me", headers=auth_header)
+    check("the update is readable back",
+          data_of(r).get("bio") == "Updated by smoke",
+          f"bio={data_of(r).get('bio')!r}")
 
     # ── post ──────────────────────────────────────────────────────────────────
     step("posts")

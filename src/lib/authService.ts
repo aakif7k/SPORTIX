@@ -1,4 +1,5 @@
-import { account, databases, ID, Query, DATABASE_ID, COLLECTIONS } from '@/lib/appwrite';
+import { account, databases, Query, DATABASE_ID, COLLECTIONS } from '@/lib/appwrite';
+import { api } from '@/lib/api';
 // Appwrite SDK v26+ removed the Models namespace — use inline types
 type AppwriteUser = {
   $id: string;
@@ -58,6 +59,7 @@ export interface RegisterData {
   sports: string[];
   experienceLevel: string;
   location: string;
+  city?: string;
 }
 
 /* ─── Map Appwrite Models.User to AuthUser ───────────────────────────────── */
@@ -71,51 +73,36 @@ export function toAuthUser(user: AppwriteUser): AuthUser {
 
 /* ─── REGISTER ───────────────────────────────────────────────────────────── */
 export async function registerUser(data: RegisterData): Promise<AuthUser> {
-  // 1. Create Appwrite auth account
-  const user = await account.create(
-    ID.unique(),
-    data.email,
-    data.password,
-    data.fullName,
-  );
+  // The BACKEND is the single owner of profile creation.
+  //
+  // This used to create the Appwrite auth account and the profiles document
+  // straight from the browser, while POST /api/auth/register did the same thing
+  // server-side -- two writers producing two different document shapes. Worse,
+  // once collection permissions were locked down (no create for any client role,
+  // because the server API key bypasses permissions), the browser write started
+  // being rejected outright and the failure was swallowed by a console.warn. The
+  // visible result was an auth account with no profile at all.
+  //
+  // So registration goes through the API, which creates the auth user, the
+  // profile and the Pulse/level/coins/streak rows in one place and rolls the auth
+  // account back if the profile write fails. Only then does the browser open its
+  // own session, which is what the SDK needs for realtime and for minting JWTs.
+  await api.post('/api/auth/register', {
+    email: data.email,
+    password: data.password,
+    full_name: data.fullName,
+    username: data.username.toLowerCase().trim(),
+    role: data.role,
+    sport: data.sport,
+    sports: data.sports,
+    experience_level: data.experienceLevel,
+    location: data.location,
+    city: data.city ?? data.location,
+  });
 
-  // 2. Create email session immediately (log them in)
   await account.createEmailPasswordSession(data.email, data.password);
-
-  // 3. Create profile document in Appwrite Database (graceful fallback if collection is pending)
-  try {
-    const now = new Date().toISOString();
-    await databases.createDocument(
-      DATABASE_ID,
-      COLLECTIONS.PROFILES,
-      user.$id,           // Use the auth user ID as the document ID
-      {
-        full_name:              data.fullName,
-        username:               data.username.toLowerCase().trim(),
-        email:                  data.email,
-        role:                   data.role,
-        sport:                  data.sport,
-        sports:                 data.sports,
-        experience_level:       data.experienceLevel,
-        location:               data.location,
-        avatar_url:             null,
-        bio:                    '',
-        is_open_to_recruit:     false,
-        is_active:              true,
-        is_onboarding_complete: false,
-        pulse_score:            100,
-        level:                  1,
-        coins_balance:          0,
-        login_streak:           0,
-        created_at:             now,
-        updated_at:             now,
-      },
-    );
-  } catch (err: any) {
-    console.warn('Appwrite profiles document creation skipped (collection pending):', err?.message);
-  }
-
-  return toAuthUser(user);
+  const user = await account.get();
+  return toAuthUser(user as AppwriteUser);
 }
 
 /* ─── LOGIN ──────────────────────────────────────────────────────────────── */
@@ -170,21 +157,22 @@ export async function getUserProfile(uid: string): Promise<UserProfile | null> {
 
 /* ─── UPDATE USER PROFILE ────────────────────────────────────────────────── */
 export async function updateUserProfile(
-  uid: string,
+  _uid: string,
   updates: Partial<UserProfile>,
 ): Promise<UserProfile | null> {
-  try {
-    const doc = await databases.updateDocument(
-      DATABASE_ID,
-      COLLECTIONS.PROFILES,
-      uid,
-      { ...updates, updated_at: new Date().toISOString() },
-    );
-    return docToProfile(doc);
-  } catch {
-    console.warn('updateUserProfile: profiles collection missing, updating local session profile');
-    return null;
-  }
+  // Writes go through the API, never the browser SDK. Clients hold no
+  // create/update/delete permission on any collection, so the direct
+  // databases.updateDocument call this replaces was rejected -- and the catch
+  // block reported "collection missing" and returned null, which read as an
+  // empty profile rather than a permission failure. The server also owns
+  // denormalisation, which a direct write would skip.
+  //
+  // The uid is unused: the endpoint derives the user from the JWT, so a caller
+  // cannot edit someone else's profile by passing a different id.
+  const res = await api.put<{ success: boolean; data: AppwriteDocument }>(
+    '/api/users/me', updates,
+  );
+  return docToProfile(res.data);
 }
 
 /* ─── CHECK USERNAME AVAILABLE ───────────────────────────────────────────── */

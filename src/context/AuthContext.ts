@@ -33,12 +33,20 @@ export interface AuthUser {
   sport?: string;
   level?: number;
   pulse_score?: number;
+  /** Gates the /onboarding route. Absent on a provisional profile. */
+  is_onboarding_complete?: boolean;
 }
 
 export interface AuthContextType {
   user: AuthUser | null;
   appwriteUser: AppwriteUser | null;
   authLoading: boolean;
+  /**
+   * True when a session exists but its profile could not be fetched. Distinct
+   * from "no profile yet": screens should offer a retry rather than render
+   * placeholder values as though they were the user's own data.
+   */
+  profileError: boolean;
   isAuthenticated: boolean;
   login: (email: string, password: string) => Promise<void>;
   register: (data: RegisterData) => Promise<void>;
