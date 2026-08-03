@@ -62,3 +62,55 @@ export interface Paginated<T> {
   limit: number;
   has_more: boolean;
 }
+
+export interface ApiSquad {
+  $id: string;
+  name: string;
+  sport: string;
+  captain_id: string;
+  logo_url: string | null;
+  formation: string | null;
+  tactical_notes: string | null;
+  max_members: number;
+  members_count: number;
+  win_rate: number;
+  chemistry_score: number;
+  pulse_avg: number;
+  trust: number;
+  coordination: number;
+  communication: number;
+  matches_played: number;
+  wins: number;
+  losses: number;
+  draws: number;
+  xp_boost_active: boolean;
+  streak_multiplier: number;
+  last_active: string | null;
+  created_at: string;
+  $createdAt: string;
+}
+
+export type SquadRole =
+  | 'captain' | 'vice' | 'strategist' | 'analyst' | 'recruiter' | 'member';
+
+export interface ApiSquadMember {
+  $id: string;
+  squad_id: string;
+  user_id: string;
+  role: SquadRole;
+  position: string | null;
+  readiness: 'ready' | 'maybe' | 'unavailable';
+  joined_at: string;
+}
+
+export interface ApiSquadChemistry {
+  squad_id: string;
+  overall: number;
+  trust: number;
+  coordination: number;
+  communication: number;
+  chemistry_score: number;
+  pulse_avg: number;
+  members_count: number;
+  matches_played: number;
+}

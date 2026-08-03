@@ -132,26 +132,16 @@ async def update_role(squad_id: str, target_user_id: str, role: str, requester_i
 
 
 async def get_chemistry(squad_id: str) -> dict:
-    """Calculate chemistry score based on member pulse scores."""
-    members = db.list_documents(
-        DB_ID, settings.collection_squad_members,
-        queries=[Q.equal("squad_id", squad_id), Q.limit(50)],
-    )
-    member_ids = [m["user_id"] for m in members.get("documents", [])]
-    pulses = []
-    for uid in member_ids:
-        try:
-            res = db.list_documents(
-                DB_ID, settings.collection_pulse_scores,
-                queries=[Q.equal("user_id", uid), Q.limit(1)],
-            )
-            if res.get("documents"):
-                pulses.append(res["documents"][0].get("total_pulse", 100))
-        except Exception:
-            pulses.append(100.0)
-    avg_pulse = sum(pulses) / len(pulses) if pulses else 0
-    chemistry = round(min(100, avg_pulse * 0.8 + len(pulses) * 2), 1)
-    return {"chemistry_score": chemistry, "member_count": len(pulses), "avg_pulse": round(avg_pulse, 1)}
+    """
+    Squad chemistry, delegated to the service that owns the rule.
+
+    This used to compute its own score as avg_pulse * 0.8 + members * 2 -- a
+    third chemistry formula, disagreeing both with chemistry_service and with the
+    trust/coordination/communication pillars stored on the squad. It also
+    returned none of the fields the UI reads: no overall, no pillars.
+    """
+    from app.services import chemistry_service
+    return await chemistry_service.get_squad_chemistry(squad_id)
 
 
 async def get_analytics(squad_id: str) -> dict:
