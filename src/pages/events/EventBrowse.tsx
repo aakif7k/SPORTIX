@@ -5,30 +5,36 @@ import {
   Calendar, MapPin, Search, Trophy, ArrowRight, Plus, 
   Activity, Settings 
 } from 'lucide-react';
-import { useEventStore } from '../../store/eventStore';
+import { useEvents } from '@/hooks/useEvents';
 import { SPORT_CATEGORIES } from '../../services/mockData';
 import { PendingReportBanner } from '../../components/performance/PendingReportBanner';
 
 export const EventBrowse: React.FC = () => {
   const navigate = useNavigate();
-  const events = useEventStore(state => state.events);
+  const { events, loading, error, refresh } = useEvents();
   
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedSport, setSelectedSport] = useState<string>('all');
   const [filterTab, setFilterTab] = useState<'all' | 'live' | 'featured'>('all');
 
+  // The soonest upcoming event headlines the page.
+  const featuredEvent = [...events]
+    .filter(e => e.status === 'upcoming' || e.status === 'live')
+    .sort((a, b) => new Date(a.starts_at).getTime() - new Date(b.starts_at).getTime())[0]
+    ?? events[0];
+
   const filteredEvents = events.filter(event => {
-    const matchesSearch = event.title.toLowerCase().includes(searchQuery.toLowerCase()) || 
-                          event.location.toLowerCase().includes(searchQuery.toLowerCase());
-    const matchesSport = selectedSport === 'all' || event.sport.toLowerCase() === selectedSport.toLowerCase();
-    
+    const haystack = `${event.title} ${event.location ?? ''} ${event.city ?? ''}`.toLowerCase();
+    const matchesSearch = haystack.includes(searchQuery.toLowerCase());
+    const matchesSport = selectedSport === 'all'
+      || event.sport.toLowerCase() === selectedSport.toLowerCase();
+
     if (!matchesSearch || !matchesSport) return false;
     if (filterTab === 'live') return event.status === 'live';
-    if (filterTab === 'featured') return (event as any).isFeatured;
+    // There is no isFeatured column; "featured" means starting soonest.
+    if (filterTab === 'featured') return event.$id === featuredEvent?.$id;
     return true;
   });
-
-  const featuredEvent = events.find(e => (e as any).isFeatured) || events[0];
 
   return (
     <div className="max-w-5xl mx-auto space-y-8 pb-24">
@@ -80,16 +86,16 @@ export const EventBrowse: React.FC = () => {
       </div>
 
       {/* ── FEATURED HERO EVENT BANNER ───────────────────────────────────── */}
-      {featuredEvent && (
+      {!loading && !error && featuredEvent && (
         <motion.div 
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
-          onClick={() => navigate(`/app/events/${featuredEvent.id}`)}
+          onClick={() => navigate(`/app/events/${featuredEvent.$id}`)}
           className="relative rounded-3xl overflow-hidden border border-white/10 bg-surface cursor-pointer group shadow-2xl"
         >
           <div className="h-64 sm:h-80 relative overflow-hidden">
             <img 
-              src={featuredEvent.bannerImage || 'https://images.unsplash.com/photo-1508098682722-e99c43a406b2?w=1200&q=80'} 
+              src={featuredEvent.banner_url || 'https://images.unsplash.com/photo-1508098682722-e99c43a406b2?w=1200&q=80'} 
               alt={featuredEvent.title}
               className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700" 
             />
@@ -110,20 +116,20 @@ export const EventBrowse: React.FC = () => {
             {/* Bottom Event Info */}
             <div className="absolute bottom-4 left-4 right-4 sm:bottom-6 sm:left-6 sm:right-6 space-y-3">
               <div className="flex items-center gap-2 text-xs font-mono text-[#CCFF00]">
-                <span>{new Date(featuredEvent.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</span>
+                <span>{new Date(featuredEvent.starts_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</span>
                 <span>•</span>
-                <span className="flex items-center gap-1"><MapPin size={12} /> {featuredEvent.location}</span>
+                <span className="flex items-center gap-1"><MapPin size={12} /> {featuredEvent.location ?? featuredEvent.city ?? 'TBC'}</span>
               </div>
               <h2 className="text-xl sm:text-3xl font-black text-white uppercase tracking-tight leading-tight group-hover:text-[#FF6B00] transition-colors">
                 {featuredEvent.title}
               </h2>
               <div className="flex items-center justify-between pt-2 border-t border-white/10">
                 <div className="flex items-center gap-3 text-xs font-mono text-text-secondary">
-                  <span>{featuredEvent.participants.length} / {featuredEvent.maxParticipants} Registered</span>
+                  <span>{featuredEvent.current_participants} / {featuredEvent.max_participants} Registered</span>
                   <div className="w-24 h-1.5 rounded-full bg-white/10 overflow-hidden hidden sm:block">
                     <div 
                       className="h-full bg-[#FF6B00] rounded-full" 
-                      style={{ width: `${(featuredEvent.participants.length / featuredEvent.maxParticipants) * 100}%` }} 
+                      style={{ width: `${(featuredEvent.current_participants / featuredEvent.max_participants) * 100}%` }} 
                     />
                   </div>
                 </div>
@@ -201,22 +207,82 @@ export const EventBrowse: React.FC = () => {
         </div>
       </div>
 
+      {/* ── LOADING ──────────────────────────────────────────────────────── */}
+      {loading && (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6"
+             aria-busy="true" aria-label="Loading events">
+          {[0, 1, 2, 3, 4, 5].map(i => (
+            <div key={i} className="rounded-2xl bg-surface border border-border-muted overflow-hidden">
+              <div className="h-40 w-full bg-elevated animate-shimmer" />
+              <div className="p-4 space-y-3">
+                <div className="h-3 w-3/4 rounded bg-elevated animate-shimmer" />
+                <div className="h-2 w-1/2 rounded bg-elevated animate-shimmer" />
+                <div className="h-2 w-2/3 rounded bg-elevated animate-shimmer" />
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* ── ERROR ────────────────────────────────────────────────────────── */}
+      {!loading && error && (
+        <div className="rounded-2xl bg-surface border border-border-muted p-8 text-center space-y-3">
+          <p className="font-display text-[15px] tracking-wider text-text-primary uppercase">
+            Could not load events
+          </p>
+          <p className="font-mono text-[11px] text-text-secondary">
+            {error.isNetwork
+              ? 'The server is unreachable. Check your connection.'
+              : error.message}
+          </p>
+          {error.requestId && (
+            <p className="font-mono text-[9px] text-text-muted">Reference: {error.requestId}</p>
+          )}
+          <button
+            onClick={() => refresh()}
+            className="px-4 py-2 rounded-full bg-accent text-black font-mono text-[11px] font-bold uppercase tracking-wider hover:bg-accent/90 transition-all"
+          >
+            Try again
+          </button>
+        </div>
+      )}
+
+      {/* ── EMPTY ────────────────────────────────────────────────────────── */}
+      {!loading && !error && filteredEvents.length === 0 && (
+        <div className="rounded-2xl bg-surface border border-dashed border-border-muted p-10 text-center space-y-2">
+          <p className="font-display text-[15px] tracking-wider text-text-primary uppercase">
+            {events.length === 0 ? 'No events yet' : 'Nothing matches that'}
+          </p>
+          <p className="font-mono text-[11px] text-text-secondary">
+            {events.length === 0
+              ? 'Be the first to put one on.'
+              : 'Try a different sport or clear the search.'}
+          </p>
+          <button
+            onClick={() => navigate('/app/events/create')}
+            className="mt-2 px-4 py-2 rounded-full bg-accent text-black font-mono text-[11px] font-bold uppercase tracking-wider hover:bg-accent/90 transition-all"
+          >
+            Create an event
+          </button>
+        </div>
+      )}
+
       {/* ── TOURNAMENT CARDS GRID ────────────────────────────────────────── */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        {filteredEvents.map(event => {
-          const pctFull = Math.round((event.participants.length / event.maxParticipants) * 100);
+        {!loading && !error && filteredEvents.map(event => {
+          const pctFull = Math.round((event.current_participants / event.max_participants) * 100);
           return (
             <motion.div
-              key={event.id}
+              key={event.$id}
               whileHover={{ y: -4 }}
-              onClick={() => navigate(`/app/events/${event.id}`)}
+              onClick={() => navigate(`/app/events/${event.$id}`)}
               className="rounded-3xl overflow-hidden bg-surface border border-border-muted/80 cursor-pointer group flex flex-col justify-between shadow-lg transition-all hover:border-[#FF6B00]/40"
             >
               <div>
                 {/* Event Image Banner */}
                 <div className="h-44 relative overflow-hidden">
                   <img 
-                    src={event.bannerImage || 'https://images.unsplash.com/photo-1574629810360-7efbbe195018?w=800&q=80'} 
+                    src={event.banner_url || 'https://images.unsplash.com/photo-1574629810360-7efbbe195018?w=800&q=80'} 
                     alt={event.title} 
                     className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
                   />
@@ -240,10 +306,10 @@ export const EventBrowse: React.FC = () => {
                 <div className="p-5 space-y-3">
                   <div className="flex items-center gap-2 text-[11px] font-mono text-text-muted">
                     <Calendar size={12} className="text-[#FF6B00]" />
-                    <span>{new Date(event.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</span>
+                    <span>{new Date(event.starts_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</span>
                     <span>•</span>
                     <MapPin size={12} className="text-text-muted" />
-                    <span className="truncate">{event.location}</span>
+                    <span className="truncate">{(event.location ?? event.city ?? 'TBC')}</span>
                   </div>
 
                   <h3 className="font-sans font-bold text-base text-white uppercase tracking-tight group-hover:text-[#FF6B00] transition-colors line-clamp-1">
@@ -261,7 +327,7 @@ export const EventBrowse: React.FC = () => {
                 <div className="pt-3 border-t border-white/5 space-y-2">
                   <div className="flex items-center justify-between text-[11px] font-mono">
                     <span className="text-text-muted">Filled: {pctFull}%</span>
-                    <span className="text-[#FF6B00] font-bold">{event.participants.length}/{event.maxParticipants}</span>
+                    <span className="text-[#FF6B00] font-bold">{event.current_participants}/{event.max_participants}</span>
                   </div>
                   <div className="w-full h-1.5 rounded-full bg-white/10 overflow-hidden">
                     <div className="h-full bg-[#FF6B00] rounded-full transition-all" style={{ width: `${pctFull}%` }} />
