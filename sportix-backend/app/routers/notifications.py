@@ -34,6 +34,13 @@ async def mark_all_read(user=Depends(get_current_user)):
     return {"success": True, "message": "All notifications marked as read"}
 
 
+@router.delete("/")
+async def clear_all_notifications(user=Depends(get_current_user)):
+    """Clear the caller's whole notification list in one request."""
+    data = await notification_service.clear_all(user["id"])
+    return {"success": True, "data": data}
+
+
 @router.delete("/{notification_id}")
 async def delete_notification(notification_id: str, user=Depends(get_current_user)):
     await notification_service.delete(notification_id, user["id"])

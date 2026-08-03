@@ -4,8 +4,8 @@ import {
   CheckCheck, Trash2, Calendar, Brain, User2, Heart, Clock, Trophy, 
   Bell, CheckCircle2
 } from 'lucide-react';
-import { useNotificationStore } from '../../store/notificationStore';
-import type { Notification, NotificationType } from '../../types';
+import { useNotifications, type ApiNotification } from '@/hooks/useNotifications';
+import type { NotificationType } from '../../types';
 
 const UPCOMING_DROPS = [
   { id: 1, title: 'Summer Championship Bracket', time: '14:00', type: 'Tournament' },
@@ -67,18 +67,20 @@ const isYesterday = (ts: string) => {
   return new Date(ts).toDateString() === y.toDateString();
 };
 
-const NotifItem: React.FC<{ notif: Notification }> = ({ notif }) => {
-  const { markRead } = useNotificationStore();
-  const config = TYPE_CONFIG[notif.type] || { icon: Bell, color: 'text-white', bg: 'bg-elevated border-white/10' };
+const NotifItem: React.FC<{
+  notif: ApiNotification;
+  onRead: (id: string) => void;
+}> = ({ notif, onRead }) => {
+  const config = TYPE_CONFIG[notif.type as keyof typeof TYPE_CONFIG] || { icon: Bell, color: 'text-white', bg: 'bg-elevated border-white/10' };
   const Icon = config.icon;
 
   return (
     <motion.div
       initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}
       whileHover={{ y: -2 }}
-      onClick={() => markRead(notif.id)}
+      onClick={() => onRead(notif.$id)}
       className={`flex items-start gap-4 p-4 rounded-2xl border cursor-pointer transition-all ${
-        notif.read ? 'bg-surface/50 border-border-muted/50 opacity-60' : 'bg-surface border-[#FF3B00]/30 shadow-md'
+        notif.is_read ? 'bg-surface/50 border-border-muted/50 opacity-60' : 'bg-surface border-[#FF3B00]/30 shadow-md'
       }`}
     >
       <div className={`w-10 h-10 rounded-xl flex items-center justify-center border flex-shrink-0 ${config.bg}`}>
@@ -87,11 +89,11 @@ const NotifItem: React.FC<{ notif: Notification }> = ({ notif }) => {
       <div className="flex-1 min-w-0">
         <div className="flex items-start justify-between gap-2">
           <p className="font-sans font-bold text-sm text-white">{notif.title}</p>
-          <span className="font-mono text-[10px] text-text-muted flex-shrink-0">{timeAgo(notif.timestamp)}</span>
+          <span className="font-mono text-[10px] text-text-muted flex-shrink-0">{timeAgo(notif.created_at)}</span>
         </div>
-        <p className="text-xs text-text-secondary font-sans mt-1 leading-relaxed">{notif.message}</p>
+        <p className="text-xs text-text-secondary font-sans mt-1 leading-relaxed">{notif.body}</p>
       </div>
-      {!notif.read && <div className="w-2.5 h-2.5 rounded-full bg-[#FF3B00] shadow-[0_0_8px_rgba(255,59,0,0.8)] flex-shrink-0 mt-1.5" />}
+      {!notif.is_read && <div className="w-2.5 h-2.5 rounded-full bg-[#FF3B00] shadow-[0_0_8px_rgba(255,59,0,0.8)] flex-shrink-0 mt-1.5" />}
     </motion.div>
   );
 };
@@ -105,14 +107,17 @@ const GroupLabel: React.FC<{ label: string }> = ({ label }) => (
 );
 
 export const NotificationCenter: React.FC = () => {
-  const { notifications, unreadCount, markAllRead, clearAll } = useNotificationStore();
+  const {
+    notifications, unreadCount, loading, error,
+    markRead, markAllRead, clearAll, refresh,
+  } = useNotifications();
   const [filter, setFilter] = useState<'all' | 'unread'>('all');
 
-  const filteredNotifications = filter === 'unread' ? notifications.filter(n => !n.read) : notifications;
+  const filteredNotifications = filter === 'unread' ? notifications.filter(n => !n.is_read) : notifications;
 
-  const today = filteredNotifications.filter(n => isToday(n.timestamp));
-  const yesterday = filteredNotifications.filter(n => isYesterday(n.timestamp));
-  const earlier = filteredNotifications.filter(n => !isToday(n.timestamp) && !isYesterday(n.timestamp));
+  const today = filteredNotifications.filter(n => isToday(n.created_at));
+  const yesterday = filteredNotifications.filter(n => isYesterday(n.created_at));
+  const earlier = filteredNotifications.filter(n => !isToday(n.created_at) && !isYesterday(n.created_at));
 
   return (
     <div className="max-w-3xl mx-auto space-y-6 pb-24">
@@ -179,16 +184,43 @@ export const NotificationCenter: React.FC = () => {
           <p className="font-sans font-bold text-base text-white">ALL CLEAR</p>
           <p className="text-xs text-text-secondary font-mono">You have no pending unread notifications in your Buzz feed.</p>
         </div>
+      ) : loading ? (
+        <div className="space-y-2" aria-busy="true" aria-label="Loading notifications">
+          {[0, 1, 2, 3].map(i => (
+            <div key={i} className="flex items-start gap-4 p-4 rounded-2xl bg-surface border border-border-muted">
+              <div className="w-10 h-10 rounded-xl bg-elevated animate-shimmer" />
+              <div className="flex-1 space-y-2">
+                <div className="h-3 w-1/3 rounded bg-elevated animate-shimmer" />
+                <div className="h-2 w-2/3 rounded bg-elevated animate-shimmer" />
+              </div>
+            </div>
+          ))}
+        </div>
+      ) : error ? (
+        <div className="rounded-2xl bg-surface border border-border-muted p-8 text-center space-y-3">
+          <p className="font-display text-[15px] tracking-wider text-text-primary uppercase">
+            Could not load notifications
+          </p>
+          <p className="font-mono text-[11px] text-text-secondary">
+            {error.isNetwork ? 'The server is unreachable.' : error.message}
+          </p>
+          <button
+            onClick={() => refresh()}
+            className="px-4 py-2 rounded-full bg-accent text-black font-mono text-[11px] font-bold uppercase tracking-wider hover:bg-accent/90 transition-all"
+          >
+            Try again
+          </button>
+        </div>
       ) : (
         <div className="space-y-2">
           {today.length > 0 && (
-            <><GroupLabel label="TODAY" />{today.map(n => <NotifItem key={n.id} notif={n} />)}</>
+            <><GroupLabel label="TODAY" />{today.map(n => <NotifItem key={n.$id} notif={n} onRead={markRead} />)}</>
           )}
           {yesterday.length > 0 && (
-            <><GroupLabel label="YESTERDAY" />{yesterday.map(n => <NotifItem key={n.id} notif={n} />)}</>
+            <><GroupLabel label="YESTERDAY" />{yesterday.map(n => <NotifItem key={n.$id} notif={n} onRead={markRead} />)}</>
           )}
           {earlier.length > 0 && (
-            <><GroupLabel label="EARLIER" />{earlier.map(n => <NotifItem key={n.id} notif={n} />)}</>
+            <><GroupLabel label="EARLIER" />{earlier.map(n => <NotifItem key={n.$id} notif={n} onRead={markRead} />)}</>
           )}
         </div>
       )}

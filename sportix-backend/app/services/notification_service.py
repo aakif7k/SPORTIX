@@ -1,7 +1,10 @@
+import logging
 from appwrite.query import Query as Q
 from appwrite.id import ID
 from app.core.appwrite import db, DB_ID
 from app.core.config import settings
+
+logger = logging.getLogger(__name__)
 from app.utils.formatters import now_iso
 
 
@@ -64,3 +67,30 @@ async def delete(notification_id: str, user_id: str):
     if doc.get("user_id") != user_id:
         raise PermissionError("Not your notification")
     db.delete_document(DB_ID, settings.collection_notifications, notification_id)
+
+
+async def clear_all(user_id: str) -> dict:
+    """
+    Delete every notification for one user.
+
+    The UI offers a "clear all" action that had no endpoint behind it, only
+    DELETE /{id}. Doing it as N requests from the browser would be N round trips
+    and would half-succeed on a dropped connection.
+    """
+    deleted = 0
+    while True:
+        batch = db.list_documents(
+            DB_ID, settings.collection_notifications,
+            queries=[Q.equal("user_id", user_id), Q.limit(100)],
+        ).get("documents", [])
+        if not batch:
+            break
+        for row in batch:
+            try:
+                db.delete_document(DB_ID, settings.collection_notifications, row["$id"])
+                deleted += 1
+            except Exception:
+                logger.warning("could not delete notification %s", row["$id"], exc_info=True)
+        if len(batch) < 100:
+            break
+    return {"deleted": deleted}
