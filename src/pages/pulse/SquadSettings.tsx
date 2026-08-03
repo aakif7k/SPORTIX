@@ -1,21 +1,58 @@
 import React, { useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { useSquad } from '../../hooks/useSquad';
-import { Settings, ShieldAlert, Check } from 'lucide-react';
+import { useSquadDetail, useSquadMutations } from '@/hooks/useSquads';
+import { Settings, ShieldAlert, Check, Trash2 } from 'lucide-react';
+import { useAuthStore } from '../../store/authStore';
 
 export const SquadSettings: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const { squad, isCaptain, updateSquadSettings } = useSquad(id);
+  const { squad, loading, error } = useSquadDetail(id);
+  const { updateSquad, disbandSquad } = useSquadMutations(id);
+  // The server enforces this too; the flag only decides what the UI offers.
+  const user = useAuthStore(state => state.user);
+  const isCaptain = Boolean(squad && user && squad.captain_id === user.id);
+  const updateSquadSettings = (updates: Record<string, unknown>) => void updateSquad(updates);
+  const handleDisband = () => {
+    if (window.confirm('Disband this squad? Every member loses access and this cannot be undone.')) {
+      void disbandSquad().then(() => navigate('/pulse'));
+    }
+  };
 
   const [name, setName] = useState(squad?.name || '');
   const [formation, setFormation] = useState(squad?.formation || '4-3-3');
   const [showSavedToast, setShowSavedToast] = useState(false);
 
-  if (!squad) {
+  if (loading) {
     return (
-      <div className="p-8 text-center text-text-secondary font-mono">
-        Squad not found.
+      <div className="p-6 md:p-8 max-w-7xl mx-auto space-y-6" aria-busy="true">
+        <div className="h-10 w-2/3 rounded bg-elevated animate-shimmer" />
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+          {[0, 1, 2, 3].map(i => (
+            <div key={i} className="h-24 rounded-2xl bg-elevated animate-shimmer" />
+          ))}
+        </div>
+        <div className="h-64 rounded-2xl bg-elevated animate-shimmer" />
+      </div>
+    );
+  }
+
+  if (error || !squad) {
+    return (
+      <div className="max-w-2xl mx-auto p-8">
+        <div className="rounded-2xl bg-surface border border-border-muted p-8 text-center space-y-3">
+          <p className="font-display text-[15px] tracking-wider text-text-primary uppercase">
+            {error?.status === 404 ? 'Squad not found' : 'Could not load these settings'}
+          </p>
+          <p className="font-mono text-[11px] text-text-secondary">
+            {error?.status === 404
+              ? 'It may have been disbanded.'
+              : error?.message ?? 'You may not be a member of this squad.'}
+          </p>
+          {error?.requestId && (
+            <p className="font-mono text-[9px] text-text-muted">Reference: {error.requestId}</p>
+          )}
+        </div>
       </div>
     );
   }
@@ -24,17 +61,17 @@ export const SquadSettings: React.FC = () => {
     e.preventDefault();
     if (!isCaptain) return;
 
-    updateSquadSettings(squad.squadId, name, formation);
+    updateSquadSettings({ name, formation });
     setShowSavedToast(true);
     setTimeout(() => setShowSavedToast(false), 2000);
   };
 
   const tabs = [
-    { id: 'overview', label: 'Overview', path: `/pulse/squad/${squad.squadId}` },
-    { id: 'analytics', label: 'Analytics', path: `/pulse/squad/${squad.squadId}/analytics` },
-    { id: 'chat', label: 'Squad Chat', path: `/pulse/squad/${squad.squadId}/chat` },
-    { id: 'history', label: 'Match History', path: `/pulse/squad/${squad.squadId}/history` },
-    { id: 'settings', label: 'Settings', path: `/pulse/squad/${squad.squadId}/settings` }
+    { id: 'overview', label: 'Overview', path: `/pulse/squad/${squad.$id}` },
+    { id: 'analytics', label: 'Analytics', path: `/pulse/squad/${squad.$id}/analytics` },
+    { id: 'chat', label: 'Squad Chat', path: `/pulse/squad/${squad.$id}/chat` },
+    { id: 'history', label: 'Match History', path: `/pulse/squad/${squad.$id}/history` },
+    { id: 'settings', label: 'Settings', path: `/pulse/squad/${squad.$id}/settings` }
   ];
 
   return (
@@ -109,6 +146,25 @@ export const SquadSettings: React.FC = () => {
               </div>
             </form>
           )}
+
+          {/* The page warned about irreversible actions but offered none. */}
+          {isCaptain && (
+            <div className="mt-8 pt-6 border-t border-danger/20 space-y-3">
+              <p className="font-mono text-[9px] uppercase tracking-widest text-danger">
+                Danger zone
+              </p>
+              <button
+                type="button"
+                onClick={handleDisband}
+                className="w-full px-4 py-3 rounded-[12px] bg-danger/10 border border-danger/40 text-danger font-mono text-[11px] font-bold uppercase tracking-wider hover:bg-danger/20 transition-all flex items-center justify-center gap-2"
+              >
+                <Trash2 size={14} /> Disband this squad
+              </button>
+              <p className="font-mono text-[9px] text-text-muted">
+                Every member loses access. This cannot be undone.
+              </p>
+            </div>
+          )}
         </div>
 
         {/* Right Info: General Specs */}
@@ -120,7 +176,7 @@ export const SquadSettings: React.FC = () => {
           <div className="font-mono text-[11px] text-text-secondary space-y-2.5">
             <div className="flex justify-between">
               <span>SQUAD ID:</span>
-              <strong className="text-text-primary">{squad.squadId}</strong>
+              <strong className="text-text-primary">{squad.$id}</strong>
             </div>
             <div className="flex justify-between">
               <span>SPORT CHANNEL:</span>
@@ -128,7 +184,7 @@ export const SquadSettings: React.FC = () => {
             </div>
             <div className="flex justify-between">
               <span>CREATION DATE:</span>
-              <strong className="text-text-primary">{squad.createdAt}</strong>
+              <strong className="text-text-primary">{squad.created_at}</strong>
             </div>
             <div className="flex justify-between">
               <span>LEAD CLEARANCE:</span>

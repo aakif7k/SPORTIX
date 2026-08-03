@@ -1,18 +1,50 @@
 import React from 'react';
-import { useSquad } from '../../hooks/useSquad';
+import { useMySquads, useSquadDetail, useSquadChemistry } from '@/hooks/useSquads';
 import { useChemistry } from '../../hooks/useChemistry';
 import { ProgressArc } from '../../components/pulse/ProgressArc';
 import { AreaChart, Area, XAxis, YAxis, Tooltip, ReferenceLine, ResponsiveContainer } from 'recharts';
 import { Zap } from 'lucide-react';
 
 export const ChemistryDashboard: React.FC = () => {
-  const { squad } = useSquad();
+  // No squad id in the route here, so this shows the caller's first squad.
+  const { squads } = useMySquads();
+  const squadId = squads[0]?.$id;
+  const { squad, members, loading, error } = useSquadDetail(squadId);
+  const { chemistry } = useSquadChemistry(squadId);
+  const overall = chemistry?.overall ?? squad?.chemistry_score ?? 0;
+  void overall;   // surfaced below once the header reads it
   const { getCompatibilityGrid } = useChemistry();
 
-  if (!squad) {
+  if (loading) {
     return (
-      <div className="p-8 text-center text-text-secondary font-mono">
-        Squad not found.
+      <div className="p-6 md:p-8 max-w-7xl mx-auto space-y-6" aria-busy="true">
+        <div className="h-10 w-2/3 rounded bg-elevated animate-shimmer" />
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+          {[0, 1, 2, 3].map(i => (
+            <div key={i} className="h-24 rounded-2xl bg-elevated animate-shimmer" />
+          ))}
+        </div>
+        <div className="h-64 rounded-2xl bg-elevated animate-shimmer" />
+      </div>
+    );
+  }
+
+  if (error || !squad) {
+    return (
+      <div className="max-w-2xl mx-auto p-8">
+        <div className="rounded-2xl bg-surface border border-border-muted p-8 text-center space-y-3">
+          <p className="font-display text-[15px] tracking-wider text-text-primary uppercase">
+            {error?.status === 404 ? 'Squad not found' : 'Could not load squad chemistry'}
+          </p>
+          <p className="font-mono text-[11px] text-text-secondary">
+            {error?.status === 404
+              ? 'It may have been disbanded.'
+              : error?.message ?? 'You may not be a member of this squad.'}
+          </p>
+          {error?.requestId && (
+            <p className="font-mono text-[9px] text-text-muted">Reference: {error.requestId}</p>
+          )}
+        </div>
       </div>
     );
   }
@@ -119,20 +151,20 @@ export const ChemistryDashboard: React.FC = () => {
             {/* Headers */}
             <div className="flex gap-1">
               <div className="w-10 flex-shrink-0" />
-              {squad.members.map((m, idx) => (
+              {members.map((m, idx) => (
                 <div key={idx} className="w-8 text-center font-mono text-[8px] text-text-secondary truncate">
-                  {m.name.charAt(0)}
+                  {m.full_name.charAt(0)}
                 </div>
               ))}
             </div>
 
             {/* Matrix Rows */}
-            {squad.members.map((rowMember, rIdx) => (
+            {members.map((rowMember, rIdx) => (
               <div key={rIdx} className="flex gap-1 items-center">
                 <div className="w-10 flex-shrink-0 font-mono text-[8px] text-text-secondary truncate leading-none">
-                  {rowMember.name.split(' ')[0]}
+                  {rowMember.full_name.split(' ')[0]}
                 </div>
-                {squad.members.map((colMember, cIdx) => {
+                {members.map((colMember, cIdx) => {
                   const val = compatibilityMatrix[rIdx]?.[cIdx] || 85;
                   return (
                     <div
@@ -143,7 +175,7 @@ export const ChemistryDashboard: React.FC = () => {
                       
                       {/* Matrix Cell Tooltip */}
                       <div className="absolute z-30 bottom-full mb-1.5 left-1/2 -translate-x-1/2 w-40 p-2 bg-elevated border border-border-muted rounded-[8px] text-[8px] font-mono text-text-secondary pointer-events-none hidden group-hover:block text-center leading-normal shadow-2xl">
-                        <strong className="text-text-primary block mb-0.5">{rowMember.name.split(' ')[0]} + {colMember.name.split(' ')[0]}</strong>
+                        <strong className="text-text-primary block mb-0.5">{rowMember.full_name.split(' ')[0]} + {colMember.full_name.split(' ')[0]}</strong>
                         Compatibility: {val}%<br/>
                         8 matches together
                       </div>

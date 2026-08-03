@@ -101,6 +101,14 @@ export interface ApiSquadMember {
   position: string | null;
   readiness: 'ready' | 'maybe' | 'unavailable';
   joined_at: string;
+  // Joined from the member's profile by GET /api/squads/{id}/members. The rows
+  // themselves hold only user_id, so a roster had no names to show.
+  full_name: string;
+  username: string;
+  avatar_url: string | null;
+  sport: string;
+  level: number;
+  pulse_score: number;
 }
 
 export interface ApiSquadChemistry {

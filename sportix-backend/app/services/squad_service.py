@@ -1,4 +1,5 @@
 import logging
+from appwrite.exception import AppwriteException
 from appwrite.query import Query as Q
 from appwrite.id import ID
 from app.core.appwrite import db, DB_ID
@@ -72,10 +73,40 @@ async def disband(squad_id: str, user_id: str):
 
 
 async def get_members(squad_id: str) -> dict:
-    return db.list_documents(
+    """
+    Squad members with their profile fields attached.
+
+    The rows themselves hold only user_id, so every screen that shows a roster
+    got a list of opaque ids and had to invent names. Appwrite has no joins, so
+    the profiles are fetched here -- the server owns denormalisation, and a roster
+    is capped at 50 members.
+    """
+    res = db.list_documents(
         DB_ID, settings.collection_squad_members,
         queries=[Q.equal("squad_id", squad_id), Q.limit(50)],
     )
+
+    enriched = []
+    for member in res.get("documents", []):
+        row = dict(member)
+        try:
+            profile = db.get_document(DB_ID, settings.collection_users, member["user_id"])
+            row.update({
+                "full_name": profile.get("full_name", ""),
+                "username": profile.get("username", ""),
+                "avatar_url": profile.get("avatar_url"),
+                "sport": profile.get("sport", ""),
+                "level": profile.get("level", 1),
+                "pulse_score": profile.get("pulse_score", 100.0),
+            })
+        except AppwriteException:
+            # A member whose profile is gone still belongs on the roster.
+            logger.warning("no profile for squad member %s", member.get("user_id"))
+            row.update({"full_name": "", "username": "", "avatar_url": None,
+                        "sport": "", "level": 1, "pulse_score": 100.0})
+        enriched.append(row)
+
+    return {"documents": enriched, "total": res.get("total", len(enriched))}
 
 
 async def add_member(squad_id: str, requester_id: str, payload: MemberAdd) -> dict:

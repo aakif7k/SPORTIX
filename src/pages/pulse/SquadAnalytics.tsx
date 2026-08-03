@@ -1,6 +1,6 @@
 import React from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { useSquad } from '../../hooks/useSquad';
+import { useSquadDetail } from '@/hooks/useSquads';
 import {
   LineChart,
   Line,
@@ -42,12 +42,38 @@ const CustomTooltip = ({ active, payload, label }: any) => {
 export const SquadAnalytics: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const { squad } = useSquad(id);
+  const { squad, loading, error } = useSquadDetail(id);
 
-  if (!squad) {
+  if (loading) {
     return (
-      <div className="p-8 text-center text-text-secondary font-mono">
-        Squad not found.
+      <div className="p-6 md:p-8 max-w-7xl mx-auto space-y-6" aria-busy="true">
+        <div className="h-10 w-2/3 rounded bg-elevated animate-shimmer" />
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+          {[0, 1, 2, 3].map(i => (
+            <div key={i} className="h-24 rounded-2xl bg-elevated animate-shimmer" />
+          ))}
+        </div>
+        <div className="h-64 rounded-2xl bg-elevated animate-shimmer" />
+      </div>
+    );
+  }
+
+  if (error || !squad) {
+    return (
+      <div className="max-w-2xl mx-auto p-8">
+        <div className="rounded-2xl bg-surface border border-border-muted p-8 text-center space-y-3">
+          <p className="font-display text-[15px] tracking-wider text-text-primary uppercase">
+            {error?.status === 404 ? 'Squad not found' : "Could not load this squad's analytics"}
+          </p>
+          <p className="font-mono text-[11px] text-text-secondary">
+            {error?.status === 404
+              ? 'It may have been disbanded.'
+              : error?.message ?? 'You may not be a member of this squad.'}
+          </p>
+          {error?.requestId && (
+            <p className="font-mono text-[9px] text-text-muted">Reference: {error.requestId}</p>
+          )}
+        </div>
       </div>
     );
   }
@@ -94,11 +120,11 @@ export const SquadAnalytics: React.FC = () => {
   ];
 
   const tabs = [
-    { id: 'overview', label: 'Overview', path: `/pulse/squad/${squad.squadId}` },
-    { id: 'analytics', label: 'Analytics', path: `/pulse/squad/${squad.squadId}/analytics` },
-    { id: 'chat', label: 'Squad Chat', path: `/pulse/squad/${squad.squadId}/chat` },
-    { id: 'history', label: 'Match History', path: `/pulse/squad/${squad.squadId}/history` },
-    { id: 'settings', label: 'Settings', path: `/pulse/squad/${squad.squadId}/settings` }
+    { id: 'overview', label: 'Overview', path: `/pulse/squad/${squad.$id}` },
+    { id: 'analytics', label: 'Analytics', path: `/pulse/squad/${squad.$id}/analytics` },
+    { id: 'chat', label: 'Squad Chat', path: `/pulse/squad/${squad.$id}/chat` },
+    { id: 'history', label: 'Match History', path: `/pulse/squad/${squad.$id}/history` },
+    { id: 'settings', label: 'Settings', path: `/pulse/squad/${squad.$id}/settings` }
   ];
 
   return (
@@ -140,11 +166,11 @@ export const SquadAnalytics: React.FC = () => {
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         <div className="p-5 rounded-[16px] bg-surface border border-border-muted/50 shadow-card">
           <span className="font-mono text-[9px] text-text-secondary uppercase">Win Rate</span>
-          <span className="font-display text-[26px] text-accent block mt-1">{squad.winRate}%</span>
+          <span className="font-display text-[26px] text-accent block mt-1">{squad.win_rate}%</span>
         </div>
         <div className="p-5 rounded-[16px] bg-surface border border-border-muted/50 shadow-card">
           <span className="font-mono text-[9px] text-text-secondary uppercase">Avg Pulse Score</span>
-          <span className="font-display text-[26px] text-text-primary block mt-1">{squad.pulseAvg}</span>
+          <span className="font-display text-[26px] text-text-primary block mt-1">{squad.pulse_avg}</span>
         </div>
         <div className="p-5 rounded-[16px] bg-surface border border-border-muted/50 shadow-card">
           <span className="font-mono text-[9px] text-text-secondary uppercase">Chemistry Trend</span>
@@ -152,7 +178,7 @@ export const SquadAnalytics: React.FC = () => {
         </div>
         <div className="p-5 rounded-[16px] bg-surface border border-border-muted/50 shadow-card">
           <span className="font-mono text-[9px] text-text-secondary uppercase">Matches Played</span>
-          <span className="font-display text-[26px] text-text-primary block mt-1">{squad.matchHistory.length + 14}</span>
+          <span className="font-display text-[26px] text-text-primary block mt-1">{squad.matches_played}</span>
         </div>
       </div>
 
