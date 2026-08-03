@@ -5,30 +5,29 @@ import {
   Settings, Plus, Search, Calendar, MapPin, 
   Edit, Trash2, ArrowLeft, ChevronRight
 } from 'lucide-react';
-import { useEventStore } from '../../store/eventStore';
-import { useAuthStore } from '../../store/authStore';
+import { useMyEvents, useEventMutations } from '@/hooks/useEvents';
 
 export const ManageEventsDashboard: React.FC = () => {
-  const { events, deleteEvent } = useEventStore();
-  const { user } = useAuthStore();
+  // Only the organiser's own events belong on a manage dashboard; the store
+  // handed back every event in the mock dataset.
+  const { created: events, loading, error } = useMyEvents();
+  const { cancelEvent } = useEventMutations();
   const navigate = useNavigate();
   const [searchQuery, setSearchQuery] = useState('');
 
-  // Filter events created by the authenticated organizer
-  const myEvents = events.filter(e => e.organizerId === user?.id || !user);
-
-  const filteredEvents = myEvents.filter(e => 
-    !searchQuery || 
-    e.title.toLowerCase().includes(searchQuery.toLowerCase()) || 
-    e.location.toLowerCase().includes(searchQuery.toLowerCase())
+  // /api/events/me already scopes this to the caller's own events, so the
+  // client-side organiser filter (which fell open to every event when `user` was
+  // momentarily null) is gone.
+  const filteredEvents = events.filter(e =>
+    !searchQuery ||
+    `${e.title} ${e.location ?? ''} ${e.city ?? ''}`
+      .toLowerCase().includes(searchQuery.toLowerCase())
   );
 
   const handleDelete = (e: React.MouseEvent, id: string) => {
     e.stopPropagation();
-    if (window.confirm('Are you sure you want to delete this event? This action cannot be undone.')) {
-      if (deleteEvent) {
-        deleteEvent(id);
-      }
+    if (window.confirm('Are you sure you want to cancel this event? This action cannot be undone.')) {
+      void cancelEvent(id);
     }
   };
 
@@ -50,7 +49,7 @@ export const ManageEventsDashboard: React.FC = () => {
             </div>
             <h1 className="text-2xl sm:text-4xl font-black uppercase tracking-tight">Manage My Events</h1>
             <p className="font-mono text-xs text-text-secondary mt-1">
-              You are organizing {myEvents.length} active tournaments
+              You are organizing {events.length} active tournaments
             </p>
           </div>
         </div>
@@ -75,21 +74,61 @@ export const ManageEventsDashboard: React.FC = () => {
         />
       </div>
 
+      {loading && (
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6" aria-busy="true"
+             aria-label="Loading your events">
+          {[0, 1].map(i => (
+            <div key={i} className="rounded-2xl bg-surface border border-border-muted overflow-hidden">
+              <div className="h-32 w-full bg-elevated animate-shimmer" />
+              <div className="p-4 space-y-3">
+                <div className="h-3 w-2/3 rounded bg-elevated animate-shimmer" />
+                <div className="h-2 w-1/2 rounded bg-elevated animate-shimmer" />
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {!loading && error && (
+        <div className="rounded-2xl bg-surface border border-border-muted p-8 text-center space-y-3">
+          <p className="font-display text-[15px] tracking-wider text-text-primary uppercase">
+            Could not load your events
+          </p>
+          <p className="font-mono text-[11px] text-text-secondary">{error.message}</p>
+          {error.requestId && (
+            <p className="font-mono text-[9px] text-text-muted">Reference: {error.requestId}</p>
+          )}
+        </div>
+      )}
+
+      {!loading && !error && filteredEvents.length === 0 && (
+        <div className="rounded-2xl bg-surface border border-dashed border-border-muted p-10 text-center space-y-2">
+          <p className="font-display text-[15px] tracking-wider text-text-primary uppercase">
+            {events.length === 0 ? 'You have not organised anything yet' : 'Nothing matches that search'}
+          </p>
+          <p className="font-mono text-[11px] text-text-secondary">
+            {events.length === 0
+              ? 'Create an event and it will show up here to manage.'
+              : 'Try a different name or location.'}
+          </p>
+        </div>
+      )}
+
       {/* ── EVENTS LIST ─────────────────────────────────────── */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        {filteredEvents.map(event => {
+        {!loading && !error && filteredEvents.map(event => {
           return (
             <motion.div
-              key={event.id}
+              key={event.$id}
               whileHover={{ y: -4 }}
-              onClick={() => navigate(`/app/events/${event.id}/manage`)}
+              onClick={() => navigate(`/app/events/${event.$id}/manage`)}
               className="rounded-3xl overflow-hidden bg-surface border border-border-muted cursor-pointer group flex flex-col justify-between shadow-xl transition-all hover:border-[#CCFF00]/40"
             >
               <div>
                 {/* Banner Header */}
                 <div className="h-44 relative overflow-hidden">
                   <img
-                    src={event.bannerImage || 'https://images.unsplash.com/photo-1574629810360-7efbbe195018?w=800&q=80'}
+                    src={event.banner_url || 'https://images.unsplash.com/photo-1574629810360-7efbbe195018?w=800&q=80'}
                     alt={event.title}
                     className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
                   />
@@ -98,14 +137,14 @@ export const ManageEventsDashboard: React.FC = () => {
                   {/* Action Buttons */}
                   <div className="absolute top-3 right-3 flex items-center gap-2">
                     <button
-                      onClick={(e) => { e.stopPropagation(); navigate(`/app/events/${event.id}/manage`); }}
+                      onClick={(e) => { e.stopPropagation(); navigate(`/app/events/${event.$id}/manage`); }}
                       className="p-2 rounded-xl bg-black/60 backdrop-blur border border-white/20 hover:bg-[#CCFF00] hover:text-black text-white transition-all"
                       title="Edit Event"
                     >
                       <Edit size={14} />
                     </button>
                     <button
-                      onClick={(e) => handleDelete(e, event.id)}
+                      onClick={(e) => handleDelete(e, event.$id)}
                       className="p-2 rounded-xl bg-black/60 backdrop-blur border border-white/20 hover:bg-red-600 text-white transition-all"
                       title="Delete Event"
                     >
@@ -118,7 +157,7 @@ export const ManageEventsDashboard: React.FC = () => {
                 <div className="p-5 space-y-3">
                   <div className="flex items-center gap-2 text-[11px] font-mono text-text-muted">
                     <Calendar size={12} className="text-[#CCFF00]" />
-                    <span>{new Date(event.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</span>
+                    <span>{new Date(event.starts_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</span>
                     <span>•</span>
                     <MapPin size={12} className="text-text-muted" />
                     <span className="truncate">{event.location}</span>
@@ -130,7 +169,7 @@ export const ManageEventsDashboard: React.FC = () => {
 
                   <div className="flex items-center justify-between text-xs font-mono text-text-muted pt-2 border-t border-white/5">
                     <span>Format: {event.format}</span>
-                    <span className="text-[#CCFF00] font-bold">Prize: {event.prizePool || 'TBD'}</span>
+                    <span className="text-[#CCFF00] font-bold">Prize: {event.prize_pool || 'TBD'}</span>
                   </div>
                 </div>
               </div>
@@ -138,7 +177,7 @@ export const ManageEventsDashboard: React.FC = () => {
               {/* Action Link */}
               <div className="p-5 pt-0">
                 <button
-                  onClick={() => navigate(`/app/events/${event.id}/manage`)}
+                  onClick={() => navigate(`/app/events/${event.$id}/manage`)}
                   className="w-full py-2.5 rounded-xl bg-elevated border border-white/10 hover:border-[#CCFF00]/40 text-[#CCFF00] font-mono text-xs font-bold uppercase tracking-wider flex items-center justify-center gap-1 transition-all"
                 >
                   Manage Event Settings <ChevronRight size={14} />

@@ -4,15 +4,15 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { 
   Check, Upload, ArrowLeft, Trophy, Sparkles, Plus 
 } from 'lucide-react';
-import { useEventStore } from '../../store/eventStore';
+import { useEventMutations } from '@/hooks/useEvents';
 import { SPORT_CATEGORIES } from '../../services/mockData';
-import type { Event, SportCategory, EventFormat, ExperienceLevel } from '../../types';
+import type { SportCategory, EventFormat, ExperienceLevel } from '../../types';
 
 const STEPS = ['Basics', 'Rules & Fees', 'Teams', 'Review & Host'];
 
 export const CreateEvent: React.FC = () => {
   const navigate = useNavigate();
-  const { addEvent } = useEventStore();
+  const { createEvent, creating } = useEventMutations();
 
   const [step, setStep] = useState(0);
   const [form, setForm] = useState({
@@ -46,32 +46,32 @@ export const CreateEvent: React.FC = () => {
     reader.readAsDataURL(file);
   };
 
-  const publish = () => {
-    const newEvent: Event = {
-      id: `e_${Date.now()}`,
-      title: form.title || 'Untitled Tournament',
-      sport: form.sport,
-      description: form.description || 'No description provided.',
-      date: form.date || new Date().toISOString(),
-      venue: form.venue || 'TBD',
-      location: form.location || 'Local Grounds',
-      format: form.format,
-      skillLevel: form.skillLevel,
-      maxParticipants: parseInt(form.maxParticipants, 10) || 32,
-      participants: ['cu1'],
-      teams: [],
-      organizerId: 'cu1',
-      status: 'upcoming',
-      aiTeamAvailable: form.aiTeamAvailable,
-      aiGenerated: false,
-      tags: [form.sport],
-      rules: form.rules.filter(Boolean),
-      prizePool: form.prizePool,
-      entryFee: form.entryFee,
-      createdAt: new Date().toISOString(),
-    };
-    addEvent(newEvent);
-    navigate(`/app/events/${newEvent.id}`);
+  const publish = async () => {
+    // The event is created server-side and its real id comes back in the
+    // response. The previous version minted `e_${Date.now()}` locally and pushed
+    // it into a zustand store, so the event existed only in that browser tab and
+    // vanished on refresh.
+    try {
+      const created = await createEvent({
+        title: form.title || 'Untitled Tournament',
+        sport: form.sport,
+        description: form.description || 'No description provided.',
+        format: form.format,
+        skill_level: form.skillLevel.replace('-', '_'),
+        venue: form.venue || 'TBD',
+        city: form.location || 'Local Grounds',
+        event_date: form.date || new Date().toISOString(),
+        max_participants: parseInt(form.maxParticipants, 10) || 32,
+        entry_fee: form.entryFee,
+        prize_pool: form.prizePool,
+        rules: form.rules.filter(Boolean),
+        is_ai_managed: form.aiTeamAvailable,
+      });
+      navigate(`/app/events/${created.$id}`);
+    } catch {
+      // useEventMutations already surfaced the reason via toast; staying on the
+      // form preserves what the user typed.
+    }
   };
 
   return (
@@ -295,9 +295,10 @@ export const CreateEvent: React.FC = () => {
           ) : (
             <button
               onClick={publish}
-              className="px-6 py-2.5 rounded-xl bg-[#CCFF00] hover:bg-[#b8e600] text-black font-mono text-xs font-bold uppercase tracking-wider transition-all shadow-[0_0_20px_rgba(204,255,0,0.4)]"
+              disabled={creating}
+              className="px-6 py-2.5 rounded-xl bg-[#CCFF00] hover:bg-[#b8e600] disabled:opacity-50 disabled:cursor-not-allowed text-black font-mono text-xs font-bold uppercase tracking-wider transition-all shadow-[0_0_20px_rgba(204,255,0,0.4)]"
             >
-              🚀 Launch Tournament Live
+              {creating ? 'Launching…' : '🚀 Launch Tournament Live'}
             </button>
           )}
         </div>

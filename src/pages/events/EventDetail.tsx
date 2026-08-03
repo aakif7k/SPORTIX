@@ -7,7 +7,7 @@ import {
   Shield, BarChart3, CheckCircle2, Swords, Timer,
   Hash, Share2, Settings
 } from 'lucide-react';
-import { useEventStore } from '../../store/eventStore';
+import { useEvent, useEventParticipants } from '@/hooks/useEvents';
 import { useAuthStore } from '../../store/authStore';
 import { useAISettingsStore } from '../../store/aiSettingsStore';
 import { SPORT_CATEGORIES, MOCK_USERS } from '../../services/mockData';
@@ -151,7 +151,8 @@ const fadeUp  = { hidden: { opacity: 0, y: 18 }, visible: { opacity: 1, y: 0, tr
 export const EventDetail: React.FC = () => {
   const { id } = useParams();
   const navigate = useNavigate();
-  const { events } = useEventStore();
+  const { event, loading, error } = useEvent(id);
+  const { participants } = useEventParticipants(id);
   const { user } = useAuthStore();
   const { nearbyRadius } = useAISettingsStore();
   
@@ -165,23 +166,57 @@ export const EventDetail: React.FC = () => {
   const [joined, setJoined]           = useState(false);
   const [activeTab, setActiveTab]     = useState<'overview' | 'schedule' | 'participants' | 'bracket'>('overview');
   const [shared, setShared]           = useState(false);
-
-  const event    = events.find(e => e.id === id) || events[0];
-  const isOrganizer = event?.organizerId === (user?.id || 'cu1');
+  const isOrganizer = event?.organizer_id === (user?.id || 'cu1');
   const sportData = SPORT_CATEGORIES.find(s => s.id === event?.sport);
-  const pctFull  = event ? Math.round((event.participants.length / event.maxParticipants) * 100) : 0;
+  const pctFull  = event ? Math.round((participants.length / event.max_participants) * 100) : 0;
 
   // Derived from the event, so computed during render instead of pushed into
   // state by an effect (react-hooks/set-state-in-effect), which rendered the
   // bracket tab empty on first paint.
   const bracket = useMemo<BracketRound[]>(() => {
     if (!event) return [];
-    return generateBracket(event.participants.length > 0
-      ? event.participants
+    return generateBracket(participants.length > 0
+      ? participants.map(p => p.user_id)
       : ['P1','P2','P3','P4','P5','P6','P7','P8']);
   }, [event]);
 
-  if (!event) return null;
+  if (loading) {
+    return (
+      <div className="max-w-5xl mx-auto p-8 space-y-6" aria-busy="true">
+        <div className="h-64 w-full rounded-3xl bg-elevated animate-shimmer" />
+        <div className="h-6 w-1/2 rounded bg-elevated animate-shimmer" />
+        <div className="h-3 w-1/3 rounded bg-elevated animate-shimmer" />
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+          {[0, 1, 2, 3].map(i => (
+            <div key={i} className="h-20 rounded-2xl bg-elevated animate-shimmer" />
+          ))}
+        </div>
+      </div>
+    );
+  }
+
+  if (error || !event) {
+    return (
+      <div className="max-w-2xl mx-auto p-8">
+        <div className="rounded-2xl bg-surface border border-border-muted p-8 text-center space-y-3">
+          <p className="font-display text-[15px] tracking-wider text-text-primary uppercase">
+            {error?.status === 404 ? 'Event not found' : 'Could not load this event'}
+          </p>
+          <p className="font-mono text-[11px] text-text-secondary">
+            {error?.status === 404
+              ? 'It may have been cancelled or removed.'
+              : error?.message ?? 'Something went wrong.'}
+          </p>
+          <button
+            onClick={() => navigate('/app/events')}
+            className="px-4 py-2 rounded-full bg-accent text-black font-mono text-[11px] font-bold uppercase tracking-wider hover:bg-accent/90 transition-all"
+          >
+            Back to events
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   const TABS = [
     { id: 'overview',     label: 'Overview',      icon: <Hash size={11} /> },
@@ -199,14 +234,14 @@ export const EventDetail: React.FC = () => {
       <div ref={heroRef} className="relative rounded-[28px] overflow-hidden mb-6" style={{ minHeight: 300 }}>
         {/* Parallax image */}
         <motion.div className="absolute inset-0 rounded-[28px]" style={{ y: heroY, willChange: 'transform' }}>
-          {event.bannerImage
-            ? <img src={event.bannerImage} alt={event.title}
+          {event.banner_url
+            ? <img src={event.banner_url} alt={event.title}
                 className="w-full h-full object-cover rounded-[28px]"
                 style={{ 
                   minHeight: 300, 
-                  objectPosition: event.bannerAlignment === 'top' 
+                  objectPosition: event.banner_alignment === 'top' 
                     ? 'center 20%' 
-                    : event.bannerAlignment === 'bottom' 
+                    : event.banner_alignment === 'bottom' 
                     ? 'center 80%' 
                     : 'center 50%' 
                 }} />
@@ -269,7 +304,7 @@ export const EventDetail: React.FC = () => {
             {/* Action buttons top-right */}
             <div className="flex items-center gap-2">
               {isOrganizer && (
-                <motion.button whileTap={{ scale: 0.95 }} onClick={() => navigate(`/app/events/${event.id}/manage`)}
+                <motion.button whileTap={{ scale: 0.95 }} onClick={() => navigate(`/app/events/${event.$id}/manage`)}
                   className="flex items-center gap-1.5 px-3 py-1.5 rounded-full font-mono text-[10px] font-bold backdrop-blur-md transition-all hover:opacity-90"
                   style={{ background: 'rgba(204,255,0,0.2)', border: '1px solid rgba(204,255,0,0.4)', color: '#CCFF00' }}>
                   <Settings size={12} />
@@ -304,7 +339,7 @@ export const EventDetail: React.FC = () => {
               className="flex flex-wrap items-center gap-4">
               <span className="flex items-center gap-1.5 font-mono text-[11px] text-white/80 backdrop-blur-sm">
                 <Calendar size={12} className="opacity-70" />
-                {new Date(event.date).toLocaleDateString('en', { weekday: 'long', month: 'long', day: 'numeric' })}
+                {new Date(event.starts_at).toLocaleDateString('en', { weekday: 'long', month: 'long', day: 'numeric' })}
               </span>
               <span className="flex items-center gap-1.5 font-mono text-[11px] text-white/80">
                 <MapPin size={12} className="opacity-70" />
@@ -315,16 +350,17 @@ export const EventDetail: React.FC = () => {
             {/* Participant avatars row */}
             <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.18 }}
               className="flex items-center gap-3 mt-4">
-                {(event.participants || []).slice(0, 5).map((pId, i) => {
+                {participants.slice(0, 5).map((participant, i) => {
+                  const pId = participant.user_id;
                   const u = MOCK_USERS.find(user => user.id === pId || user.uid === pId) || { avatar: `https://i.pravatar.cc/150?img=${(i % 50) + 1}`, name: 'Athlete' };
                   return (
-                    <img key={pId || i} src={u.avatar} alt={u.name}
+                    <img key={participant.$id} src={u.avatar} alt={u.name}
                       className="w-7 h-7 rounded-full border-2 object-cover"
                       style={{ borderColor: 'var(--bg-surface)', zIndex: 5 - i }} />
                   );
                 })}
               <span className="font-mono text-[10px] text-white/70">
-                <strong className="text-white">{event.participants.length}</strong>/{event.maxParticipants} registered
+                <strong className="text-white">{participants.length}</strong>/{event.max_participants} registered
               </span>
               <span className="ml-auto font-mono text-[10px] font-bold px-2 py-1 rounded-full"
                 style={{ background: pctFull > 80 ? 'rgba(255,59,0,0.4)' : 'rgba(204,255,0,0.25)', color: pctFull > 80 ? '#FF6B35' : '#CCFF00' }}>
@@ -341,9 +377,9 @@ export const EventDetail: React.FC = () => {
       <motion.div variants={stagger} initial="hidden" animate="visible"
         className="grid grid-cols-4 gap-3 mb-6">
         {[
-          { label: 'Athletes',   value: event.participants.length, suffix: `/${event.maxParticipants}`, icon: <Users size={14} />,    accent: 'var(--accent)' },
-          { label: 'Prize Pool', value: event.prizePool || 'TBD',  suffix: '',                          icon: <Trophy size={14} />,   accent: '#FFD700',       raw: true },
-          { label: 'Skill',      value: event.skillLevel,           suffix: '',                          icon: <Star size={14} />,     accent: '#00D4FF',       raw: true },
+          { label: 'Athletes',   value: participants.length, suffix: `/${event.max_participants}`, icon: <Users size={14} />,    accent: 'var(--accent)' },
+          { label: 'Prize Pool', value: event.prize_pool || 'TBD',  suffix: '',                          icon: <Trophy size={14} />,   accent: '#FFD700',       raw: true },
+          { label: 'Skill',      value: event.skill_level,           suffix: '',                          icon: <Star size={14} />,     accent: '#00D4FF',       raw: true },
           { label: 'Capacity',   value: pctFull,                    suffix: '%',                         icon: <BarChart3 size={14} />,accent: pctFull > 80 ? '#FF6B35' : 'var(--accent)' },
         ].map((item, i) => (
           <motion.div key={i} variants={fadeUp} whileHover={{ y: -3 }}
@@ -397,9 +433,9 @@ export const EventDetail: React.FC = () => {
 
           <div className="grid grid-cols-3 gap-3">
             {[
-              { label: 'Teams',       val: Math.round(event.participants.length / 2) },
-              { label: 'Solo Players', val: event.participants.length % 3 },
-              { label: 'Open Slots',  val: event.maxParticipants - event.participants.length },
+              { label: 'Teams',       val: Math.round(participants.length / 2) },
+              { label: 'Solo Players', val: participants.length % 3 },
+              { label: 'Open Slots',  val: event.max_participants - participants.length },
             ].map((s, i) => (
               <div key={i} className="text-center">
                 <div className="font-display text-[20px] leading-none" style={{ color: 'var(--text-primary)' }}>
@@ -424,7 +460,7 @@ export const EventDetail: React.FC = () => {
             <motion.button
               whileHover={{ scale: 1.03, y: -4 }}
               whileTap={{ scale: 0.97 }}
-              onClick={() => navigate(`/app/events/${event.id}/manage`)}
+              onClick={() => navigate(`/app/events/${event.$id}/manage`)}
               className="w-full rounded-[22px] p-5 text-left relative overflow-hidden group transition-all"
               style={{
                 background: 'linear-gradient(135deg, #CCFF00 0%, #88FF00 100%)',
@@ -505,7 +541,7 @@ export const EventDetail: React.FC = () => {
           <motion.button
             whileHover={{ scale: 1.03, y: -4 }}
             whileTap={{ scale: 0.97 }}
-            onClick={() => navigate(`/app/events/${event.id}/crew`)}
+            onClick={() => navigate(`/app/events/${event.$id}/crew`)}
             className="w-full rounded-[22px] p-5 text-left relative overflow-hidden group premium-card"
             style={{ minHeight: 150 }}>
             <div className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity rounded-[22px]"
@@ -532,7 +568,7 @@ export const EventDetail: React.FC = () => {
           <motion.button
             whileHover={{ scale: 1.03, y: -4 }}
             whileTap={{ scale: 0.97 }}
-            onClick={() => navigate(`/app/events/${event.id}/discussion`)}
+            onClick={() => navigate(`/app/events/${event.$id}/discussion`)}
             className="w-full rounded-[22px] p-5 text-left relative overflow-hidden group premium-card"
             style={{ minHeight: 150 }}>
             <div className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity rounded-[22px]"
@@ -782,14 +818,14 @@ export const EventDetail: React.FC = () => {
                 <h2 className="font-display text-[18px] tracking-wider uppercase flex items-center gap-2"
                   style={{ color: 'var(--text-primary)' }}>
                   <Users size={14} style={{ color: 'var(--accent-text)' }} />
-                  Athletes ({event.participants.length})
+                  Athletes ({participants.length})
                 </h2>
                 <span className="font-mono text-[10px]" style={{ color: 'var(--text-muted)' }}>
-                  {event.maxParticipants - event.participants.length} slots open
+                  {event.max_participants - participants.length} slots open
                 </span>
               </motion.div>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                {MOCK_USERS.slice(0, event.participants.length || 4).map((athlete, i) => (
+                {MOCK_USERS.slice(0, participants.length || 4).map((athlete, i) => (
                   <motion.div key={athlete.id} variants={fadeUp}
                     whileHover={{ y: -3, scale: 1.01 }}
                     className="flex items-center gap-3 rounded-[18px] p-3.5 cursor-default premium-card relative overflow-hidden">
@@ -807,7 +843,7 @@ export const EventDetail: React.FC = () => {
                   </motion.div>
                 ))}
                 {/* Open slot placeholders */}
-                {Array.from({ length: Math.min(2, event.maxParticipants - event.participants.length) }).map((_, i) => (
+                {Array.from({ length: Math.min(2, event.max_participants - participants.length) }).map((_, i) => (
                   <motion.div key={`slot${i}`} variants={fadeUp}
                     className="flex items-center justify-center rounded-[18px] p-3.5 font-mono text-[10px]"
                     style={{ border: '1px dashed var(--border)', color: 'var(--text-muted)', minHeight: 72 }}>
@@ -849,7 +885,7 @@ export const EventDetail: React.FC = () => {
         className="fixed bottom-24 right-4 md:right-6 flex flex-col gap-3 z-40 md:hidden">
         {/* Discussion FAB */}
         <motion.button whileHover={{ scale: 1.12 }} whileTap={{ scale: 0.92 }}
-          onClick={() => navigate(`/app/events/${event.id}/discussion`)}
+          onClick={() => navigate(`/app/events/${event.$id}/discussion`)}
           className="w-12 h-12 rounded-full flex items-center justify-center relative"
           style={{ background: 'var(--accent)', boxShadow: '0 4px 20px var(--accent-glow)' }}
           title="Discussion Group">
@@ -860,7 +896,7 @@ export const EventDetail: React.FC = () => {
         </motion.button>
         {/* Crew FAB */}
         <motion.button whileHover={{ scale: 1.12 }} whileTap={{ scale: 0.92 }}
-          onClick={() => navigate(`/app/events/${event.id}/crew`)}
+          onClick={() => navigate(`/app/events/${event.$id}/crew`)}
           className="w-12 h-12 rounded-full flex items-center justify-center"
           style={{ background: 'var(--bg-elevated)', border: '1px solid var(--border)', boxShadow: '0 4px 16px rgba(0,0,0,0.3)' }}
           title="Join With Crew">
@@ -875,7 +911,9 @@ export const EventDetail: React.FC = () => {
         isOpen={joinModalOpen}
         onClose={() => setJoinModalOpen(false)}
         onJoined={() => { setJoined(true); setJoinModalOpen(false); }}
-        event={event}
+        // The modal reads only title and sport; it keeps the camelCase Event
+        // shape until it is wired in its own right.
+        event={{ ...event, id: event.$id, title: event.title, sport: event.sport } as never}
       />
     </div>
   );

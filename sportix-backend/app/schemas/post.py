@@ -4,10 +4,17 @@ from enum import Enum
 
 
 class PostType(str, Enum):
+    """
+    Must match the `post_type` enum on the posts collection.
+
+    highlight/achievement were singular here and plural in the column, so a post
+    of either type was rejected at write time. `events` was unreachable entirely.
+    """
     general = "general"
-    highlight = "highlight"
-    achievement = "achievement"
     training = "training"
+    highlights = "highlights"
+    achievements = "achievements"
+    events = "events"
 
 
 class MediaType(str, Enum):
@@ -49,8 +56,17 @@ class ReelCreate(BaseModel):
     duration_seconds: int = 0
 
 
+class StoryMediaType(str, Enum):
+    """Must match the `media_type` enum on the stories collection."""
+    image = "image"
+    video = "video"
+
+
 class StoryCreate(BaseModel):
     media_url: str
-    media_type: str = "image"
+    # An enum, not a free string: the column accepts only image or video, so an
+    # unvalidated string reached Appwrite and 400d there instead of being
+    # rejected here with a useful message.
+    media_type: StoryMediaType = StoryMediaType.image
     caption: Optional[str] = None
     sport_tag: Optional[str] = None
