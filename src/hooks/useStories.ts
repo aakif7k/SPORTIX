@@ -1,11 +1,14 @@
 /**
- * useStories.ts — Appwrite-backed stories hook
- * Replaces the old in-memory DEMO_STORIES implementation.
- * Stories are grouped by author, marked seen/unseen per current user.
- * Stories auto-expire after 24 hours (enforced by DB expires_at).
+ * useStories — active stories, grouped by author.
+ *
+ * Stories expire after 24 hours, enforced by expires_at server-side.
  */
-import { useState, useEffect, useCallback } from 'react';
+import { useMemo } from 'react';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+
 import { useAuth } from '@/context/AuthContext';
+import { ApiError } from '@/lib/api';
+import { qk } from '@/lib/queryKeys';
 import {
   getActiveStories,
   createStory,
@@ -15,92 +18,61 @@ import {
 
 export function useStories() {
   const { user: currentUser } = useAuth();
+  const queryClient = useQueryClient();
   const userId = currentUser?.id;
-  const [storyGroups, setStoryGroups] = useState<DbStoryGroup[]>([]);
-  const [uploading, setUploading] = useState(false);
-  // Which user the groups in state belong to. `loading` derives from this
-  // instead of being a flag the effect has to set synchronously
-  // (react-hooks/set-state-in-effect).
-  const [loadedFor, setLoadedFor] = useState<string | null>(null);
+  const key = qk.stories.active(userId);
 
-  const load = useCallback(async () => {
-    if (!userId) return;
-    try {
-      const groups = await getActiveStories(userId);
-      setStoryGroups(groups);
-    } catch {
-      setStoryGroups([]);
-    } finally {
-      setLoadedFor(userId);
-    }
-  }, [userId]);
+  const query = useQuery<DbStoryGroup[], ApiError>({
+    queryKey: key,
+    enabled: Boolean(userId),
+    queryFn: () => getActiveStories(userId!),
+  });
 
-  // Fetched inline so the state writes happen in a promise continuation rather
-  // than during the effect body. load() remains for event-driven refreshes.
-  useEffect(() => {
-    if (!userId) return;
+  const storyGroups = useMemo(() => query.data ?? [], [query.data]);
 
-    let cancelled = false;
-    getActiveStories(userId)
-      .then(groups => {
-        if (cancelled) return;
-        setStoryGroups(groups);
-        setLoadedFor(userId);
-      })
-      .catch(() => {
-        if (cancelled) return;
-        setStoryGroups([]);
-        setLoadedFor(userId);
-      });
+  // The current user's own ring renders separately from everyone else's.
+  const { myGroup, othersGroups } = useMemo(() => ({
+    myGroup: storyGroups.find(g => g.author_id === userId) ?? null,
+    othersGroups: storyGroups.filter(g => g.author_id !== userId),
+  }), [storyGroups, userId]);
 
-    return () => { cancelled = true; };
-  }, [userId]);
+  const upload = useMutation({
+    mutationFn: (args: { file: File; caption?: string; sportTag?: string }) =>
+      createStory(args.file, args.caption, args.sportTag),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: qk.stories.all }),
+  });
 
-  const loading = Boolean(userId) && loadedFor !== userId;
+  const view = useMutation({
+    mutationFn: (storyId: string) => markStoryViewed(storyId, userId!),
+    // Mark seen locally straight away: the ring must dim as the story opens, not
+    // a round trip later.
+    onMutate: async (storyId: string) => {
+      await queryClient.cancelQueries({ queryKey: key });
+      const previous = queryClient.getQueryData<DbStoryGroup[]>(key);
 
-  const uploadStory = useCallback(async (
-    file: File,
-    caption?: string,
-    sportTag?: string
-  ) => {
-    if (!currentUser) return;
-    setUploading(true);
-    try {
-      // Author fields are derived from the JWT server-side.
-      await createStory(file, caption, sportTag);
-      await load();
-    } finally {
-      setUploading(false);
-    }
-  }, [currentUser, load]);
+      queryClient.setQueryData<DbStoryGroup[]>(key, old => old?.map(group => {
+        const stories = group.stories.map(s =>
+          s.id === storyId ? { ...s, is_seen: true } : s);
+        return { ...group, stories, has_unseen: stories.some(s => !s.is_seen) };
+      }));
 
-  const viewStory = useCallback(async (storyId: string) => {
-    if (!currentUser) return;
-    await markStoryViewed(storyId, currentUser.id);
-    // Update local state to reflect viewed
-    setStoryGroups(prev =>
-      prev.map(group => ({
-        ...group,
-        stories: group.stories.map(s =>
-          s.id === storyId ? { ...s, is_seen: true } : s
-        ),
-        has_unseen: group.stories.some(s => s.id !== storyId && !s.is_seen),
-      }))
-    );
-  }, [currentUser]);
-
-  // Separate my stories from others
-  const myGroup = storyGroups.find(g => g.author_id === currentUser?.id) || null;
-  const othersGroups = storyGroups.filter(g => g.author_id !== currentUser?.id);
+      return { previous };
+    },
+    onError: (_e, _id, ctx) => {
+      if (ctx?.previous) queryClient.setQueryData(key, ctx.previous);
+    },
+  });
 
   return {
     storyGroups,
     myGroup,
     othersGroups,
-    loading,
-    uploading,
-    uploadStory,
-    viewStory,
-    refresh: load,
+    loading: query.isPending && Boolean(userId),
+    error: (query.error as ApiError | null) ?? null,
+    uploading: upload.isPending,
+    uploadStory: (file: File, caption?: string, sportTag?: string) =>
+      upload.mutateAsync({ file, caption, sportTag }),
+    viewStory: (storyId: string) => view.mutate(storyId),
+    refresh: () => queryClient.invalidateQueries({ queryKey: key }),
   };
 }

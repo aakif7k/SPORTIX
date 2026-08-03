@@ -1,35 +1,31 @@
-import { useState, useEffect } from 'react';
-import { api } from '@/lib/api';
+import { useQuery } from '@tanstack/react-query';
+
+import { api, ApiError } from '@/lib/api';
+import { qk } from '@/lib/queryKeys';
 import type { Post } from './useFeed';
 
+/**
+ * Posts by one author.
+ *
+ * The keyed-result pattern this replaces solved the stale-data problem by hand —
+ * storing the result alongside the user it belonged to so a switch read as
+ * loading. react-query keys the cache by user id, which gets the same property
+ * for free, plus dedup when a profile page and a preview both mount.
+ */
 export function useUserPosts(userId?: string) {
-  // The fetch result is stored together with the user it belongs to, which lets
-  // `posts` and `loading` both be derived. The effect then never calls setState
-  // synchronously (react-hooks/set-state-in-effect), and switching users no
-  // longer shows the previous user's posts while the new request is in flight —
-  // the stale key simply reads as loading.
-  const [result, setResult] = useState<{ userId: string; posts: Post[] } | null>(null);
-
-  useEffect(() => {
-    if (!userId) return;
-
-    let cancelled = false;
-    api.get<any>(`/api/posts/user/${userId}`)
-      .then(res => {
-        if (!cancelled) setResult({ userId, posts: res.data?.posts || [] });
-      })
-      .catch(err => {
-        console.error(err);
-        if (!cancelled) setResult({ userId, posts: [] });
-      });
-
-    return () => { cancelled = true; };
-  }, [userId]);
-
-  const isFresh = result !== null && result.userId === userId;
+  const query = useQuery<Post[], ApiError>({
+    queryKey: qk.posts.byUser(userId),
+    enabled: Boolean(userId),
+    queryFn: async () => {
+      const res = await api.get<{ data: { posts?: Post[] } }>(`/api/posts/user/${userId}`);
+      return res.data?.posts ?? [];
+    },
+  });
 
   return {
-    posts: isFresh ? result.posts : [],
-    loading: Boolean(userId) && !isFresh,
+    posts: query.data ?? [],
+    loading: query.isPending && Boolean(userId),
+    error: (query.error as ApiError | null) ?? null,
+    refresh: query.refetch,
   };
 }

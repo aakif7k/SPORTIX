@@ -1,7 +1,9 @@
-import { useState, useEffect } from 'react';
-import { useAuth } from '@/context/AuthContext';
-import { api } from '@/lib/api';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import toast from 'react-hot-toast';
+
+import { useAuth } from '@/context/AuthContext';
+import { api, ApiError } from '@/lib/api';
+import { qk } from '@/lib/queryKeys';
 
 interface ProfileStats {
   posts: number;
@@ -10,96 +12,72 @@ interface ProfileStats {
   following: number;
 }
 
-// Module constant so the fallback keeps a stable identity across renders.
 const EMPTY_STATS: ProfileStats = { posts: 0, reels: 0, followers: 0, following: 0 };
 
-interface FetchedProfile {
-  userId: string;
-  profile: any;
-  stats: ProfileStats;
-}
-
+/**
+ * The signed-in user's profile and stats.
+ *
+ * Profile and stats are separate queries because they change at different rates
+ * and are invalidated by different things: posting moves the stats but not the
+ * profile, editing a bio moves the profile but not the stats. Fetching them as
+ * one blob meant every post refetched the whole profile.
+ */
 export function useMyProfile() {
   const { user, refreshUser } = useAuth();
+  const queryClient = useQueryClient();
+  const enabled = Boolean(user?.id);
 
-  // Held together with the user it was fetched for, so `profile`, `stats` and
-  // `loading` are all derived. That keeps the effect free of synchronous
-  // setState (react-hooks/set-state-in-effect) and means a user switch cannot
-  // briefly show the previous account's profile.
-  const [fetched, setFetched] = useState<FetchedProfile | null>(null);
-  const [uploadingAvatar, setUploadingAvatar] = useState(false);
+  const profileQuery = useQuery<any, ApiError>({
+    queryKey: qk.profile.me(),
+    enabled,
+    queryFn: async () => (await api.get<{ data: any }>('/api/users/me')).data,
+  });
 
-  const userId = user?.id;
+  const statsQuery = useQuery<ProfileStats, ApiError>({
+    queryKey: qk.profile.stats(),
+    enabled,
+    queryFn: async () => {
+      const res = await api.get<{ data: Partial<ProfileStats> }>('/api/users/me/stats');
+      return { ...EMPTY_STATS, ...(res.data ?? {}) };
+    },
+  });
 
-  useEffect(() => {
-    if (!userId) return;
-
-    let cancelled = false;
-    Promise.all([
-      api.get<any>('/api/users/me'),
-      api.get<any>('/api/users/me/stats'),
-    ]).then(([profileRes, statsRes]) => {
-      if (!cancelled) {
-        setFetched({
-          userId,
-          profile: profileRes.data,
-          // Previously `statsRes.data || stats`, which closed over the current
-          // stats without declaring them as a dependency and so could reuse a
-          // stale value.
-          stats: statsRes.data || EMPTY_STATS,
-        });
-      }
-    }).catch(err => {
-      console.error(err);
-      if (!cancelled) setFetched({ userId, profile: null, stats: EMPTY_STATS });
-    });
-
-    return () => { cancelled = true; };
-  }, [userId]);
-
-  const isFresh = fetched !== null && fetched.userId === userId;
-  const profile = isFresh ? fetched.profile : null;
-  const stats = isFresh ? fetched.stats : EMPTY_STATS;
-  const loading = Boolean(userId) && !isFresh;
-
-  const patchProfile = (next: any) => {
-    setFetched(prev => (prev ? { ...prev, profile: next(prev.profile) } : prev));
-  };
-
-  const updateAvatar = async (file: File) => {
-    if (!user) return;
-    setUploadingAvatar(true);
-    try {
-      const formData = new FormData();
-      formData.append('file', file);
-      const res = await api.upload<any>(
-        '/api/upload/avatar', formData
-      );
-      const url = res.data?.url;
-      patchProfile((prev: any) => ({ ...prev, avatar_url: url }));
-      await refreshUser();
+  const avatar = useMutation({
+    mutationFn: async (file: File) => {
+      const form = new FormData();
+      form.append('file', file);
+      const res = await api.upload<{ data: { url: string } }>('/api/upload/avatar', form);
+      return res.data.url;
+    },
+    onSuccess: async () => {
       toast.success('Profile photo updated!');
-      return url;
-    } catch (err: any) {
-      toast.error(err.message || 'Upload failed');
-    } finally {
-      setUploadingAvatar(false);
-    }
-  };
-
-  const updateProfile = async (updates: any) => {
-    try {
-      const res = await api.put<any>('/api/users/me', updates);
-      patchProfile(() => res.data);
+      // The server attached the URL to the profile, so refetch rather than
+      // patching the cache and hoping the two agree.
+      await queryClient.invalidateQueries({ queryKey: qk.profile.all });
       await refreshUser();
+    },
+    onError: (err: ApiError) => toast.error(err.message || 'Upload failed'),
+  });
+
+  const update = useMutation({
+    mutationFn: async (updates: Record<string, unknown>) =>
+      (await api.put<{ data: any }>('/api/users/me', updates)).data,
+    onSuccess: async () => {
       toast.success('Profile updated!');
-    } catch (err: any) {
-      toast.error(err.message || 'Update failed');
-    }
-  };
+      await queryClient.invalidateQueries({ queryKey: qk.profile.all });
+      await refreshUser();
+    },
+    onError: (err: ApiError) => toast.error(err.message || 'Update failed'),
+  });
 
   return {
-    profile, stats, loading,
-    uploadingAvatar, updateAvatar, updateProfile
+    profile: profileQuery.data ?? null,
+    stats: statsQuery.data ?? EMPTY_STATS,
+    loading: enabled && (profileQuery.isPending || statsQuery.isPending),
+    error: (profileQuery.error as ApiError | null) ?? null,
+    uploadingAvatar: avatar.isPending,
+    updateAvatar: avatar.mutateAsync,
+    updateProfile: update.mutateAsync,
+    refresh: () => queryClient.invalidateQueries({ queryKey: qk.profile.all }),
   };
 }

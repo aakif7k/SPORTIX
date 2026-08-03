@@ -1,10 +1,15 @@
 /**
- * usePendingReport.ts — Real DB check for pending match reports
- * Returns true ONLY if the user has an actual unsubmitted report.
- * New users with zero match history always return false.
+ * Whether the user has an unsubmitted match report.
+ *
+ * Returns true only for a real pending report — a new account with no match
+ * history always reads false.
  */
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
+
 import { useAuth } from '@/context/AuthContext';
+import { ApiError } from '@/lib/api';
+import { qk } from '@/lib/queryKeys';
 import { hasPendingMatchReport } from '@/services/socialService';
 
 export interface PendingMatchData {
@@ -23,8 +28,9 @@ function readDismissed(): boolean {
   return dismissedAt ? Date.now() - Number(dismissedAt) < DISMISS_WINDOW_MS : false;
 }
 
-// TODO: replace with the real match payload from GET /api/matches/pending-report/check.
-// Built at module load rather than per render so the date is stable.
+// TODO: replace with the real match payload from the pending-report endpoint,
+// which currently reports only whether one exists. Built at module load so the
+// date is stable across renders.
 const MOCK_PENDING: PendingMatchData = {
   matchId: 'm-pending-01',
   eventName: 'Pro Football 5v5 Championship',
@@ -39,41 +45,24 @@ export function usePendingReport(): {
   pendingMatch?: PendingMatchData;
 } {
   const { user } = useAuth();
-
-  // Read once on mount. Recomputing during render would be impure, and the
-  // 24h dismissal window does not need to be watched live.
+  // Read once on mount; the 24h dismissal window does not need watching live.
   const [isDismissed] = useState(readDismissed);
 
-  // The fetch result is keyed by the user it belongs to, which lets both
-  // `isLoading` and `hasPending` be derived instead of stored. That keeps the
-  // effect free of synchronous setState and makes a user switch self-healing:
-  // a stale result no longer matches the current id, so it reads as loading.
-  const [result, setResult] = useState<{ userId: string; hasPending: boolean } | null>(null);
+  const enabled = Boolean(user?.id) && !isDismissed;
 
-  const userId = user?.id;
-  const shouldCheck = Boolean(userId) && !isDismissed;
+  const query = useQuery<boolean, ApiError>({
+    queryKey: qk.matches.pendingReport(user?.id),
+    enabled,
+    queryFn: () => hasPendingMatchReport(user!.id),
+    // A banner that nags on every navigation is worse than a slightly stale one.
+    staleTime: 5 * 60 * 1000,
+  });
 
-  useEffect(() => {
-    if (!shouldCheck || !userId) return;
-
-    let cancelled = false;
-    hasPendingMatchReport(userId)
-      .then(pending => {
-        if (!cancelled) setResult({ userId, hasPending: pending });
-      })
-      .catch(() => {
-        if (!cancelled) setResult({ userId, hasPending: false });
-      });
-
-    return () => { cancelled = true; };
-  }, [shouldCheck, userId]);
-
-  const isFresh = result !== null && result.userId === userId;
-  const hasPending = shouldCheck && isFresh && result.hasPending;
+  const hasPending = enabled && query.data === true;
 
   return {
     hasPending,
-    isLoading: shouldCheck && !isFresh,
+    isLoading: enabled && query.isPending,
     pendingMatch: hasPending ? MOCK_PENDING : undefined,
   };
 }
