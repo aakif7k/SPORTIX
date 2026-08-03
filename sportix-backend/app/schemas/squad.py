@@ -53,3 +53,35 @@ class LeadershipVote(BaseModel):
     """
     candidate_id: str
     vote: Literal["approve", "reject"] = "approve"
+
+
+# ─── Squad activity ───────────────────────────────────────────────────────────
+class SquadEventType(str, Enum):
+    """Must match the `type` enum on squad_events."""
+    practice = "practice"
+    match = "match"
+    social = "social"
+
+
+class AttendanceVote(str, Enum):
+    """Must match the `vote` enum on squad_event_votes."""
+    yes = "yes"
+    maybe = "maybe"
+    no = "no"
+
+
+class SquadEventCreate(BaseModel):
+    title: str
+    starts_at: str
+    type: SquadEventType = SquadEventType.practice
+    venue: Optional[str] = None
+    notes: Optional[str] = None
+
+
+class SquadEventVote(BaseModel):
+    vote: AttendanceVote
+
+
+class SquadPostCreate(BaseModel):
+    content: str
+    media_url: Optional[str] = None

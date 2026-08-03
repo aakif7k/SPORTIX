@@ -66,6 +66,13 @@ def _doc(**extra) -> dict:
         "result": "win",
         "status": "upcoming",
         "vote": "confirm",
+        # Squad-scoped rows carry the squad they belong to; without it the
+        # membership checks in squad_activity_service cannot resolve.
+        "squad_id": "squad123",
+        "squad_post_id": "spost123",
+        "squad_event_id": "sevent123",
+        "created_by": MOCK_USER["id"],
+        "likes_count": 0,
     }
     base.update(extra)
     return base

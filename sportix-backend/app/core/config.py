@@ -74,6 +74,16 @@ class Settings(BaseSettings):
     collection_tournaments: str = "tournaments"
     collection_tournament_matches: str = "tournament_matches"
 
+    # Squad activity: practice scheduling, the squad feed and squad achievements
+    # all had UI with no collection behind them.
+    collection_squad_events: str = "squad_events"
+    collection_squad_event_votes: str = "squad_event_votes"
+    collection_squad_posts: str = "squad_posts"
+    collection_squad_post_likes: str = "squad_post_likes"
+    collection_squad_achievements: str = "squad_achievements"
+    # Answers "which conversations am I in", which participant_ids cannot index.
+    collection_conversation_members: str = "conversation_members"
+
     # ── App ───────────────────────────────────────────────────────────────────
     # No default: a missing SECRET_KEY must fail at startup rather than silently
     # falling back to a value an attacker can read in the repository.

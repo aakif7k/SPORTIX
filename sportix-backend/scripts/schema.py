@@ -567,12 +567,11 @@ COLLECTIONS: list[Collection] = [
             ID_("event_id"), S("event_name", 140),
             S("last_message", 300), D("last_message_at"), D("created_at", required=True),
         ],
-        # The spec asked for key(participant_ids), but Appwrite rejects indexes on
-        # array attributes outright ("Creating indexes on array attributes is not
-        # currently supported"). Querying "conversations I am in" therefore has no
-        # index to use and must not be done with Query.contains on this column at
-        # scale. The fix is a conversation_members join collection mirroring
-        # squad_members; deferred to the messaging phase, which owns this feature.
+        # No index on participant_ids: Appwrite rejects indexes on array
+        # attributes. "Which conversations am I in" is answered through the
+        # conversation_members join collection below, which IS indexed by user_id.
+        # participant_ids stays as a convenience for rendering a thread header
+        # without a second query, but must never be the basis of a lookup.
         indexes=[DESC("last_message_at")],
     ),
     Collection(
@@ -585,6 +584,77 @@ COLLECTIONS: list[Collection] = [
             SA("read_by", 10), D("created_at", required=True),
         ],
         indexes=[KEY("conversation_id"), DESC("created_at")],
+    ),
+
+
+    # ── Squad activity ──────────────────────────────────────────────────────
+    # SquadOverview shipped UI for practice scheduling, a squad feed and squad
+    # achievements with no collections behind any of them; the store faked all
+    # three. These are those backends.
+    Collection(
+        "squad_events", "Squad Events", read="users",
+        attrs=[
+            ID_("squad_id", required=True), S("title", 140, required=True),
+            E("type", ["practice", "match", "social"], required=True, default="practice"),
+            D("starts_at", required=True), S("venue", 200),
+            ID_("created_by", required=True),
+            E("status", ["scheduled", "confirmed", "cancelled"], default="scheduled"),
+            S("notes", 500), D("created_at", required=True),
+        ],
+        indexes=[KEY("squad_id"), KEY("starts_at"), KEY("status")],
+    ),
+    Collection(
+        "squad_event_votes", "Squad Event Attendance", read="users",
+        attrs=[
+            ID_("squad_event_id", required=True), ID_("user_id", required=True),
+            E("vote", ["yes", "maybe", "no"], required=True),
+            D("created_at", required=True),
+        ],
+        indexes=[UNIQUE("squad_event_id", "user_id"), KEY("squad_event_id")],
+    ),
+    Collection(
+        "squad_posts", "Squad Feed", read="users",
+        attrs=[
+            ID_("squad_id", required=True), ID_("author_id", required=True),
+            S("author_name", 100), U("author_avatar_url"),
+            S("content", 2000, required=True), U("media_url"),
+            I("likes_count", default=0),
+            B("is_deleted", default=False), D("created_at", required=True),
+        ],
+        indexes=[KEY("squad_id"), DESC("created_at"), KEY("is_deleted")],
+    ),
+    Collection(
+        "squad_post_likes", "Squad Post Likes",
+        attrs=[
+            ID_("squad_post_id", required=True), ID_("user_id", required=True),
+            D("created_at", required=True),
+        ],
+        indexes=[UNIQUE("squad_post_id", "user_id")],
+    ),
+    Collection(
+        "squad_achievements", "Squad Achievements", read="users",
+        attrs=[
+            ID_("squad_id", required=True), S("key", 50, required=True),
+            S("name", 140, required=True), S("description", 500),
+            S("icon", 10), D("unlocked_at", required=True),
+            D("created_at", required=True),
+        ],
+        indexes=[UNIQUE("squad_id", "key"), KEY("squad_id")],
+    ),
+    Collection(
+        # The join collection conversations needs. participant_ids is an array and
+        # Appwrite cannot index arrays, so "which conversations am I in" had no
+        # indexed answer -- see the note on the conversations collection.
+        "conversation_members", "Conversation Members", doc_security=True,
+        attrs=[
+            ID_("conversation_id", required=True), ID_("user_id", required=True),
+            D("last_read_at"), D("joined_at", required=True),
+            D("created_at", required=True),
+        ],
+        indexes=[
+            UNIQUE("conversation_id", "user_id"),
+            KEY("user_id"), KEY("conversation_id"),
+        ],
     ),
 
     # ── Tournaments ─────────────────────────────────────────────────────────

@@ -44,6 +44,9 @@ MODEL_COLLECTIONS: list[tuple[str, str, str]] = [
     ("app.schemas.squad", "RoleUpdate", "squad_members"),
     ("app.schemas.match", "StatsSubmission", "player_stats"),
     ("app.schemas.user", "UserUpdate", "profiles"),
+    ("app.schemas.squad", "SquadEventCreate", "squad_events"),
+    ("app.schemas.squad", "SquadEventVote", "squad_event_votes"),
+    ("app.schemas.squad", "SquadPostCreate", "squad_posts"),
 ]
 
 

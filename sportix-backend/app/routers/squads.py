@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, Query
 from app.core.dependencies import get_current_user
-from app.schemas.squad import SquadCreate, SquadUpdate, MemberAdd, RoleUpdate, TacticsUpdate, LeadershipVote
-from app.services import squad_service
+from app.schemas.squad import SquadCreate, SquadUpdate, MemberAdd, RoleUpdate, TacticsUpdate, LeadershipVote, SquadEventCreate, SquadEventVote, SquadPostCreate
+from app.services import squad_service, squad_activity_service
 
 router = APIRouter()
 
@@ -94,4 +94,79 @@ async def vote_leadership(
     data = await squad_service.vote_leadership(
         squad_id, payload.candidate_id, user["id"], payload.vote
     )
+    return {"success": True, "data": data}
+
+
+# ─── Squad activity: scheduling, feed, achievements ───────────────────────────
+# These endpoints back UI that shipped with no backend at all.
+
+@router.get("/{squad_id}/events")
+async def list_squad_events(squad_id: str, user=Depends(get_current_user)):
+    """Scheduled practices and matches, with attendance tallies folded in."""
+    data = await squad_activity_service.list_events(squad_id, user["id"])
+    return {"success": True, "data": data}
+
+
+@router.post("/{squad_id}/events", status_code=201)
+async def create_squad_event(
+    squad_id: str, payload: SquadEventCreate, user=Depends(get_current_user),
+):
+    data = await squad_activity_service.create_event(
+        squad_id, user["id"], payload.model_dump(),
+    )
+    return {"success": True, "data": data}
+
+
+@router.post("/events/{squad_event_id}/vote")
+async def vote_squad_event(
+    squad_event_id: str, payload: SquadEventVote, user=Depends(get_current_user),
+):
+    """Record availability for a session."""
+    data = await squad_activity_service.vote_event(
+        squad_event_id, user["id"], payload.vote.value,
+    )
+    return {"success": True, "data": data}
+
+
+@router.delete("/events/{squad_event_id}")
+async def cancel_squad_event(squad_event_id: str, user=Depends(get_current_user)):
+    data = await squad_activity_service.cancel_event(squad_event_id, user["id"])
+    return {"success": True, "data": data}
+
+
+@router.get("/{squad_id}/posts")
+async def list_squad_posts(
+    squad_id: str, page: int = Query(0), limit: int = Query(20, le=50),
+    user=Depends(get_current_user),
+):
+    data = await squad_activity_service.list_posts(squad_id, user["id"], page, limit)
+    return {"success": True, "data": data}
+
+
+@router.post("/{squad_id}/posts", status_code=201)
+async def create_squad_post(
+    squad_id: str, payload: SquadPostCreate, user=Depends(get_current_user),
+):
+    data = await squad_activity_service.create_post(
+        squad_id, user["id"], payload.content, payload.media_url,
+    )
+    return {"success": True, "data": data}
+
+
+@router.post("/posts/{squad_post_id}/like")
+async def like_squad_post(squad_post_id: str, user=Depends(get_current_user)):
+    data = await squad_activity_service.toggle_post_like(squad_post_id, user["id"])
+    return {"success": True, "data": data}
+
+
+@router.delete("/posts/{squad_post_id}")
+async def delete_squad_post(squad_post_id: str, user=Depends(get_current_user)):
+    data = await squad_activity_service.delete_post(squad_post_id, user["id"])
+    return {"success": True, "data": data}
+
+
+@router.get("/{squad_id}/achievements")
+async def list_squad_achievements(squad_id: str, user=Depends(get_current_user)):
+    """The achievement shelf, re-evaluated on read so it is always current."""
+    data = await squad_activity_service.list_achievements(squad_id, user["id"])
     return {"success": True, "data": data}
