@@ -3,8 +3,10 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { SquadBanner } from '../../components/pulse/SquadBanner';
 import { ChemistryBar } from '../../components/pulse/ChemistryBar';
 import { PlayerCard } from '../../components/pulse/PlayerCard';
-import { useSquad } from '../../hooks/useSquad';
-import { useSquadStore } from '../../store/squadStore';
+import {
+  useSquadDetail, useSquadChemistry, useSquadMutations,
+  useSquadEvents, useSquadPosts, useSquadAchievements,
+} from '@/hooks/useSquads';
 import { useAuthStore } from '../../store/authStore';
 import { 
   Lock, Trophy, Calendar, Clipboard, ArrowUpRight, 
@@ -16,21 +18,18 @@ import { BadgeIcon } from '../../components/gamification/BadgeIcon';
 export const SquadOverview: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const { squad, isCaptain, updateTacticalBoard } = useSquad(id);
+  const { squad, members, loading, error } = useSquadDetail(id);
+  const { chemistry } = useSquadChemistry(id);
+  const { updateTactics, voteLeadership } = useSquadMutations(id);
+  const { events, createEvent, voteEvent } = useSquadEvents(id);
+  const { posts, createPost, likePost } = useSquadPosts(id);
+  const { achievements } = useSquadAchievements(id);
   const user = useAuthStore(state => state.user);
-  const currentUserId = user?.id || 'cu1';
-  const { 
-    createSquadEvent, 
-    votePracticeSchedule, 
-    startCaptainVote, 
-    castCaptainVote, 
-    addSquadPost, 
-    likeSquadPost 
-  } = useSquadStore();
-
+  const currentUserId = user?.id || '';
+  const isCaptain = Boolean(squad && currentUserId && squad.captain_id === currentUserId);
   const [activeBottomTab, setActiveBottomTab] = useState<'upcoming' | 'achievements' | 'tactical' | 'feed' | 'governance'>('upcoming');
   const [formation, setFormation] = useState(squad?.formation || '4-3-3');
-  const [notes, setNotes] = useState(squad?.tacticalNotes || '');
+  const [notes, setNotes] = useState(squad?.tactical_notes || '');
   const [isEditingTactics, setIsEditingTactics] = useState(false);
 
   // Form states
@@ -44,23 +43,61 @@ export const SquadOverview: React.FC = () => {
   
   const [selectedCandidate, setSelectedCandidate] = useState('');
 
-  if (!squad) {
+  if (loading) {
     return (
-      <div className="p-8 text-center text-text-secondary font-mono">
-        Squad not found.
+      <div className="p-6 md:p-8 max-w-7xl mx-auto space-y-6" aria-busy="true">
+        <div className="h-48 w-full rounded-3xl bg-elevated animate-shimmer" />
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          {[0, 1, 2].map(i => (
+            <div key={i} className="h-28 rounded-2xl bg-elevated animate-shimmer" />
+          ))}
+        </div>
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-6">
+          {[0, 1, 2, 3, 4, 5].map(i => (
+            <div key={i} className="h-56 rounded-2xl bg-elevated animate-shimmer" />
+          ))}
+        </div>
+      </div>
+    );
+  }
+
+  if (error || !squad) {
+    return (
+      <div className="max-w-2xl mx-auto p-8">
+        <div className="rounded-2xl bg-surface border border-border-muted p-8 text-center space-y-3">
+          <p className="font-display text-[15px] tracking-wider text-text-primary uppercase">
+            {error?.status === 404 ? 'Squad not found' : 'Could not load this squad'}
+          </p>
+          <p className="font-mono text-[11px] text-text-secondary">
+            {error?.status === 404
+              ? 'It may have been disbanded.'
+              : error?.status === 403
+                ? 'You are not a member of this squad.'
+                : error?.message ?? 'Something went wrong.'}
+          </p>
+          {error?.requestId && (
+            <p className="font-mono text-[9px] text-text-muted">Reference: {error.requestId}</p>
+          )}
+          <button
+            onClick={() => navigate('/pulse')}
+            className="px-4 py-2 rounded-full bg-accent text-black font-mono text-[11px] font-bold uppercase tracking-wider hover:bg-accent/90 transition-all"
+          >
+            Back to Pulse
+          </button>
+        </div>
       </div>
     );
   }
 
   const handleSaveTactics = () => {
-    updateTacticalBoard(squad.squadId, formation, notes);
+    void updateTactics({ formation, tactical_notes: notes });
     setIsEditingTactics(false);
   };
 
   const handleScheduleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!eventTitle.trim() || !eventDate) return;
-    createSquadEvent(squad.squadId, eventTitle, eventDate, eventType);
+    void createEvent({ title: eventTitle, starts_at: eventDate, type: eventType });
     setEventTitle('');
     setEventDate('');
     setIsScheduling(false);
@@ -69,7 +106,7 @@ export const SquadOverview: React.FC = () => {
   const handleCreatePost = (e: React.FormEvent) => {
     e.preventDefault();
     if (!postContent.trim()) return;
-    addSquadPost(squad.squadId, postContent, postMedia || undefined);
+    void createPost({ content: postContent, media_url: postMedia || null });
     setPostContent('');
     setPostMedia('');
   };
@@ -77,16 +114,18 @@ export const SquadOverview: React.FC = () => {
   const handleStartVoteSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedCandidate) return;
-    startCaptainVote(squad.squadId, selectedCandidate, currentUserId); // Zack u6 is initiator
+    // A vote IS the proposal: the server tallies per-voter approvals and
+    // promotes on a strict majority, so there is no separate 'start' step.
+    void voteLeadership({ candidate_id: selectedCandidate, vote: 'approve' });
     setSelectedCandidate('');
   };
 
   const tabs = [
-    { id: 'overview', label: 'Overview', path: `/pulse/squad/${squad.squadId}` },
-    { id: 'analytics', label: 'Analytics', path: `/pulse/squad/${squad.squadId}/analytics` },
-    { id: 'chat', label: 'Squad Chat', path: `/pulse/squad/${squad.squadId}/chat` },
-    { id: 'history', label: 'Match History', path: `/pulse/squad/${squad.squadId}/history` },
-    { id: 'settings', label: 'Settings', path: `/pulse/squad/${squad.squadId}/settings` }
+    { id: 'overview', label: 'Overview', path: `/pulse/squad/${squad.$id}` },
+    { id: 'analytics', label: 'Analytics', path: `/pulse/squad/${squad.$id}/analytics` },
+    { id: 'chat', label: 'Squad Chat', path: `/pulse/squad/${squad.$id}/chat` },
+    { id: 'history', label: 'Match History', path: `/pulse/squad/${squad.$id}/history` },
+    { id: 'settings', label: 'Settings', path: `/pulse/squad/${squad.$id}/settings` }
   ];
 
   return (
@@ -109,35 +148,44 @@ export const SquadOverview: React.FC = () => {
       </div>
 
       {/* Top Banner */}
-      <SquadBanner squad={squad} />
+      <SquadBanner
+        squad={{
+          ...squad,
+          squadId: squad.$id,
+          captainId: squad.captain_id,
+          members,
+          chemistry: chemistry ?? { overall: squad.chemistry_score, trust: squad.trust,
+            coordination: squad.coordination, communication: squad.communication },
+        } as never}
+      />
 
       {/* Chemistry & Boost row */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <div className="lg:col-span-2 p-5 rounded-[20px] bg-elevated border border-border-muted">
           <h3 className="font-display text-[13px] tracking-wider text-text-secondary uppercase mb-3">TEAM PULSE SEGMENTS</h3>
-          <ChemistryBar overallValue={squad.chemistry.overall} />
+          <ChemistryBar overallValue={(chemistry?.overall ?? squad.chemistry_score)} />
         </div>
 
         {/* Boost visual panel */}
         <div className={`p-5 rounded-[20px] border flex flex-col justify-center relative overflow-hidden transition-all ${
-          squad.xpBoostActive 
+          squad.xp_boost_active 
             ? 'bg-volt-dim border-volt/30 shadow-card' 
             : 'bg-elevated border-border-muted'
         }`}>
           <div className="absolute top-0 right-0 w-20 h-20 bg-volt/5 blur-[25px] rounded-full pointer-events-none" />
           <div className="flex items-center gap-3">
-            <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${squad.xpBoostActive ? 'bg-volt text-volt-text' : 'bg-surface text-text-secondary border border-border-muted'}`}>
-              <Zap size={20} fill={squad.xpBoostActive ? 'currentColor' : 'none'} />
+            <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${squad.xp_boost_active ? 'bg-volt text-volt-text' : 'bg-surface text-text-secondary border border-border-muted'}`}>
+              <Zap size={20} fill={squad.xp_boost_active ? 'currentColor' : 'none'} />
             </div>
             <div>
               <span className="font-mono text-[9px] text-text-secondary block uppercase">TRAINING CONSENSUS BOOST</span>
-              <strong className={`font-display text-[15px] block ${squad.xpBoostActive ? 'text-volt' : 'text-text-primary'}`}>
-                {squad.xpBoostActive ? '⚡ 1.5x XP STREAK ACTIVE' : 'PENDING ACCEPTANCE'}
+              <strong className={`font-display text-[15px] block ${squad.xp_boost_active ? 'text-volt' : 'text-text-primary'}`}>
+                {squad.xp_boost_active ? '⚡ 1.5x XP STREAK ACTIVE' : 'PENDING ACCEPTANCE'}
               </strong>
             </div>
           </div>
           <p className="font-mono text-[9px] text-text-secondary mt-2.5 leading-snug">
-            {squad.xpBoostActive 
+            {squad.xp_boost_active 
               ? 'Consensus reached! All members confirmed attendance. XP and Chemistry multipliers are fully boosted.'
               : 'Schedule a practice session and get confirmations from all members to unlock the 30% XP boost.'}
           </p>
@@ -147,12 +195,25 @@ export const SquadOverview: React.FC = () => {
       {/* Player Cards Grid */}
       <div className="space-y-4">
         <h3 className="font-display text-[18px] tracking-[3px] text-text-secondary uppercase">
-          SQUAD ROSTER ({squad.members.length})
+          SQUAD ROSTER ({members.length})
         </h3>
         <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-6">
-          {squad.members.map((member) => (
-            <div key={member.uid} className="relative group">
-              <PlayerCard athlete={member} interactive={false} />
+          {members.map((member) => (
+            <div key={member.user_id} className="relative group">
+              <PlayerCard
+                athlete={{
+                  uid: member.user_id,
+                  name: member.full_name,
+                  avatar: member.avatar_url,
+                  pulseScore: member.pulse_score,
+                  tier: 'contender',
+                  position: member.position,
+                  role: member.role,
+                  level: member.level,
+                  sport: member.sport,
+                } as never}
+                interactive={false}
+              />
               
               {/* Badge level indicator */}
               {member.level !== undefined && (
@@ -163,13 +224,15 @@ export const SquadOverview: React.FC = () => {
               
               {/* Overlay with details */}
               <div className="absolute inset-0 bg-base/75 rounded-[16px] backdrop-blur-sm opacity-0 group-hover:opacity-100 flex flex-col items-center justify-center gap-2.5 transition-all duration-300 pointer-events-none group-hover:pointer-events-auto">
-                <span className="font-mono text-[9px] text-text-secondary uppercase">PROXIMITY</span>
-                <span className="font-mono text-[12px] text-volt font-bold">
-                  {member.distance === 0 ? 'Home Base (0 KM)' : `${member.distance} KM away`}
+                {/* Distance was a mock field; no location data is stored per
+                    member, so the overlay shows the squad role instead. */}
+                <span className="font-mono text-[9px] text-text-secondary uppercase">ROLE</span>
+                <span className="font-mono text-[12px] text-volt font-bold uppercase">
+                  {member.role}
                 </span>
                 
                 <button
-                  onClick={() => navigate(`/app/profile/${member.uid}`)}
+                  onClick={() => navigate(`/app/profile/${member.user_id}`)}
                   className="px-4 py-2 bg-volt text-volt-text font-condensed font-bold text-[12px] tracking-wide rounded-[8px] uppercase flex items-center gap-1 hover:scale-105 transition-transform pointer-events-auto mt-2"
                 >
                   View Profile <ArrowUpRight size={14} />
@@ -272,16 +335,17 @@ export const SquadOverview: React.FC = () => {
 
             {/* List events */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              {(squad.events || []).map((ev) => {
-                const confirmedCount = Object.values(ev.votes || {}).filter(v => v === 'yes').length;
-                const totalMembers = squad.members.length;
-                const allConfirmed = confirmedCount >= totalMembers;
-                
-                const userVote = ev.votes?.[currentUserId];
+              {events.map((ev) => {
+                // The server sends an aggregate tally plus this caller's own
+                // vote, rather than a map of every member's answer.
+                const confirmedCount = ev.votes?.yes ?? 0;
+                const totalMembers = ev.total_members || members.length;
+                const allConfirmed = totalMembers > 0 && confirmedCount >= totalMembers;
+                const userVote = ev.my_vote;
 
                 return (
                   <div 
-                    key={ev.eventId} 
+                    key={ev.$id} 
                     className={`p-5 rounded-[16px] bg-base/30 border transition-all ${
                       allConfirmed ? 'border-volt/30 bg-volt-dim' : 'border-border-muted'
                     }`}
@@ -293,7 +357,7 @@ export const SquadOverview: React.FC = () => {
                           <span className="font-condensed font-bold text-text-primary uppercase text-[15px]">{ev.title}</span>
                         </div>
                         <p className="font-mono text-[10px] text-text-secondary">
-                          {new Date(ev.date).toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' })}
+                          {new Date(ev.starts_at).toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' })}
                         </p>
                       </div>
                       <span className={`px-2 py-0.5 rounded font-mono text-[8px] uppercase font-bold border ${
@@ -324,7 +388,7 @@ export const SquadOverview: React.FC = () => {
                       <div className="flex gap-2 items-center pt-2 border-t border-border-muted/50 mt-2">
                         <span className="text-text-muted text-[9px] mr-1">Your response:</span>
                         <button
-                          onClick={() => votePracticeSchedule(squad.squadId, ev.eventId, currentUserId, 'yes')}
+                          onClick={() => voteEvent(ev.$id, 'yes')}
                           className={`px-3 py-1 rounded font-bold text-[9px] uppercase transition-colors ${
                             userVote === 'yes'
                               ? 'bg-success text-white'
@@ -334,7 +398,7 @@ export const SquadOverview: React.FC = () => {
                           Confirm (Yes)
                         </button>
                         <button
-                          onClick={() => votePracticeSchedule(squad.squadId, ev.eventId, currentUserId, 'no')}
+                          onClick={() => voteEvent(ev.$id, 'no')}
                           className={`px-3 py-1 rounded font-bold text-[9px] uppercase transition-colors ${
                             userVote === 'no'
                               ? 'bg-danger text-white'
@@ -349,7 +413,7 @@ export const SquadOverview: React.FC = () => {
                 );
               })}
 
-              {(squad.events || []).length === 0 && (
+              {events.length === 0 && (
                 <div className="col-span-2 p-8 text-center rounded-xl bg-base/10 border border-dashed border-border-muted font-mono text-text-secondary text-[11px]">
                   No active schedules. Click "Schedule Session" above to create one.
                 </div>
@@ -398,17 +462,17 @@ export const SquadOverview: React.FC = () => {
 
             {/* Posts feed */}
             <div className="space-y-4 max-w-2xl">
-              {(squad.posts || []).map((post) => {
-                const isLiked = post.likes.includes(currentUserId);
+              {posts.map((post) => {
+                const isLiked = post.is_liked;
                 return (
-                  <div key={post.postId} className="p-4 rounded-xl bg-base/20 border border-border-muted space-y-3 shadow-sm">
+                  <div key={post.$id} className="p-4 rounded-xl bg-base/20 border border-border-muted space-y-3 shadow-sm">
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-2.5">
-                        <img src={post.authorAvatar} alt={post.authorName} className="w-8 h-8 rounded-full object-cover border border-border-muted" />
+                        <img src={post.author_avatar_url ?? undefined} alt={post.author_name ?? ''} className="w-8 h-8 rounded-full object-cover border border-border-muted" />
                         <div>
-                          <span className="font-condensed font-bold text-text-primary text-[13px] block">{post.authorName}</span>
+                          <span className="font-condensed font-bold text-text-primary text-[13px] block">{post.author_name}</span>
                           <span className="font-mono text-[8px] text-text-muted block">
-                            {new Date(post.timestamp).toLocaleString([], { dateStyle: 'short', timeStyle: 'short' })}
+                            {new Date(post.created_at).toLocaleString([], { dateStyle: 'short', timeStyle: 'short' })}
                           </span>
                         </div>
                       </div>
@@ -421,21 +485,21 @@ export const SquadOverview: React.FC = () => {
 
                     <p className="font-mono text-[12px] text-text-primary leading-relaxed">{post.content}</p>
 
-                    {post.mediaUrl && (
+                    {post.media_url && (
                       <div className="rounded-lg overflow-hidden border border-border-muted max-h-60 bg-surface/40">
-                        <img src={post.mediaUrl} alt="Post Attachment" className="w-full h-full object-cover" />
+                        <img src={post.media_url} alt="Post Attachment" className="w-full h-full object-cover" />
                       </div>
                     )}
 
                     <div className="flex justify-between items-center pt-2 border-t border-border-muted font-mono text-[10px]">
                       <button
-                        onClick={() => likeSquadPost(squad.squadId, post.postId, currentUserId)}
+                        onClick={() => likePost(post.$id)}
                         className={`flex items-center gap-1.5 px-2.5 py-1 rounded hover:bg-surface transition-colors ${
                           isLiked ? 'text-volt' : 'text-text-secondary'
                         }`}
                       >
                         <ThumbsUp size={12} fill={isLiked ? 'currentColor' : 'none'} /> 
-                        <span>{post.likes.length} Likes</span>
+                        <span>{post.likes_count} Likes</span>
                       </button>
                       
                       <span className="text-[8px] text-text-secondary flex items-center gap-1">
@@ -446,7 +510,7 @@ export const SquadOverview: React.FC = () => {
                 );
               })}
 
-              {(squad.posts || []).length === 0 && (
+              {posts.length === 0 && (
                 <div className="p-8 text-center rounded-xl bg-base/10 border border-dashed border-border-muted font-mono text-text-secondary text-[11px]">
                   No posts shared on the team bulletin yet. Be the first to share an update!
                 </div>
@@ -508,7 +572,7 @@ export const SquadOverview: React.FC = () => {
                     />
                   ) : (
                     <p className="font-mono text-[12px] text-text-primary leading-relaxed">
-                      {squad.tacticalNotes || 'No instructions set by captain.'}
+                      {squad.tactical_notes || 'No instructions set by captain.'}
                     </p>
                   )}
                 </div>
@@ -551,47 +615,56 @@ export const SquadOverview: React.FC = () => {
               
               {/* Election Details */}
               <div className="md:col-span-2 p-5 rounded-[16px] bg-base/30 border border-border-muted space-y-4">
-                {squad.activeCaptainVote ? (
+                {/*
+                  The API has no notion of a single "active vote" to open and
+                  close: leadership_votes records one approval per member and the
+                  server promotes a candidate the moment one holds a strict
+                  majority. So the UI is "pick someone and approve" rather than
+                  "start an election, then vote in it", and the tally shown is
+                  whatever the last vote returned.
+                */}
+                {selectedCandidate ? (
                   <div className="space-y-4 font-mono">
                     <div className="p-3 bg-volt-dim border border-volt/20 rounded-lg flex items-center gap-3">
                       <Vote className="text-volt" size={18} />
                       <div>
-                        <span className="text-[9px] text-volt block uppercase font-bold">Democratic Poll Live</span>
+                        <span className="text-[9px] text-volt block uppercase font-bold">Leadership vote</span>
                         <strong className="text-[12px] text-text-primary">
-                          Proposal: Transfer captaincy to {squad.members.find(m => m.uid === squad.activeCaptainVote?.candidateId)?.name}
+                          Transfer captaincy to {members.find(m => m.user_id === selectedCandidate)?.full_name ?? 'this member'}
                         </strong>
                       </div>
                     </div>
 
-                    {/* Progress tracking */}
                     {(() => {
-                      const totalMembers = squad.members.length;
-                      const votes = squad.activeCaptainVote.votes || {};
-                      const votedCount = Object.keys(votes).length;
-                      const approvalCount = Object.values(votes).filter(v => v === squad.activeCaptainVote?.candidateId).length;
+                      const totalMembers = members.length;
+                      const needed = Math.floor(totalMembers / 2) + 1;
 
                       return (
                         <div className="space-y-3 text-[11px]">
                           <div className="flex justify-between text-text-secondary">
-                            <span>Electoral turnouts:</span>
-                            <span className="text-text-primary">{votedCount} / {totalMembers} Voted</span>
-                          </div>
-                          
-                          <div className="flex justify-between text-volt">
-                            <span>Approvals registered:</span>
-                            <span className="font-bold">{approvalCount} / {Math.floor(totalMembers / 2) + 1} Needed for Majority</span>
+                            <span>Squad size:</span>
+                            <span className="text-text-primary">{totalMembers} members</span>
                           </div>
 
-                          {/* Action Buttons */}
+                          <div className="flex justify-between text-volt">
+                            <span>Approvals needed:</span>
+                            <span className="font-bold">{needed} for a majority</span>
+                          </div>
+
+                          <p className="text-[9px] text-text-muted leading-relaxed">
+                            Each member may approve once and can change their mind. The
+                            handover happens automatically on the {needed}th approval.
+                          </p>
+
                           <div className="flex gap-2 pt-2 border-t border-border-muted/40 mt-2">
                             <button
-                              onClick={() => castCaptainVote(squad.squadId, currentUserId, squad.activeCaptainVote!.candidateId)}
+                              onClick={() => voteLeadership({ candidate_id: selectedCandidate, vote: 'approve' })}
                               className="px-4 py-1.5 bg-volt text-volt-text font-bold text-[10px] uppercase rounded"
                             >
                               Approve Candidate
                             </button>
                             <button
-                              onClick={() => castCaptainVote(squad.squadId, currentUserId, 'no')}
+                              onClick={() => voteLeadership({ candidate_id: selectedCandidate, vote: 'reject' })}
                               className="px-4 py-1.5 bg-surface border border-border-muted text-text-primary font-bold text-[10px] uppercase rounded hover:bg-hover"
                             >
                               Reject Vote
@@ -619,10 +692,10 @@ export const SquadOverview: React.FC = () => {
                           required
                         >
                           <option value="">Select Candidate...</option>
-                          {squad.members
-                            .filter(m => m.uid !== squad.captainId) // filter out current captain
+                          {members
+                            .filter(m => m.user_id !== squad.captain_id) // filter out current captain
                             .map(m => (
-                              <option key={m.uid} value={m.uid}>{m.name} ({m.position})</option>
+                              <option key={m.user_id} value={m.user_id}>{m.full_name} ({m.position})</option>
                             ))}
                         </select>
                       </div>
@@ -659,9 +732,9 @@ export const SquadOverview: React.FC = () => {
           <div className="space-y-4">
             <h4 className="font-display text-[16px] text-text-primary">SQUAD REWARDS & MILESTONES</h4>
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-              {squad.achievements.map((ach) => (
+              {achievements.map((ach) => (
                 <div
-                  key={ach.id}
+                  key={ach.key}
                   style={{ opacity: ach.unlocked ? 1 : 0.3 }}
                   className="p-4 rounded-[16px] bg-base/20 border border-border-muted flex flex-col items-center text-center space-y-2 relative"
                 >

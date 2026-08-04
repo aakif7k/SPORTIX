@@ -18,6 +18,9 @@ import type {
 
 export const squadKeys = {
   all: ['squads'] as const,
+  events: (id: string | undefined) => ['squads', id ?? null, 'events'] as const,
+  posts: (id: string | undefined) => ['squads', id ?? null, 'posts'] as const,
+  achievements: (id: string | undefined) => ['squads', id ?? null, 'achievements'] as const,
   mine: () => ['squads', 'mine'] as const,
   detail: (id: string | undefined) => ['squads', 'detail', id ?? null] as const,
   members: (id: string | undefined) => ['squads', id ?? null, 'members'] as const,
@@ -191,5 +194,175 @@ export function useSquadMutations(squadId?: string) {
     voteLeadership: voteLeadership.mutateAsync,
     creating: create.isPending,
     savingTactics: updateTactics.isPending,
+  };
+}
+
+// ─── Squad activity: scheduling, feed, achievements ───────────────────────────
+// These back UI that shipped with no server behind it at all.
+
+export interface ApiSquadEvent {
+  $id: string;
+  squad_id: string;
+  title: string;
+  type: 'practice' | 'match' | 'social';
+  starts_at: string;
+  venue: string | null;
+  notes: string | null;
+  created_by: string;
+  status: 'scheduled' | 'confirmed' | 'cancelled';
+  votes: { yes: number; maybe: number; no: number };
+  my_vote: 'yes' | 'maybe' | 'no' | null;
+  total_members: number;
+  created_at: string;
+}
+
+export interface ApiSquadPost {
+  $id: string;
+  squad_id: string;
+  author_id: string;
+  author_name: string | null;
+  author_avatar_url: string | null;
+  content: string;
+  media_url: string | null;
+  likes_count: number;
+  is_liked: boolean;
+  created_at: string;
+  $createdAt: string;
+}
+
+export interface ApiSquadAchievement {
+  key: string;
+  name: string;
+  description: string | null;
+  icon: string | null;
+  unlocked: boolean;
+  unlocked_at: string | null;
+}
+
+export function useSquadEvents(squadId?: string) {
+  const queryClient = useQueryClient();
+  const key = squadKeys.events(squadId);
+
+  const query = useQuery<ApiSquadEvent[], ApiError>({
+    queryKey: key,
+    enabled: Boolean(squadId),
+    queryFn: async () => unwrapList<ApiSquadEvent>(
+      (await api.get<{ data: unknown }>(`/api/squads/${squadId}/events`)).data,
+    ),
+  });
+
+  const create = useMutation({
+    mutationFn: (input: {
+      title: string; starts_at: string;
+      type?: 'practice' | 'match' | 'social'; venue?: string; notes?: string;
+    }) => api.post(`/api/squads/${squadId}/events`, input),
+    onSuccess: () => { toast.success('Session scheduled'); void queryClient.invalidateQueries({ queryKey: key }); },
+    onError: (e: ApiError) => toast.error(e.message || 'Could not schedule that'),
+  });
+
+  const vote = useMutation({
+    mutationFn: (args: { eventId: string; vote: 'yes' | 'maybe' | 'no' }) =>
+      api.post(`/api/squads/events/${args.eventId}/vote`, { vote: args.vote }),
+    // Optimistic so the availability pill flips immediately.
+    onMutate: async ({ eventId, vote }) => {
+      await queryClient.cancelQueries({ queryKey: key });
+      const previous = queryClient.getQueryData<ApiSquadEvent[]>(key);
+      queryClient.setQueryData<ApiSquadEvent[]>(key, old => old?.map(e =>
+        e.$id === eventId ? { ...e, my_vote: vote } : e));
+      return { previous };
+    },
+    onError: (_e, _v, ctx) => {
+      if (ctx?.previous) queryClient.setQueryData(key, ctx.previous);
+      toast.error('Could not record your availability');
+    },
+    onSettled: () => void queryClient.invalidateQueries({ queryKey: key }),
+  });
+
+  const cancel = useMutation({
+    mutationFn: (eventId: string) => api.delete(`/api/squads/events/${eventId}`),
+    onSuccess: () => { toast.success('Session cancelled'); void queryClient.invalidateQueries({ queryKey: key }); },
+    onError: (e: ApiError) => toast.error(e.message || 'Could not cancel that'),
+  });
+
+  return {
+    events: query.data ?? [],
+    loading: query.isPending && Boolean(squadId),
+    error: (query.error as ApiError | null) ?? null,
+    createEvent: create.mutateAsync,
+    voteEvent: (eventId: string, v: 'yes' | 'maybe' | 'no') => vote.mutate({ eventId, vote: v }),
+    cancelEvent: cancel.mutateAsync,
+    scheduling: create.isPending,
+  };
+}
+
+export function useSquadPosts(squadId?: string) {
+  const queryClient = useQueryClient();
+  const key = squadKeys.posts(squadId);
+
+  const query = useQuery<ApiSquadPost[], ApiError>({
+    queryKey: key,
+    enabled: Boolean(squadId),
+    queryFn: async () => unwrapList<ApiSquadPost>(
+      (await api.get<{ data: unknown }>(`/api/squads/${squadId}/posts`)).data,
+    ),
+  });
+
+  const create = useMutation({
+    mutationFn: (input: { content: string; media_url?: string | null }) =>
+      api.post(`/api/squads/${squadId}/posts`, input),
+    onSuccess: () => void queryClient.invalidateQueries({ queryKey: key }),
+    onError: (e: ApiError) => toast.error(e.message || 'Could not post that'),
+  });
+
+  const like = useMutation({
+    mutationFn: (postId: string) => api.post(`/api/squads/posts/${postId}/like`),
+    onMutate: async (postId: string) => {
+      await queryClient.cancelQueries({ queryKey: key });
+      const previous = queryClient.getQueryData<ApiSquadPost[]>(key);
+      queryClient.setQueryData<ApiSquadPost[]>(key, old => old?.map(p =>
+        p.$id === postId
+          ? { ...p, is_liked: !p.is_liked, likes_count: p.likes_count + (p.is_liked ? -1 : 1) }
+          : p));
+      return { previous };
+    },
+    onError: (_e, _id, ctx) => {
+      if (ctx?.previous) queryClient.setQueryData(key, ctx.previous);
+    },
+    onSettled: () => void queryClient.invalidateQueries({ queryKey: key }),
+  });
+
+  return {
+    posts: query.data ?? [],
+    loading: query.isPending && Boolean(squadId),
+    error: (query.error as ApiError | null) ?? null,
+    createPost: create.mutateAsync,
+    likePost: (postId: string) => like.mutate(postId),
+    posting: create.isPending,
+  };
+}
+
+export function useSquadAchievements(squadId?: string) {
+  const query = useQuery<
+    { items: ApiSquadAchievement[]; unlocked_count: number; total: number }, ApiError
+  >({
+    queryKey: squadKeys.achievements(squadId),
+    enabled: Boolean(squadId),
+    queryFn: async () => {
+      const res = await api.get<{
+        data: { items?: ApiSquadAchievement[]; unlocked_count?: number; total?: number };
+      }>(`/api/squads/${squadId}/achievements`);
+      return {
+        items: res.data?.items ?? [],
+        unlocked_count: res.data?.unlocked_count ?? 0,
+        total: res.data?.total ?? 0,
+      };
+    },
+  });
+
+  return {
+    achievements: query.data?.items ?? [],
+    unlockedCount: query.data?.unlocked_count ?? 0,
+    loading: query.isPending && Boolean(squadId),
+    error: (query.error as ApiError | null) ?? null,
   };
 }
