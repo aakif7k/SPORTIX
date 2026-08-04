@@ -18,8 +18,10 @@ Requests go through TestClient, which runs the full ASGI stack -- every
 middleware, dependency and exception handler -- so the only thing it skips is the
 socket. Appwrite is genuinely remote.
 
-Cleanup runs by default: four auth accounts and their content are removed at the
-end. Pass --keep to leave them for inspection.
+Cleanup runs by default: four auth accounts and every document they own are
+removed at the end -- deleting an Appwrite auth user does not cascade to
+documents, so the sweep is explicit. Pass --keep to leave them for inspection,
+and --purge-orphans to clear what an earlier interrupted run left behind.
 """
 from __future__ import annotations
 
@@ -77,15 +79,107 @@ def data_of(response) -> dict:
     return body(response).get("data") or {}
 
 
+# Fields that mean "this row belongs to this user". Any collection in schema.py
+# declaring one of these gets swept, so a new collection with a user_id is
+# cleaned up without this list changing.
+OWNER_FIELDS = (
+    "user_id", "sender_id", "author_id", "organizer_id", "captain_id",
+    "follower_id", "following_id", "created_by", "voter_id", "viewer_id",
+    "reporter_id", "recipient_id", "actor_id", "requester_id", "uploader_id",
+)
+
+
+def purge_user(uid: str) -> int:
+    """
+    Remove a test user's rows from every collection that says it owns them.
+
+    The previous cleanup deleted the auth account and stopped there, while the
+    docstring claimed the content went too. It did not: sixteen runs had left 64
+    orphaned profiles behind, and because profiles are searchable those test
+    accounts were showing up in real search results. Deleting the auth user does
+    not cascade to documents -- nothing in Appwrite ties them together.
+    """
+    from appwrite.query import Query as Q
+
+    from app.core.appwrite import db, DB_ID
+    from scripts.schema import COLLECTIONS
+
+    removed = 0
+    for collection in COLLECTIONS:
+        keys = {a.key for a in collection.all_attrs}
+        for field in OWNER_FIELDS:
+            if field not in keys:
+                continue
+            try:
+                rows = db.list_documents(DB_ID, collection.id, queries=[
+                    Q.equal(field, uid), Q.limit(100),
+                ]).get("documents", [])
+            except Exception:
+                continue
+            for row in rows:
+                try:
+                    db.delete_document(DB_ID, collection.id, row["$id"])
+                    removed += 1
+                except Exception:
+                    pass
+
+    # The profile's document id IS the auth user id, so it has no owner field.
+    try:
+        db.delete_document(DB_ID, "profiles", uid)
+        removed += 1
+    except Exception:
+        pass
+    return removed
+
+
+def purge_orphans() -> int:
+    """
+    Delete every leftover smoke account, for clearing what earlier runs left.
+
+        python -m scripts.smoke --purge-orphans
+
+    Matches on the smoke_ username prefix, which only this script creates.
+    """
+    from appwrite.query import Query as Q
+
+    from app.core.appwrite import db, DB_ID, users_svc
+
+    victims: list[str] = []
+    while True:
+        rows = db.list_documents(DB_ID, "profiles", queries=[
+            Q.search("username", "smoke"), Q.limit(100),
+        ]).get("documents", [])
+        fresh = [r["$id"] for r in rows
+                 if str(r.get("username", "")).startswith("smoke_")
+                 and r["$id"] not in victims]
+        if not fresh:
+            break
+        victims.extend(fresh)
+        for uid in fresh:
+            purge_user(uid)
+            try:
+                users_svc.delete(user_id=uid)
+            except Exception:
+                pass
+    print(f"purged {len(victims)} orphaned smoke account(s)")
+    return len(victims)
+
+
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--keep", action="store_true", help="do not delete the accounts created")
+    ap.add_argument("--purge-orphans", action="store_true",
+                    help="delete leftover smoke_* accounts from earlier runs, then exit")
     args = ap.parse_args()
 
     from app.core.config import settings
     if settings.appwrite_api_key in ("", "your_api_key_with_all_scopes"):
         print("[x] APPWRITE_API_KEY is unset or still the placeholder.")
         return 2
+
+    if args.purge_orphans:
+        purge_orphans()
+        return 0
 
     from app.core.rate_limit import limiter
     from app.core.appwrite import users_svc
@@ -285,6 +379,18 @@ def main() -> int:
     partner_header = {"Authorization": f"Bearer {partner['data'].get('jwt', '')}"}
     outsider_header = {"Authorization": f"Bearer {validators[1]['data'].get('jwt', '')}"}
 
+    # The new-message picker searches people by name, which only matched
+    # username before -- so typing a name found nobody.
+    r = client.get(f"/api/search/?type=users&q=Smoke", headers=auth_header)
+    found = (data_of(r).get("users") or [])
+    check("user search matches on full_name, not just username",
+          any(u.get("$id") == partner_id for u in found),
+          f"{len(found)} hit(s) for 'Smoke', partner {partner_id} not among them")
+    r = client.get("/api/search/?type=users&q=Smoke&sport=badminton", headers=auth_header)
+    check("the sport filter is actually applied to search",
+          not (data_of(r).get("users") or []),
+          f"got {len(data_of(r).get('users') or [])} football players filtered by badminton")
+
     r = client.post("/api/conversations/", headers=auth_header, json={"user_id": partner_id})
     check("POST /api/conversations/ -> 201", r.status_code == 201, f"{r.status_code} {body(r)}")
     conversation_id = data_of(r).get("$id", "")
@@ -426,13 +532,17 @@ def main() -> int:
     else:
         step("cleanup")
         removed = 0
+        rows = 0
         for user_id in created_users:
+            # Content first: with the account gone the ids are still valid, but
+            # sweeping while the user exists keeps this honest if it fails.
+            rows += purge_user(user_id)
             try:
                 users_svc.delete(user_id=user_id)
                 removed += 1
             except Exception as e:
                 print(f"  [!] could not delete {user_id}: {e}")
-        print(f"  removed {removed}/{len(created_users)} accounts")
+        print(f"  removed {removed}/{len(created_users)} accounts and {rows} document(s)")
 
     print("\n" + "=" * 62)
     print(f"passed {passed}   failed {failed}")
