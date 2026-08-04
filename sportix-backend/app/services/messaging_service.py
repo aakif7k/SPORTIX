@@ -17,6 +17,16 @@ Unread counts are derived from a per-member last_read_at rather than a flag on
 each message. A read flag per message per member would mean writing N rows every
 time someone opens a thread; a timestamp is one write and answers the same
 question.
+
+Messages are the one place the browser reads Appwrite directly, and only through
+a realtime subscription. Both message collections were provisioned with document
+security and no collection-level read, so a client sees nothing by default;
+_read_grants attaches read to exactly the people entitled to the message, which
+is what makes a live subscription possible without opening the collection up.
+No write permission is granted to anyone, so the browser still cannot send a
+message except through this service. A member who joins a squad later starts
+receiving live messages from that point on and gets everything earlier from the
+history endpoint -- history is a server read and is not affected by these grants.
 """
 from __future__ import annotations
 
@@ -25,7 +35,9 @@ import logging
 
 from appwrite.exception import AppwriteException
 from appwrite.id import ID
+from appwrite.permission import Permission
 from appwrite.query import Query as Q
+from appwrite.role import Role
 
 from app.core.appwrite import db, DB_ID
 from app.core.config import settings
@@ -71,6 +83,11 @@ def _member_rows(conversation_id: str) -> list[dict]:
     return db.list_documents(DB_ID, MEMBERS, queries=[
         Q.equal("conversation_id", conversation_id), Q.limit(50),
     ]).get("documents", [])
+
+
+def _read_grants(user_ids: list[str]) -> list[str]:
+    """Read-only document permissions, deduplicated, for realtime delivery."""
+    return [Permission.read(Role.user(uid)) for uid in dict.fromkeys(user_ids) if uid]
 
 
 # ─── Conversations ────────────────────────────────────────────────────────────
@@ -200,6 +217,9 @@ async def send_message(conversation_id: str, user_id: str, content: str,
     if not content.strip() and not media_url:
         raise ValueError("A message needs text or an attachment")
 
+    participants = [m["user_id"] for m in _member_rows(conversation_id)
+                    if m.get("user_id")]
+
     now = now_iso()
     message = db.create_document(DB_ID, MESSAGES, ID.unique(), {
         "conversation_id": conversation_id,
@@ -209,7 +229,7 @@ async def send_message(conversation_id: str, user_id: str, content: str,
         "media_type": media_type,
         "read_by": [user_id],
         "created_at": now,
-    })
+    }, permissions=_read_grants(participants))
 
     # Denormalised onto the conversation so a thread list needs no per-row query.
     try:
@@ -287,12 +307,10 @@ async def send_squad_message(squad_id: str, user_id: str, content: str,
         raise ValueError("A message needs some content")
 
     sender = _profile(user_id)
-    role = ""
-    rows = db.list_documents(DB_ID, SQUAD_MEMBERS, queries=[
-        Q.equal("squad_id", squad_id), Q.equal("user_id", user_id), Q.limit(1),
+    members = db.list_documents(DB_ID, SQUAD_MEMBERS, queries=[
+        Q.equal("squad_id", squad_id), Q.limit(100),
     ]).get("documents", [])
-    if rows:
-        role = rows[0].get("role", "")
+    role = next((m.get("role", "") for m in members if m.get("user_id") == user_id), "")
 
     now = now_iso()
     return db.create_document(DB_ID, SQUAD_MESSAGES, ID.unique(), {
@@ -308,4 +326,4 @@ async def send_squad_message(squad_id: str, user_id: str, content: str,
         "tactical_data": json.dumps(tactical_data) if tactical_data else None,
         "announcement_data": json.dumps(announcement_data) if announcement_data else None,
         "created_at": now,
-    })
+    }, permissions=_read_grants([m["user_id"] for m in members if m.get("user_id")]))

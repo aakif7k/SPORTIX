@@ -311,6 +311,21 @@ def main() -> int:
                     headers=partner_header, json={"content": "and hello back"})
     check("the other participant can reply", r.status_code == 201, f"{r.status_code} {body(r)}")
 
+    # The browser subscribes to this collection for live delivery, and Appwrite
+    # only pushes documents the client may read. Both participants therefore need
+    # a read grant, nobody may hold a write grant, and an outsider must hold
+    # nothing -- otherwise realtime either delivers silence or leaks.
+    perms = data_of(r).get("$permissions") or []
+    check("a message grants read to both participants",
+          f'read("user:{uid}")' in perms and f'read("user:{partner_id}")' in perms,
+          f"permissions={perms!r}")
+    check("a message grants nobody write access",
+          not any(p.startswith(("create(", "update(", "delete(", "write(")) for p in perms),
+          f"permissions={perms!r}")
+    check("a non-participant is granted nothing on the message",
+          not any(validators[1]["data"].get("user_id", "?") in p for p in perms),
+          f"permissions={perms!r}")
+
     check("an empty message with no attachment is refused",
           client.post(f"/api/conversations/{conversation_id}/messages",
                       headers=auth_header, json={"content": "   "}).status_code == 400)
@@ -365,6 +380,10 @@ def main() -> int:
 
     r = client.get(f"/api/squads/{squad_id}/messages", headers=auth_header)
     channel = data_of(r).get("items", [])
+    squad_perms = channel[0].get("$permissions", []) if channel else []
+    check("a squad message grants read to every member of the squad",
+          sum(1 for p in squad_perms if p.startswith("read(")) == 4,
+          f"{len(squad_perms)} grant(s) for a 4-member squad: {squad_perms!r}")
     check("both squad messages come back", len(channel) == 2, f"got {len(channel)}")
     poll = next((m for m in channel if m.get("type") == "poll"), {})
     # The column is a string; the service json.dumps on write and parses on read,
