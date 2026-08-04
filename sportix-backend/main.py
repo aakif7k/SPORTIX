@@ -17,6 +17,7 @@ from app.routers import (
     missions, coins, badges, notifications,
     leaderboard, autosquad, search,
     upload, settings as settings_router, admin,
+    conversations,
 )
 
 configure_logging()
@@ -111,6 +112,7 @@ app.include_router(search.router,           prefix="/api/search",        tags=["
 app.include_router(upload.router,           prefix="/api/upload",        tags=["File Upload"])
 app.include_router(settings_router.router,  prefix="/api/settings",      tags=["Settings"])
 app.include_router(admin.router,            prefix="/api/admin",         tags=["Admin"])
+app.include_router(conversations.router,    prefix="/api/conversations", tags=["Messaging"])
 
 
 @app.get("/", tags=["Health"])

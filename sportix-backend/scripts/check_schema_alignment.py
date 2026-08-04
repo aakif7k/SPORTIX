@@ -32,6 +32,23 @@ from scripts.schema import COLLECTIONS
 
 ATTRS = {c.id: {a.key: a for a in c.all_attrs} for c in COLLECTIONS}
 
+# Fields the model takes as a dict and the service serialises into a string
+# column with json.dumps. Legitimate — Appwrite has no JSON type — but it has to
+# be declared, or a genuine dict/string mismatch would hide among them. Note that
+# Dict[str, Any] previously slipped through this check by accident while a bare
+# `dict` was caught, so the two are now treated identically.
+SERIALISED_BLOBS: set[tuple[str, str]] = {
+    ("squad_messages", "poll_data"),
+    ("squad_messages", "tactical_data"),
+    ("squad_messages", "announcement_data"),
+    ("player_stats", "stats_data"),
+    ("autosquad_requests", "params"),
+    ("generated_squads", "squad_data"),
+    ("profiles", "notification_prefs"),
+    ("profiles", "privacy"),
+    ("profiles", "sport_preferences"),
+}
+
 # model path -> the collection the service writes it to
 MODEL_COLLECTIONS: list[tuple[str, str, str]] = [
     ("app.schemas.event", "EventCreate", "events"),
@@ -47,6 +64,8 @@ MODEL_COLLECTIONS: list[tuple[str, str, str]] = [
     ("app.schemas.squad", "SquadEventCreate", "squad_events"),
     ("app.schemas.squad", "SquadEventVote", "squad_event_votes"),
     ("app.schemas.squad", "SquadPostCreate", "squad_posts"),
+    ("app.schemas.message", "MessageCreate", "messages"),
+    ("app.schemas.message", "SquadMessageCreate", "squad_messages"),
 ]
 
 
@@ -98,6 +117,22 @@ def check_model(module_path: str, model_name: str, collection: str) -> list[str]
             continue
 
         target = _element(annotation) if column.array else _unwrap_optional(annotation)
+
+        # A mapping stored as a JSON string.
+        is_mapping = target is dict or typing.get_origin(target) is dict
+        if is_mapping:
+            if (collection, field_name) in SERIALISED_BLOBS:
+                if column.kind != "string":
+                    problems.append(
+                        f"{where}: serialised as JSON but the column is "
+                        f"{column.kind}, not string"
+                    )
+                continue
+            problems.append(
+                f"{where}: model is a mapping but the column is {column.kind}. "
+                f"If the service json.dumps it, add it to SERIALISED_BLOBS."
+            )
+            continue
 
         # enum membership
         if isinstance(target, type) and issubclass(target, enum.Enum):

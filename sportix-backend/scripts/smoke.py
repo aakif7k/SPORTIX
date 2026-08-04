@@ -278,6 +278,112 @@ def main() -> int:
           int(level.get("current_level", 0)) >= 2,
           f"current_level={level.get('current_level')!r}")
 
+    # ── messaging ─────────────────────────────────────────────────────────────
+    step("direct messages and squad chat")
+    partner = validators[0]
+    partner_id = partner["data"].get("user_id", "")
+    partner_header = {"Authorization": f"Bearer {partner['data'].get('jwt', '')}"}
+    outsider_header = {"Authorization": f"Bearer {validators[1]['data'].get('jwt', '')}"}
+
+    r = client.post("/api/conversations/", headers=auth_header, json={"user_id": partner_id})
+    check("POST /api/conversations/ -> 201", r.status_code == 201, f"{r.status_code} {body(r)}")
+    conversation_id = data_of(r).get("$id", "")
+
+    # Opening the same chat twice must reuse the thread, or every visit to a
+    # profile would mint another conversation with the same person.
+    r = client.post("/api/conversations/", headers=auth_header, json={"user_id": partner_id})
+    check("opening the same thread again reuses it",
+          data_of(r).get("$id") == conversation_id,
+          f"first={conversation_id!r} second={data_of(r).get('$id')!r}")
+
+    check("you cannot open a thread with yourself",
+          client.post("/api/conversations/", headers=auth_header,
+                      json={"user_id": uid}).status_code == 400)
+
+    r = client.post(f"/api/conversations/{conversation_id}/messages",
+                    headers=auth_header, json={"content": f"hello from author {tag}"})
+    check("POST a message -> 201", r.status_code == 201, f"{r.status_code} {body(r)}")
+    check("the sent message carries a joined sender profile",
+          bool(data_of(r).get("sender", {}).get("username")),
+          f"sender={data_of(r).get('sender')!r}")
+
+    r = client.post(f"/api/conversations/{conversation_id}/messages",
+                    headers=partner_header, json={"content": "and hello back"})
+    check("the other participant can reply", r.status_code == 201, f"{r.status_code} {body(r)}")
+
+    check("an empty message with no attachment is refused",
+          client.post(f"/api/conversations/{conversation_id}/messages",
+                      headers=auth_header, json={"content": "   "}).status_code == 400)
+
+    r = client.get(f"/api/conversations/{conversation_id}/messages", headers=auth_header)
+    items = data_of(r).get("items", [])
+    check("both messages come back", len(items) == 2, f"got {len(items)}")
+    check("messages are ordered oldest first for rendering",
+          len(items) == 2 and items[0].get("sender_id") == uid,
+          f"first sender={items[0].get('sender_id') if items else None!r}")
+
+    # A non-participant must not be able to read or write the thread.
+    check("a non-participant cannot read the thread",
+          client.get(f"/api/conversations/{conversation_id}/messages",
+                     headers=outsider_header).status_code == 403)
+    check("a non-participant cannot post to the thread",
+          client.post(f"/api/conversations/{conversation_id}/messages",
+                      headers=outsider_header, json={"content": "intruding"}).status_code == 403)
+
+    r = client.get("/api/conversations/", headers=partner_header)
+    threads = data_of(r).get("items", [])
+    mine = next((c for c in threads if c.get("$id") == conversation_id), {})
+    check("the thread appears in the recipient's list", bool(mine), f"{len(threads)} thread(s)")
+    check("the conversation carries the denormalised last message",
+          mine.get("last_message") == "and hello back", f"{mine.get('last_message')!r}")
+    check("the other participant is resolved for the header",
+          bool(mine.get("participants")) and mine["participants"][0].get("user_id") == uid,
+          f"participants={mine.get('participants')!r}")
+    # Never read, so both messages are unread -- including the recipient's own,
+    # which is what the read marker is for.
+    check("unread count is non-zero before reading",
+          int(mine.get("unread_count", 0)) > 0, f"unread={mine.get('unread_count')!r}")
+
+    r = client.post(f"/api/conversations/{conversation_id}/read", headers=partner_header)
+    check("POST /read -> 200", r.status_code == 200, f"{r.status_code} {body(r)}")
+    r = client.get("/api/conversations/", headers=partner_header)
+    after = next((c for c in data_of(r).get("items", [])
+                  if c.get("$id") == conversation_id), {})
+    check("reading zeroes the unread count",
+          int(after.get("unread_count", -1)) == 0, f"unread={after.get('unread_count')!r}")
+
+    # ── squad chat ────────────────────────────────────────────────────────────
+    r = client.post(f"/api/squads/{squad_id}/messages", headers=auth_header,
+                    json={"content": "team, training at six", "type": "announcement",
+                          "announcement_data": {"priority": "high", "pinned": True}})
+    check("POST a squad message -> 201", r.status_code == 201, f"{r.status_code} {body(r)}")
+
+    r = client.post(f"/api/squads/{squad_id}/messages", headers=partner_header,
+                    json={"content": "which formation?", "type": "poll",
+                          "poll_data": {"options": ["4-3-3", "4-4-2"], "votes": [0, 0]}})
+    check("a member can post to the channel", r.status_code == 201, f"{r.status_code} {body(r)}")
+
+    r = client.get(f"/api/squads/{squad_id}/messages", headers=auth_header)
+    channel = data_of(r).get("items", [])
+    check("both squad messages come back", len(channel) == 2, f"got {len(channel)}")
+    poll = next((m for m in channel if m.get("type") == "poll"), {})
+    # The column is a string; the service json.dumps on write and parses on read,
+    # so the client never sees a JSON blob.
+    check("poll_data arrives parsed, not as a JSON string",
+          isinstance(poll.get("poll_data"), dict)
+          and poll["poll_data"].get("options") == ["4-3-3", "4-4-2"],
+          f"poll_data={poll.get('poll_data')!r}")
+    check("squad messages carry the sender's name and role",
+          bool(channel[0].get("sender_name")) and bool(channel[0].get("sender_role")),
+          f"name={channel[0].get('sender_name')!r} role={channel[0].get('sender_role')!r}")
+
+    # validators[1] and [2] were added to the squad, so a true outsider is needed:
+    # the account itself is a member, hence checking the reverse -- a member is
+    # allowed -- above, and a bad squad id here.
+    check("a non-member cannot read another squad's channel",
+          client.get("/api/squads/not-a-real-squad/messages",
+                     headers=auth_header).status_code == 403)
+
     # ── envelope and limits ───────────────────────────────────────────────────
     step("error envelope and rate limiting")
     r = client.get("/api/posts/does-not-exist-at-all", headers=auth_header)

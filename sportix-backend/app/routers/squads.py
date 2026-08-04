@@ -1,7 +1,8 @@
 from fastapi import APIRouter, Depends, Query
 from app.core.dependencies import get_current_user
 from app.schemas.squad import SquadCreate, SquadUpdate, MemberAdd, RoleUpdate, TacticsUpdate, LeadershipVote, SquadEventCreate, SquadEventVote, SquadPostCreate
-from app.services import squad_service, squad_activity_service
+from app.schemas.message import SquadMessageCreate
+from app.services import squad_service, squad_activity_service, messaging_service
 
 router = APIRouter()
 
@@ -169,4 +170,30 @@ async def delete_squad_post(squad_post_id: str, user=Depends(get_current_user)):
 async def list_squad_achievements(squad_id: str, user=Depends(get_current_user)):
     """The achievement shelf, re-evaluated on read so it is always current."""
     data = await squad_activity_service.list_achievements(squad_id, user["id"])
+    return {"success": True, "data": data}
+
+
+# ─── Squad chat ───────────────────────────────────────────────────────────────
+# squad_messages was provisioned in phase 2 and never served; SquadChat kept its
+# messages in zustand, so nothing was sent anywhere.
+
+@router.get("/{squad_id}/messages")
+async def list_squad_messages(
+    squad_id: str, page: int = Query(0), limit: int = Query(50, le=100),
+    user=Depends(get_current_user),
+):
+    """Channel history, oldest-first for rendering, with JSON blobs parsed."""
+    data = await messaging_service.list_squad_messages(squad_id, user["id"], page, limit)
+    return {"success": True, "data": data}
+
+
+@router.post("/{squad_id}/messages", status_code=201)
+async def send_squad_message(
+    squad_id: str, payload: SquadMessageCreate, user=Depends(get_current_user),
+):
+    data = await messaging_service.send_squad_message(
+        squad_id, user["id"], payload.content, payload.type.value,
+        payload.attachment_url, payload.poll_data,
+        payload.tactical_data, payload.announcement_data,
+    )
     return {"success": True, "data": data}
