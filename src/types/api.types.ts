@@ -122,3 +122,73 @@ export interface ApiSquadChemistry {
   members_count: number;
   matches_played: number;
 }
+
+// ─── Messaging ────────────────────────────────────────────────────────────────
+// The browser subscribes to these two collections for live delivery, so these
+// shapes describe both an API response and a realtime payload. The one
+// difference is called out on ApiSquadMessage.
+
+export interface ApiParticipant {
+  user_id: string;
+  full_name: string;
+  username: string;
+  avatar_url: string | null;
+  sport: string;
+}
+
+export interface ApiConversation {
+  $id: string;
+  participant_ids: string[];
+  is_event_chat: boolean;
+  event_id: string | null;
+  event_name: string | null;
+  last_message: string | null;
+  last_message_at: string | null;
+  created_at: string;
+  $createdAt: string;
+  // Resolved by the server from conversation_members so a thread header needs no
+  // second request. Excludes the caller.
+  participants: ApiParticipant[];
+  unread_count: number;
+  last_read_at: string | null;
+}
+
+export type MessageMediaType = 'image' | 'video' | 'file';
+
+export interface ApiMessage {
+  $id: string;
+  conversation_id: string;
+  sender_id: string;
+  content: string;
+  media_url: string | null;
+  media_type: MessageMediaType | null;
+  read_by: string[];
+  created_at: string;
+  $createdAt: string;
+  // Joined on the API's own responses; absent on a realtime payload, which is
+  // the raw document.
+  sender?: ApiParticipant;
+}
+
+export type SquadMessageType =
+  | 'text' | 'announcement' | 'poll' | 'tactical' | 'achievement';
+
+export interface ApiSquadMessage {
+  $id: string;
+  squad_id: string;
+  sender_id: string;
+  sender_name: string | null;
+  sender_avatar_url: string | null;
+  sender_role: string | null;
+  content: string;
+  type: SquadMessageType;
+  attachment_url: string | null;
+  // Appwrite has no JSON type, so these are string columns. GET parses them; a
+  // realtime payload still carries the raw string, which is why the squad
+  // channel refetches on a socket event instead of appending the payload.
+  poll_data: Record<string, unknown> | string | null;
+  tactical_data: Record<string, unknown> | string | null;
+  announcement_data: Record<string, unknown> | string | null;
+  created_at: string;
+  $createdAt: string;
+}
