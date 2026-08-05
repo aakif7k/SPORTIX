@@ -14,7 +14,7 @@ import {
   loginWithGoogle,
   getAuthErrorMessage,
 } from '@/lib/authService';
-import { GLOBAL_SPORTS } from '../../services/mockData';
+import { GLOBAL_SPORTS } from '@/constants/sports';
 import toast from 'react-hot-toast';
 
 /* ─── Constants ─────────────────────────────────────────────────────── */

@@ -4,7 +4,8 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { 
   Search, SlidersHorizontal, MessageCircle, Bookmark, BarChart2, Zap, MapPin
 } from 'lucide-react';
-import { MOCK_USERS, MOCK_EVENTS, SPORT_CATEGORIES } from '../../services/mockData';
+import { MOCK_USERS, MOCK_EVENTS } from '../../services/mockData';
+import { SPORT_CATEGORIES } from '@/constants/sports';
 import { BarChart, Bar, XAxis, Tooltip, ResponsiveContainer } from 'recharts';
 
 const TABS = ['Athletes', 'ClashHub Events', 'The Arena Stats'];

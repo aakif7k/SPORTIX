@@ -6,7 +6,7 @@ import {
   Users, ChevronRight, UserCircle2, AtSign,
   Dumbbell, Briefcase, Award, CalendarDays
 } from 'lucide-react';
-import { GLOBAL_SPORTS } from '../../services/mockData';
+import { GLOBAL_SPORTS } from '@/constants/sports';
 import { Button } from '../../components/ui/Button';
 import { useAuth } from '@/context/AuthContext';
 import { useAuthStore } from '@/store/authStore';

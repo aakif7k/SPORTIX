@@ -7,7 +7,7 @@ import {
 } from 'lucide-react';
 import type { User as UserType, SportCategory, ExperienceLevel, PerformanceData } from '../../types';
 import { useAuthStore } from '../../store/authStore';
-import { SPORT_CATEGORIES, SPORT_POSITIONS } from '../../services/mockData';
+import { SPORT_CATEGORIES, SPORT_POSITIONS } from '@/constants/sports';
 import { Toggle } from '../ui/index';
 
 // ─── TYPES ─────────────────────────────────────────────────────────────────

@@ -5,7 +5,7 @@ import {
   Check, Upload, ArrowLeft, Trophy, Sparkles, Plus 
 } from 'lucide-react';
 import { useEventMutations } from '@/hooks/useEvents';
-import { SPORT_CATEGORIES } from '../../services/mockData';
+import { SPORT_CATEGORIES } from '@/constants/sports';
 import type { SportCategory, EventFormat, ExperienceLevel } from '../../types';
 
 const STEPS = ['Basics', 'Rules & Fees', 'Teams', 'Review & Host'];

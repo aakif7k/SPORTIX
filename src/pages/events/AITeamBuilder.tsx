@@ -4,7 +4,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { Zap, RefreshCw, CheckCircle, Users, Terminal } from 'lucide-react';
 import { useEventStore } from '../../store/eventStore';
 import { generateTeam } from '../../services/aiService';
-import { SPORT_CATEGORIES } from '../../services/mockData';
+import { SPORT_CATEGORIES } from '@/constants/sports';
 import type { AITeamResult } from '../../types';
 import { Avatar } from '../../components/ui/Avatar';
 import { Button } from '../../components/ui/Button';

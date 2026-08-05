@@ -6,7 +6,7 @@ import {
   Activity, Settings 
 } from 'lucide-react';
 import { useEvents } from '@/hooks/useEvents';
-import { SPORT_CATEGORIES } from '../../services/mockData';
+import { SPORT_CATEGORIES } from '@/constants/sports';
 import { PendingReportBanner } from '../../components/performance/PendingReportBanner';
 
 export const EventBrowse: React.FC = () => {

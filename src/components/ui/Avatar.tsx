@@ -1,5 +1,5 @@
 import React from 'react';
-import { SPORT_CATEGORIES } from '../../services/mockData';
+import { SPORT_CATEGORIES } from '@/constants/sports';
 import type { SportCategory } from '../../types';
 
 interface AvatarProps {
