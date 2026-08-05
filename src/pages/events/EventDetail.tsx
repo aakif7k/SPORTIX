@@ -915,9 +915,7 @@ export const EventDetail: React.FC = () => {
         isOpen={joinModalOpen}
         onClose={() => setJoinModalOpen(false)}
         onJoined={() => { setJoined(true); setJoinModalOpen(false); }}
-        // The modal reads only title and sport; it keeps the camelCase Event
-        // shape until it is wired in its own right.
-        event={{ ...event, id: event.$id, title: event.title, sport: event.sport } as never}
+        event={event}
       />
     </div>
   );

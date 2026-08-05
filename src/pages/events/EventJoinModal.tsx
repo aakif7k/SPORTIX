@@ -1,20 +1,17 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { createPortal } from 'react-dom';
-import { X, Sparkles, MapPin, Check, ArrowRight, Shield } from 'lucide-react';
-import { useSquadStore } from '../../store/squadStore';
-import { useAuthStore } from '../../store/authStore';
+import { X, Sparkles, Check, ArrowRight } from 'lucide-react';
+import { useAutoSquad, type ApiGeneratedSquad } from '@/hooks/useAutoSquad';
 import { useAISettingsStore } from '../../store/aiSettingsStore';
-import { generateAIPulseSquad } from '../../services/squadAI';
+import type { ApiEvent } from '@/types/api.types';
 import { BadgeIcon } from '../../components/gamification/BadgeIcon';
-import type { Event } from '../../types';
-import type { Athlete } from '../../types/pulse.types';
 
 interface EventJoinModalProps {
   isOpen: boolean;
   onClose: () => void;
   onJoined: () => void;
-  event: Event;
+  event: ApiEvent;
 }
 
 type FlowStep = 'choice' | 'generating' | 'result' | 'confirmed';
@@ -32,9 +29,17 @@ export const EventJoinModal: React.FC<EventJoinModalProps> = (props) => {
   return <EventJoinModalBody {...props} />;
 };
 
+/** The picker's labels against the experience_level values the API accepts. */
+const SKILL_LEVEL_BY_CATEGORY: Record<string, string> = {
+  Amateur: 'amateur',
+  'Semi-Pro': 'semi_pro',
+  Professional: 'pro',
+};
+
 const EventJoinModalBody: React.FC<EventJoinModalProps> = ({ onClose, onJoined, event }) => {
-  const { user } = useAuthStore();
-  const { addGeneratedSquad, acceptGeneratedSquad, incrementGenerationsCount, dailyGenerationsCount } = useSquadStore();
+  const {
+    remaining, generateSquad, acceptSquad,
+  } = useAutoSquad();
   const { nearbyRadius } = useAISettingsStore();
 
   const dynamicLogs = [
@@ -52,9 +57,8 @@ const EventJoinModalBody: React.FC<EventJoinModalProps> = ({ onClose, onJoined, 
   const [step, setStep] = useState<FlowStep>('choice');
   const [category, setCategory] = useState<'Amateur' | 'Semi-Pro' | 'Professional'>('Semi-Pro');
   const [logs, setLogs] = useState<string[]>([]);
-  const [generatedSquad, setGeneratedSquad] = useState<any>(null);
+  const [generatedSquad, setGeneratedSquad] = useState<ApiGeneratedSquad | null>(null);
   const logRef = useRef<HTMLDivElement>(null);
-  const remaining = Math.max(0, 3 - dailyGenerationsCount);
 
   // Auto-scroll logs
   useEffect(() => {
@@ -73,30 +77,33 @@ const EventJoinModalBody: React.FC<EventJoinModalProps> = ({ onClose, onJoined, 
     }
 
     try {
-      const profile = {
-        name: user?.name || 'You',
-        username: user?.username || 'athlete',
-        avatar: user?.avatar || '',
-        level: 24,
-        gameplayCategory: category,
-      };
-      const squad = await generateAIPulseSquad(event.sport, 'solo', profile);
+      // The squad comes from the server, which scores real athletes by Pulse and
+      // enforces the daily quota against autosquad_requests. This used to call
+      // generateAIPulseSquad in the browser and count generations in zustand, so
+      // the limit reset on every refresh.
+      const squad = await generateSquad({
+        sport: event.sport,
+        skill_level: SKILL_LEVEL_BY_CATEGORY[category],
+        entry_type: 'squad',
+        event_id: event.$id ?? null,
+      });
       setGeneratedSquad(squad);
-      incrementGenerationsCount();
-      addGeneratedSquad(squad);
       setStep('result');
-    } catch (err) {
-      console.error(err);
+    } catch {
+      // useAutoSquad reported the reason, including a spent quota.
       setStep('choice');
     }
   };
 
-  const handleAcceptSquad = () => {
-    if (generatedSquad) {
-      acceptGeneratedSquad(generatedSquad.squadId);
+  const handleAcceptSquad = async () => {
+    if (!generatedSquad) return;
+    try {
+      await acceptSquad(generatedSquad.request_id);
+      setStep('confirmed');
+      setTimeout(() => onJoined(), 1200);
+    } catch {
+      // Left on the result step so it can be retried.
     }
-    setStep('confirmed');
-    setTimeout(() => onJoined(), 1200);
   };
 
   return createPortal(
@@ -231,59 +238,54 @@ const EventJoinModalBody: React.FC<EventJoinModalProps> = ({ onClose, onJoined, 
               {step === 'result' && generatedSquad && (
                 <motion.div key="result" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}
                   className="p-6 space-y-4">
-                  {/* Success banner */}
+                  {/* The banner claimed a chemistry percentage and a win rate,
+                      and the card below invented a squad name, a formation and an
+                      "AI Captain". The endpoint returns the athletes it selected
+                      and a match-quality score; that is what is shown. */}
                   <div className="flex items-center gap-3 px-4 py-3 rounded-[14px] bg-accent-surface border border-accent-border/50">
                     <Check size={16} className="text-accent" />
                     <div>
-                      <div className="font-mono text-[11px] text-accent font-bold">Squad Generated Successfully</div>
-                      <div className="font-mono text-[9px] text-text-secondary">Chemistry: {generatedSquad.chemistry.overall}% · Win Rate: {generatedSquad.winRate}%</div>
+                      <div className="font-mono text-[11px] text-accent font-bold">Squad suggested</div>
+                      <div className="font-mono text-[9px] text-text-secondary">
+                        {generatedSquad.suggested_players.length} athlete
+                        {generatedSquad.suggested_players.length === 1 ? '' : 's'} matched on{' '}
+                        {generatedSquad.sport} · {generatedSquad.skill_level.replace('_', '-')}
+                      </div>
                     </div>
                   </div>
 
-                  {/* Squad name + stats */}
                   <div className="rounded-[16px] p-4 border border-border-muted bg-elevated">
-                    <div className="flex items-center justify-between mb-3">
-                      <div>
-                        <div className="font-display text-[18px] text-text-primary tracking-wide uppercase">{generatedSquad.name}</div>
-                        <div className="font-mono text-[9px] text-text-muted">{generatedSquad.sport} · {generatedSquad.formation}</div>
-                      </div>
-                      <div className="text-right">
-                        <div className="font-display text-[22px] text-accent">{generatedSquad.chemistry.overall}%</div>
-                        <div className="font-mono text-[8px] text-text-muted">CHEMISTRY</div>
-                      </div>
-                    </div>
-
-                    {/* Suggested captain */}
-                    {generatedSquad.members?.find((m: Athlete) => m.role === 'captain') && (
-                      <div className="flex items-center gap-2 mb-3 px-3 py-2 rounded-[10px] bg-accent-surface border border-accent-border/50">
-                        <Shield size={11} className="text-accent" />
-                        <span className="font-mono text-[9px] text-accent">
-                          AI Captain: <strong>{generatedSquad.members.find((m: Athlete) => m.role === 'captain')?.name}</strong>
-                        </span>
+                    {generatedSquad.suggested_players.length === 0 ? (
+                      <p className="font-mono text-[10px] text-text-muted text-center py-4">
+                        No athletes at this level play {generatedSquad.sport} yet. Try another
+                        skill level, or invite people directly.
+                      </p>
+                    ) : (
+                      <div className="space-y-2 max-h-48 overflow-y-auto" style={{ scrollbarWidth: 'none' }}>
+                        {generatedSquad.suggested_players.map((m, i) => (
+                          <motion.div key={m.$id} initial={{ opacity: 0, x: -8 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: i * 0.05 }}
+                            className="flex items-center gap-3 p-2 rounded-[10px] bg-hover border border-border-muted/50">
+                            <img src={m.avatar_url ?? undefined} alt={m.full_name} className="w-8 h-8 rounded-full object-cover flex-shrink-0" />
+                            <div className="flex-1 min-w-0">
+                              <div className="font-mono text-[11px] text-text-primary truncate font-bold">
+                                {m.full_name || 'Athlete'}
+                              </div>
+                              <div className="font-mono text-[9px] text-text-muted">
+                                {m.position ?? m.experience_level.replace('_', '-')}
+                              </div>
+                            </div>
+                            <div className="flex items-center gap-2 flex-shrink-0">
+                              {/* Distance needs coordinates the roster does not carry,
+                                  so real Pulse takes that slot. */}
+                              <span className="font-mono text-[8px] text-accent">
+                                {Math.round(m.pulse_score)}P
+                              </span>
+                              <BadgeIcon level={m.level} size={14} animate={false} glow={false} />
+                            </div>
+                          </motion.div>
+                        ))}
                       </div>
                     )}
-
-                    {/* Members */}
-                    <div className="space-y-2 max-h-48 overflow-y-auto" style={{ scrollbarWidth: 'none' }}>
-                      {generatedSquad.members?.slice(0, 6).map((m: Athlete, i: number) => (
-                        <motion.div key={m.uid} initial={{ opacity: 0, x: -8 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: i * 0.05 }}
-                          className="flex items-center gap-3 p-2 rounded-[10px] bg-hover border border-border-muted/50">
-                          <img src={m.avatar} alt={m.name} className="w-8 h-8 rounded-full object-cover flex-shrink-0" />
-                          <div className="flex-1 min-w-0">
-                            <div className="font-mono text-[11px] text-text-primary truncate font-bold">{m.name}</div>
-                            <div className="font-mono text-[9px] text-text-muted">{m.position}</div>
-                          </div>
-                          <div className="flex items-center gap-2 flex-shrink-0">
-                            {m.distance !== undefined && (
-                              <span className="font-mono text-[8px] text-accent flex items-center gap-0.5">
-                                <MapPin size={7} />{m.distance === 0 ? 'You' : `${m.distance}km`}
-                              </span>
-                            )}
-                            <BadgeIcon level={m.level || 20} size={14} animate={false} glow={false} />
-                          </div>
-                        </motion.div>
-                      ))}
-                    </div>
                   </div>
 
                   <div className="flex gap-3">
