@@ -386,6 +386,28 @@ COLLECTIONS: list[Collection] = [
         indexes=[KEY("squad_id"), DESC("created_at")],
     ),
     Collection(
+        # SquadFormation shipped an invitations tab with two fabricated invites and
+        # a badge permanently reading 2. squad_members holds only confirmed
+        # membership, so a pending state needed somewhere to live.
+        "squad_invites", "Squad Invites",
+        attrs=[
+            ID_("squad_id", required=True), ID_("invited_user_id", required=True),
+            ID_("invited_by", required=True),
+            E("status", ["pending", "accepted", "declined", "expired"],
+              required=True, default="pending"),
+            S("position", 40), S("message", 300),
+            # The UI shows "expires in 2h 30m", so the deadline is stored rather
+            # than derived: an invite's life should not change if the rule changes.
+            D("expires_at"), D("responded_at"),
+        ],
+        indexes=[
+            # One live invite per squad per person; a second would let two rows
+            # disagree about whether someone was invited.
+            UNIQUE("squad_id", "invited_user_id"),
+            KEY("invited_user_id", "status"), KEY("squad_id"),
+        ],
+    ),
+    Collection(
         "leadership_votes", "Leadership Votes",
         attrs=[
             ID_("squad_id", required=True), ID_("candidate_id", required=True),

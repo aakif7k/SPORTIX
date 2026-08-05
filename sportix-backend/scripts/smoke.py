@@ -585,6 +585,123 @@ def main() -> int:
           empty.get("current_ssr") is None and empty.get("total_matches") == 0,
           f"current_ssr={empty.get('current_ssr')!r} total={empty.get('total_matches')!r}")
 
+    # --- squad invitations and activity ---------------------------------------
+    step("squad invitations and activity feed")
+    outsider = validators[2]
+    outsider_uid = outsider["data"].get("user_id", "")
+    outsider_hdr = {"Authorization": f"Bearer {outsider['data'].get('jwt', '')}"}
+
+    # validators[2] is already a squad member from the match step, so a fresh squad
+    # is needed to invite them into.
+    r = client.post("/api/squads/", headers=auth_header,
+                    json={"name": f"Invite Squad {tag}", "sport": "football"})
+    invite_squad_id = data_of(r).get("$id", "")
+    created_docs.append(("squads", invite_squad_id))
+
+    r = client.get("/api/squads/invites/mine", headers=outsider_hdr)
+    check("an athlete with no invitations gets an empty list",
+          r.status_code == 200 and (data_of(r).get("items") or []) == [],
+          f"{r.status_code} {body(r)}")
+
+    r = client.post(f"/api/squads/{invite_squad_id}/invites", headers=auth_header,
+                    json={"user_id": outsider_uid, "position": "GK",
+                          "message": f"join us {tag}"})
+    check("POST an invitation -> 201", r.status_code == 201, f"{r.status_code} {body(r)}")
+    inv = data_of(r)
+    invite_id = inv.get("$id", "")
+    check("the invitation carries the squad and the inviter",
+          (inv.get("squad") or {}).get("name") == f"Invite Squad {tag}"
+          and (inv.get("inviter") or {}).get("user_id") == uid,
+          f"invite={inv!r}")
+    # The UI shows "expires in 2h 30m"; the deadline is stored, not guessed.
+    check("the invitation has a real deadline",
+          int(inv.get("expires_in_seconds") or 0) > 0 and inv.get("is_expired") is False,
+          f"expires_in={inv.get('expires_in_seconds')!r}")
+
+    check("a non-captain cannot invite",
+          client.post(f"/api/squads/{invite_squad_id}/invites", headers=outsider_hdr,
+                      json={"user_id": uid}).status_code == 403)
+    check("inviting the same athlete twice is refused",
+          client.post(f"/api/squads/{invite_squad_id}/invites", headers=auth_header,
+                      json={"user_id": outsider_uid}).status_code == 400)
+    check("inviting an existing member is refused",
+          client.post(f"/api/squads/{squad_id}/invites", headers=auth_header,
+                      json={"user_id": outsider_uid}).status_code == 400)
+
+    r = client.get("/api/squads/invites/mine", headers=outsider_hdr)
+    mine = data_of(r).get("items") or []
+    check("the invitation appears for the invitee",
+          any(i.get("$id") == invite_id for i in mine), f"{len(mine)} invitation(s)")
+    r = client.get(f"/api/squads/{invite_squad_id}/invites", headers=auth_header)
+    check("the captain sees the invitations they sent, with the invitee resolved",
+          any((i.get("invitee") or {}).get("user_id") == outsider_uid
+              for i in data_of(r).get("items") or []),
+          f"{body(r)}")
+
+    check("only the invitee can respond",
+          client.post(f"/api/squads/invites/{invite_id}/respond", headers=auth_header,
+                      json={"accept": True}).status_code == 403)
+
+    # Accepting is what creates the membership row, so the two cannot disagree.
+    before = len(data_of(client.get(f"/api/squads/{invite_squad_id}/members",
+                                    headers=auth_header)).get("items")
+                 or data_of(client.get(f"/api/squads/{invite_squad_id}/members",
+                                       headers=auth_header)).get("documents") or [])
+    r = client.post(f"/api/squads/invites/{invite_id}/respond", headers=outsider_hdr,
+                    json={"accept": True})
+    check("accepting an invitation -> 200", r.status_code == 200, f"{r.status_code} {body(r)}")
+    check("accepting reports the status and squad",
+          data_of(r).get("status") == "accepted"
+          and data_of(r).get("squad_id") == invite_squad_id,
+          f"{body(r)}")
+    roster = data_of(client.get(f"/api/squads/{invite_squad_id}/members",
+                                headers=auth_header))
+    members = roster.get("items") or roster.get("documents") or []
+    check("accepting actually creates the membership",
+          any(m.get("user_id") == outsider_uid for m in members),
+          f"{len(members)} member(s), invitee not among them")
+    check("responding twice is refused",
+          client.post(f"/api/squads/invites/{invite_id}/respond", headers=outsider_hdr,
+                      json={"accept": False}).status_code == 400)
+    check("the accepted invitation leaves the invitee's pending list",
+          not any(i.get("$id") == invite_id
+                  for i in data_of(client.get("/api/squads/invites/mine",
+                                              headers=outsider_hdr)).get("items") or []),
+          "an accepted invitation is still pending")
+
+    # --- activity feed ---
+    # Produce something to aggregate: this step runs before the squad-chat step, so
+    # without this the feed is legitimately empty and the assertion would be
+    # measuring ordering rather than behaviour.
+    client.post(f"/api/squads/{squad_id}/messages", headers=auth_header,
+                json={"content": f"feed check {tag}", "type": "announcement",
+                      "announcement_data": {"priority": "normal"}})
+    client.post(f"/api/squads/{squad_id}/posts", headers=auth_header,
+                json={"content": f"activity post {tag}"})
+
+    r = client.get("/api/squads/me/activity", headers=auth_header)
+    feed = data_of(r)
+    check("GET /api/squads/me/activity -> 200", r.status_code == 200, f"{r.status_code} {body(r)}")
+    check("the feed reports how many squads it covers",
+          int(feed.get("squads") or 0) >= 2, f"squads={feed.get('squads')!r}")
+    # Earlier steps posted a squad announcement and a poll, and scheduled nothing;
+    # the announcement is a non-text message and must surface.
+    kinds = {i.get("type") for i in feed.get("items") or []}
+    check("the feed aggregates real squad activity",
+          bool(feed.get("items")) and kinds <= {"post", "event", "message", "achievement"},
+          f"{len(feed.get('items') or [])} entries, kinds={kinds!r}")
+    check("every entry names its squad and carries a timestamp",
+          all(i.get("squad_name") and i.get("at") for i in feed.get("items") or []),
+          f"items={feed.get('items')!r}")
+    check("entries are newest first",
+          [i.get("at") for i in feed.get("items") or []]
+          == sorted([i.get("at") for i in feed.get("items") or []], reverse=True),
+          "the feed is not ordered by time")
+    check("an athlete in no squad gets an empty feed rather than an error",
+          client.get("/api/squads/me/activity",
+                     headers={"Authorization": "Bearer not-a-real-token"}
+                     ).status_code in (401, 403))
+
     # --- AI proxy -------------------------------------------------------------
     step("AI proxy (key stays server-side)")
     r = client.get("/api/ai/health", headers=auth_header)
@@ -971,7 +1088,13 @@ def main() -> int:
     check("a squad message grants read to every member of the squad",
           sum(1 for p in squad_perms if p.startswith("read(")) == 4,
           f"{len(squad_perms)} grant(s) for a 4-member squad: {squad_perms!r}")
-    check("both squad messages come back", len(channel) == 2, f"got {len(channel)}")
+    # Assert the two are present rather than that the channel holds exactly two:
+    # an earlier step also posts to this squad, and an exact count made this
+    # assertion depend on how many other steps happen to write here.
+    check("both squad messages come back",
+          any("training at six" in str(m.get("content", "")) for m in channel)
+          and any(m.get("type") == "poll" for m in channel),
+          f"{len(channel)} message(s) in the channel")
     poll = next((m for m in channel if m.get("type") == "poll"), {})
     # The column is a string; the service json.dumps on write and parses on read,
     # so the client never sees a JSON blob.

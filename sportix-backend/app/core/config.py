@@ -68,6 +68,7 @@ class Settings(BaseSettings):
     # squad_members, which corrupted every member query.
     collection_event_comments: str = "event_comments"
     collection_squad_messages: str = "squad_messages"
+    collection_squad_invites: str = "squad_invites"
     collection_leadership_votes: str = "leadership_votes"
     collection_conversations: str = "conversations"
     collection_messages: str = "messages"

@@ -2,9 +2,10 @@ from fastapi import APIRouter, Depends, Query
 from app.core.dependencies import get_current_user
 from app.schemas.squad import SquadCreate, SquadUpdate, MemberAdd, RoleUpdate, TacticsUpdate, LeadershipVote, SquadEventCreate, SquadEventVote, SquadPostCreate
 from app.schemas.message import SquadMessageCreate
+from app.schemas.invite import SquadInviteCreate, SquadInviteResponse
 from app.services import (
     squad_service, squad_activity_service, messaging_service, squad_history_service,
-    leadership_service,
+    leadership_service, squad_invite_service,
 )
 
 router = APIRouter()
@@ -228,3 +229,60 @@ async def get_leadership(squad_id: str, user=Depends(get_current_user)):
     """
     data = await leadership_service.get_leadership(squad_id, user["id"])
     return {"success": True, "data": data}
+
+
+# ─── Invitations ──────────────────────────────────────────────────────────────
+# SquadFormation had an invitations tab with two fabricated invites and a badge
+# permanently reading 2. squad_members holds confirmed membership only, so the
+# pending state had nowhere to live until squad_invites.
+
+@router.get("/invites/mine")
+async def my_invites(user=Depends(get_current_user)):
+    """Invitations waiting on the caller. Expired ones are marked and withheld."""
+    data = await squad_invite_service.list_mine(user["id"])
+    return {"success": True, "data": data}
+
+
+@router.get("/me/activity")
+async def my_squad_activity(limit: int = Query(25, le=50), user=Depends(get_current_user)):
+    """
+    One activity stream across the caller's squads.
+
+    Aggregated from posts, scheduled events, channel messages and achievements —
+    four collections that already existed with nothing joining them.
+    """
+    data = await squad_invite_service.activity(user["id"], limit)
+    return {"success": True, "data": data}
+
+
+@router.get("/{squad_id}/invites")
+async def squad_invites(squad_id: str, user=Depends(get_current_user)):
+    """Invitations this squad has sent. Members only."""
+    data = await squad_invite_service.list_for_squad(squad_id, user["id"])
+    return {"success": True, "data": data}
+
+
+@router.post("/{squad_id}/invites", status_code=201)
+async def invite_to_squad(
+    squad_id: str, payload: SquadInviteCreate, user=Depends(get_current_user),
+):
+    """Invite an athlete. Captain only."""
+    data = await squad_invite_service.invite(
+        squad_id, payload.user_id, user["id"], payload.position, payload.message)
+    return {"success": True, "data": data}
+
+
+@router.post("/invites/{invite_id}/respond")
+async def respond_to_invite(
+    invite_id: str, payload: SquadInviteResponse, user=Depends(get_current_user),
+):
+    """Accept or decline. Accepting is what creates the membership row."""
+    data = await squad_invite_service.respond(invite_id, user["id"], payload.accept)
+    return {"success": True, "data": data}
+
+
+@router.delete("/invites/{invite_id}")
+async def revoke_invite(invite_id: str, user=Depends(get_current_user)):
+    """Withdraw an invitation. Captain only."""
+    await squad_invite_service.revoke(invite_id, user["id"])
+    return {"success": True, "message": "Invitation withdrawn"}

@@ -136,6 +136,44 @@ async def add_member(squad_id: str, requester_id: str, payload: MemberAdd) -> di
     return member
 
 
+async def join_from_invite(squad_id: str, user_id: str,
+                           position: str | None = None) -> dict:
+    """
+    Add a member because they accepted an invitation.
+
+    Membership creation stays in this service — the service that owns the
+    members_count denormalisation — rather than being duplicated into the invite
+    flow, but the captain check is skipped: the person joining is the invitee, and
+    the captain already authorised it by sending the invitation.
+    """
+    squad = db.get_document(DB_ID, settings.collection_squads, squad_id)
+
+    existing = db.list_documents(
+        DB_ID, settings.collection_squad_members,
+        queries=[Q.equal("squad_id", squad_id), Q.equal("user_id", user_id), Q.limit(1)],
+    ).get("documents", [])
+    if existing:
+        # Accepting twice is not an error; they are in the squad either way.
+        return existing[0]
+
+    now = now_iso()
+    member = db.create_document(
+        DB_ID, settings.collection_squad_members, ID.unique(),
+        data={
+            "created_at": now,
+            "joined_at": now,
+            "squad_id": squad_id,
+            "user_id": user_id,
+            "role": "member",
+            "position": position,
+        },
+    )
+    db.update_document(DB_ID, settings.collection_squads, squad_id,
+                       {"members_count": int(squad.get("members_count", 0)) + 1,
+                        "updated_at": now})
+    return member
+
+
 async def remove_member(squad_id: str, target_user_id: str, requester_id: str):
     squad = db.get_document(DB_ID, settings.collection_squads, squad_id)
     if squad.get("captain_id") != requester_id and target_user_id != requester_id:
