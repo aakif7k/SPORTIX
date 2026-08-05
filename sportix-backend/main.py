@@ -17,7 +17,7 @@ from app.routers import (
     missions, coins, badges, notifications,
     leaderboard, autosquad, search,
     upload, settings as settings_router, admin,
-    conversations, tournaments, crews,
+    conversations, tournaments, crews, ai,
 )
 
 configure_logging()
@@ -115,6 +115,7 @@ app.include_router(admin.router,            prefix="/api/admin",         tags=["
 app.include_router(conversations.router,    prefix="/api/conversations", tags=["Messaging"])
 app.include_router(tournaments.router,      prefix="/api/tournaments",   tags=["Tournaments"])
 app.include_router(crews.router,            prefix="/api/crews",         tags=["Event Crews"])
+app.include_router(ai.router,               prefix="/api/ai",            tags=["AI"])
 
 
 @app.get("/", tags=["Health"])

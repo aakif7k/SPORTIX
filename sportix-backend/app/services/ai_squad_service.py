@@ -9,6 +9,41 @@ from datetime import date
 import random
 
 
+async def find_candidates(sport: str, skill_level: str, exclude_user_id: str) -> list[dict]:
+    """
+    Athletes who could join a squad, best Pulse first.
+
+    Extracted so the AI proxy scores the same pool by the same rule rather than
+    writing a second query that could drift away from this one. Each row carries
+    `_pulse` and a `pulse_score` mirror, because the AI prompt and the client both
+    want it under a normal name.
+    """
+    candidates = db.list_documents(DB_ID, settings.collection_users, queries=[
+        Q.equal("sport", sport),
+        Q.equal("experience_level", skill_level),
+        Q.not_equal("$id", exclude_user_id),
+        Q.limit(50),
+    ]).get("documents", [])
+
+    scored = []
+    for c in candidates:
+        try:
+            res = db.list_documents(
+                DB_ID, settings.collection_pulse_scores,
+                queries=[Q.equal("user_id", c["$id"]), Q.limit(1)],
+            )
+            docs = res.get("documents", [])
+            pulse = float(docs[0].get("total_pulse", 100)) if docs else 100.0
+        except Exception:
+            # A missing Pulse row is a new account, not a failure; 100 is the
+            # starting score every account is seeded with.
+            pulse = 100.0
+        scored.append({**c, "_pulse": pulse, "pulse_score": pulse})
+
+    scored.sort(key=lambda x: x["_pulse"], reverse=True)
+    return scored
+
+
 async def generate(user_id: str, payload: AutoSquadRequest) -> dict:
     """
     AI AutoSquad generator.
@@ -21,31 +56,7 @@ async def generate(user_id: str, payload: AutoSquadRequest) -> dict:
     if remaining["remaining"] <= 0:
         raise ValueError(f"Daily AutoSquad limit reached ({settings.max_autosquad_generations}/day)")
 
-    # Find compatible players
-    queries = [
-        Q.equal("sport", payload.sport),
-        Q.equal("experience_level", payload.skill_level.value),
-        Q.not_equal("$id", user_id),
-        Q.limit(50),
-    ]
-    candidates_res = db.list_documents(DB_ID, settings.collection_users, queries=queries)
-    candidates = candidates_res.get("documents", [])
-
-    # Score candidates by pulse
-    scored = []
-    for c in candidates:
-        try:
-            pulse_res = db.list_documents(
-                DB_ID, settings.collection_pulse_scores,
-                queries=[Q.equal("user_id", c["$id"]), Q.limit(1)],
-            )
-            pulse = pulse_res["documents"][0].get("total_pulse", 100) if pulse_res.get("documents") else 100
-        except Exception:
-            pulse = 100
-        scored.append({**c, "_pulse": pulse})
-
-    # Sort by pulse desc, take top squad
-    scored.sort(key=lambda x: x["_pulse"], reverse=True)
+    scored = await find_candidates(payload.sport, payload.skill_level.value, user_id)
     squad_size = {"solo": 0, "duo": 1, "squad": 4}.get(payload.entry_type.value, 0)
     suggested = scored[:squad_size]
 

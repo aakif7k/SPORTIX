@@ -100,6 +100,10 @@ class Settings(BaseSettings):
     allowed_origins: str = "http://localhost:5173,http://localhost:3000,http://127.0.0.1:5173"
 
     # ── Google Gemini (server-side only) ──────────────────────────────────────
+    # The key lives here and nowhere else. It was VITE_GEMINI_API_KEY in the
+    # frontend env, which ships it to every visitor in the bundle for anyone to
+    # read out and spend. Absent is a valid state: the AI endpoints report "not
+    # configured" and the app degrades rather than erroring.
     gemini_api_key: str = ""
 
     @property

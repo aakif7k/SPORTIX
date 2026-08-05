@@ -585,6 +585,47 @@ def main() -> int:
           empty.get("current_ssr") is None and empty.get("total_matches") == 0,
           f"current_ssr={empty.get('current_ssr')!r} total={empty.get('total_matches')!r}")
 
+    # --- AI proxy -------------------------------------------------------------
+    step("AI proxy (key stays server-side)")
+    r = client.get("/api/ai/health", headers=auth_header)
+    health = data_of(r)
+    check("GET /api/ai/health -> 200", r.status_code == 200, f"{r.status_code} {body(r)}")
+    # Absent is a valid state: the app must degrade, not error. Gemini used to be
+    # called from the browser with VITE_GEMINI_API_KEY in the bundle.
+    check("health reports whether AI is configured rather than failing",
+          isinstance(health.get("configured"), bool) and bool(health.get("message")),
+          f"health={health!r}")
+
+    r = client.post("/api/ai/squad-suggestion", headers=auth_header,
+                    json={"sport": "football", "skill_level": "amateur", "size": 3})
+    suggestion = data_of(r)
+    if health.get("configured"):
+        check("a squad suggestion comes back", r.status_code == 200,
+              f"{r.status_code} {body(r)}")
+        # Whatever the model says, only real athletes may end up in the squad.
+        ids = {c.get("$id") for c in suggestion.get("candidates") or []}
+        check("every selected athlete exists in the candidate pool",
+              all(sel.get("id") in ids for sel in suggestion.get("selected") or []),
+              f"selected={suggestion.get('selected')!r}")
+        check("the response says whether AI was actually used",
+              isinstance(suggestion.get("ai_used"), bool),
+              f"ai_used={suggestion.get('ai_used')!r}")
+    else:
+        check("an unconfigured squad suggestion fails cleanly, not with a 500",
+              r.status_code in (200, 503), f"{r.status_code} {body(r)}")
+
+    check("an oversized squad request is refused",
+          client.post("/api/ai/squad-suggestion", headers=auth_header,
+                      json={"sport": "football", "size": 30}).status_code == 422)
+    check("a blank sport is refused",
+          client.post("/api/ai/squad-suggestion", headers=auth_header,
+                      json={"sport": "   ", "size": 3}).status_code == 422)
+
+    # The key must never appear in a response, however the call goes.
+    check("no response leaks the API key",
+          "AIza" not in r.text and "gemini_api_key" not in r.text.lower(),
+          "an AI response contained something key-shaped")
+
     # --- crews and event discussion -------------------------------------------
     step("event crews and discussion")
     r = client.get(f"/api/crews/event/{event_id}", headers=auth_header)

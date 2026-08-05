@@ -53,11 +53,25 @@ _HTTP_CODES = {
 
 
 def register_exception_handlers(app: FastAPI) -> None:
+    # Imported here rather than at module scope: app.services imports app.core, so
+    # a top-level import would be circular.
+    from app.services.ai_service import AIUnavailable
+
 
     @app.exception_handler(StarletteHTTPException)
     async def http_handler(request: Request, exc: StarletteHTTPException):
         code = _HTTP_CODES.get(exc.status_code, "HTTP_ERROR")
         return error_response(exc.status_code, code, str(exc.detail))
+
+    @app.exception_handler(AIUnavailable)
+    async def ai_unavailable_handler(request: Request, exc: AIUnavailable):
+        # 503, not 500: the server is fine, the optional AI dependency is simply
+        # not configured. A 500 told the client something had broken and made a
+        # missing key look like a bug.
+        return error_response(
+            503, "AI_UNAVAILABLE",
+            str(exc) or "The AI service is not configured on this server.",
+        )
 
     @app.exception_handler(RequestValidationError)
     async def validation_handler(request: Request, exc: RequestValidationError):
