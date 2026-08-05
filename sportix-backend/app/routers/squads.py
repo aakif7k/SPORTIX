@@ -2,7 +2,10 @@ from fastapi import APIRouter, Depends, Query
 from app.core.dependencies import get_current_user
 from app.schemas.squad import SquadCreate, SquadUpdate, MemberAdd, RoleUpdate, TacticsUpdate, LeadershipVote, SquadEventCreate, SquadEventVote, SquadPostCreate
 from app.schemas.message import SquadMessageCreate
-from app.services import squad_service, squad_activity_service, messaging_service
+from app.services import (
+    squad_service, squad_activity_service, messaging_service, squad_history_service,
+    leadership_service,
+)
 
 router = APIRouter()
 
@@ -196,4 +199,32 @@ async def send_squad_message(
         payload.attachment_url, payload.poll_data,
         payload.tactical_data, payload.announcement_data,
     )
+    return {"success": True, "data": data}
+
+
+# ─── Match history ────────────────────────────────────────────────────────────
+# MatchHistory read squad.matchHistory out of the store, so every squad showed
+# the same three invented fixtures.
+
+@router.get("/{squad_id}/matches")
+async def list_squad_matches(
+    squad_id: str, page: int = Query(0), limit: int = Query(20, le=50),
+    user=Depends(get_current_user),
+):
+    """Matches this squad played, newest first, each with its top performer."""
+    data = await squad_history_service.list_matches(squad_id, user["id"], page, limit)
+    return {"success": True, "data": data}
+
+
+# ─── Leadership standing ──────────────────────────────────────────────────────
+# There was a POST to cast a vote and nothing to read, so LeadershipApproval
+# showed a hardcoded score, a hardcoded candidate and a tally that never moved.
+
+@router.get("/{squad_id}/leadership")
+async def get_leadership(squad_id: str, user=Depends(get_current_user)):
+    """
+    Leadership scores for every member, the promotion recommendation, and the
+    state of any open vote. All derived from the squad's own records.
+    """
+    data = await leadership_service.get_leadership(squad_id, user["id"])
     return {"success": True, "data": data}

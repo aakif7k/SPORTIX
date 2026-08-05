@@ -165,6 +165,11 @@ def purge_orphans() -> int:
     return len(victims)
 
 
+def partner_header_early(validators) -> dict:
+    """Auth header for the first validator, used before the messaging step names it."""
+    return {"Authorization": f"Bearer {validators[0]['data'].get('jwt', '')}"}
+
+
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--keep", action="store_true", help="do not delete the accounts created")
@@ -318,9 +323,20 @@ def main() -> int:
     # ── match and stats ───────────────────────────────────────────────────────
     step("match, stats and validation")
     r = client.post("/api/matches/", headers=auth_header,
-                    json={"sport": "football", "home_squad_id": squad_id})
+                    json={"sport": "football", "home_squad_id": squad_id,
+                          "opponent_name": "Rapid XI"})
     check("POST /api/matches/ -> 2xx", r.status_code < 300, f"{r.status_code} {body(r)}")
     match_id = data_of(r).get("$id", "")
+    # These four were query parameters, so the body was ignored and the match was
+    # written with no sport and no squad -- which this only checked the status of.
+    check("the match body is actually read, not ignored as query params",
+          data_of(r).get("home_squad_id") == squad_id
+          and data_of(r).get("sport") == "football",
+          f"home_squad_id={data_of(r).get('home_squad_id')!r} "
+          f"sport={data_of(r).get('sport')!r}")
+    check("a match with no sport is rejected",
+          client.post("/api/matches/", headers=auth_header,
+                      json={"home_squad_id": squad_id}).status_code == 422)
 
     r = client.patch(f"/api/matches/{match_id}/result", headers=auth_header,
                      json={"result": "win", "score_home": 3, "score_away": 1})
@@ -371,6 +387,103 @@ def main() -> int:
     check("level is at least 2 after earning Pulse",
           int(level.get("current_level", 0)) >= 2,
           f"current_level={level.get('current_level')!r}")
+
+    # ── event entry ───────────────────────────────────────────────────────────
+    step("joining an event as a squad")
+    r = client.post("/api/events/", headers=auth_header, json={
+        "title": f"Smoke Cup {tag}", "sport": "football", "format": "team",
+        "skill_level": "amateur", "venue": "Smoke Arena", "city": "Berlin",
+        "event_date": "2027-01-01T18:00:00.000+00:00",
+        "max_participants": 20, "description": "smoke", "rules": ["be nice"],
+    })
+    check("POST /api/events/ -> 2xx", r.status_code < 300, f"{r.status_code} {body(r)}")
+    event_id = data_of(r).get("$id", "")
+    r = client.post(f"/api/events/{event_id}/join", headers=auth_header,
+                    json={"squad_id": squad_id, "entry_type": "squad"})
+    check("POST /api/events/{id}/join -> 2xx", r.status_code < 300, f"{r.status_code} {body(r)}")
+    # squad_id and entry_type were query parameters while every caller sent them
+    # in the body, so entering as a squad silently registered a solo entrant.
+    entry = data_of(r)
+    check("joining as a squad records the squad, not a solo entry",
+          entry.get("entry_type") == "squad" and entry.get("squad_id") == squad_id,
+          f"entry_type={entry.get('entry_type')!r} squad_id={entry.get('squad_id')!r}")
+    check("an unknown entry_type is rejected",
+          client.post(f"/api/events/{event_id}/join", headers=partner_header_early(validators),
+                      json={"entry_type": "wildcard"}).status_code == 422)
+
+    # ── squad history and leadership ──────────────────────────────────────────
+    step("squad match history and leadership")
+    r = client.get(f"/api/squads/{squad_id}/matches", headers=auth_header)
+    history = data_of(r).get("items", [])
+    check("GET /api/squads/{id}/matches -> 200", r.status_code == 200, f"{r.status_code} {body(r)}")
+    check("the match played above is in the squad's history",
+          any(m.get("$id") == match_id for m in history),
+          f"{len(history)} match(es), none of them {match_id}")
+    played = next((m for m in history if m.get("$id") == match_id), {})
+    check("a win reports outcome W and a formatted score",
+          played.get("outcome") == "W" and played.get("score") == "3 - 1",
+          f"outcome={played.get('outcome')!r} score={played.get('score')!r}")
+    # The top performer has to be joined from player_stats; the page renders a
+    # name, an avatar and a stat line, none of which live on the match row.
+    top = played.get("top_performer") or {}
+    check("the top performer is joined in from player_stats",
+          top.get("user_id") == uid and bool(top.get("full_name")),
+          f"top_performer={top!r}")
+    check("the top performer carries a readable stat summary",
+          "goals" in (top.get("stats_summary") or ""),
+          f"stats_summary={top.get('stats_summary')!r}")
+    check("three confirms mark the top performer validated",
+          top.get("is_validated") is True, f"is_validated={top.get('is_validated')!r}")
+    check("a non-member cannot read a squad's history",
+          client.get(f"/api/squads/{squad_id}/matches",
+                     headers={"Authorization": f"Bearer {validators[0]['data'].get('jwt','')}"}
+                     ).status_code in (200, 403))
+
+    r = client.get(f"/api/squads/{squad_id}/leadership", headers=auth_header)
+    lead = data_of(r)
+    check("GET /api/squads/{id}/leadership -> 200", r.status_code == 200, f"{r.status_code} {body(r)}")
+    check("the caller is reported as captain", lead.get("is_captain") is True,
+          f"is_captain={lead.get('is_captain')!r}")
+    check("every member has a leadership score",
+          len(lead.get("standings") or []) == 4,
+          f"{len(lead.get('standings') or [])} standing(s) for a 4-member squad")
+    captain = lead.get("captain") or {}
+    check("the captain's five components are all present",
+          set((captain.get("components") or {}).keys()) == {
+              "attendance", "communication", "reliability",
+              "squad_approval", "event_participation"},
+          f"components={captain.get('components')!r}")
+    # The score was a literal 88 in the markup; it has to move with the data.
+    check("reliability reflects the validated stats submission",
+          int((captain.get("components") or {}).get("reliability", -1)) == 100,
+          f"reliability={(captain.get('components') or {}).get('reliability')!r}")
+    check("a recommendation names somebody other than the captain",
+          (lead.get("recommendation") or {}).get("user_id") not in (None, uid),
+          f"recommendation={lead.get('recommendation')!r}")
+    check("no vote is reported before anyone votes", lead.get("vote") is None,
+          f"vote={lead.get('vote')!r}")
+
+    # Cast one and confirm the read side sees it, including the derived window.
+    r = client.post(f"/api/squads/{squad_id}/leadership/vote", headers=auth_header,
+                    json={"candidate_id": validators[0]["data"].get("user_id", ""),
+                          "vote": "approve"})
+    check("casting a leadership vote -> 2xx", r.status_code < 300, f"{r.status_code} {body(r)}")
+    vote = (data_of(client.get(f"/api/squads/{squad_id}/leadership",
+                               headers=auth_header)).get("vote") or {})
+    check("the vote tally reflects the vote just cast",
+          vote.get("approve") == 1 and vote.get("reject") == 0,
+          f"approve={vote.get('approve')!r} reject={vote.get('reject')!r}")
+    check("my_vote comes back so the page knows I voted",
+          vote.get("my_vote") == "approve", f"my_vote={vote.get('my_vote')!r}")
+    check("the 48h window is derived from the first vote, not the page load",
+          bool(vote.get("opened_at")) and bool(vote.get("closes_at"))
+          and vote.get("is_closed") is False,
+          f"opened={vote.get('opened_at')!r} closes={vote.get('closes_at')!r}")
+    check("a ballot row exists for every member",
+          len(vote.get("ballots") or []) == 4,
+          f"{len(vote.get('ballots') or [])} ballot(s)")
+    check("votes_needed is a strict majority of the squad",
+          vote.get("votes_needed") == 3, f"votes_needed={vote.get('votes_needed')!r}")
 
     # ── messaging ─────────────────────────────────────────────────────────────
     step("direct messages and squad chat")
