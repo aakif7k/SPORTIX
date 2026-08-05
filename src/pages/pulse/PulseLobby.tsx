@@ -7,7 +7,55 @@ import {
   History, Shield, ArrowRight, Activity, Clock, ArrowLeft
 } from 'lucide-react';
 
-import { useGamificationStore, getLevelProgress, LEVELS } from '../../store/gamificationStore';
+import { levelStyleFor, LEVELS } from '../../store/gamificationStore';
+import type { DailyReward, Mission, Badge } from '../../store/gamificationStore';
+import {
+  usePulseAndLevel, useStreak, useMissions, useBadges,
+} from '@/hooks/useGamification';
+import type { ApiStreakRung, ApiMission, ApiBadge } from '@/hooks/useGamification';
+
+/**
+ * The reward, mission and badge cards speak the camelCase shapes this store
+ * declared for the fixtures. The API rows are adapted here rather than rewriting
+ * three shared card components.
+ */
+const toReward = (rung: ApiStreakRung): DailyReward => ({
+  day: rung.day,
+  label: rung.label,
+  pulseReward: rung.pulse,
+  xpBooster: rung.xp_booster,
+  icon: rung.icon,
+  claimed: rung.claimed,
+  isToday: rung.is_today,
+  isLocked: rung.is_locked,
+  isBonusDay: Boolean(rung.is_bonus_day),
+});
+
+const toMission = (m: ApiMission): Mission => ({
+  id: m.mission_key,
+  title: m.title,
+  description: m.description ?? '',
+  // daily_missions has no icon column; the category is what varies.
+  icon: m.category === 'weekly' ? '\u{1F3C6}' : '\u{1F3AF}',
+  category: (m.category as Mission['category']) ?? 'daily',
+  target: m.target,
+  current: m.progress,
+  reward: m.reward_pulse,
+  xpReward: m.reward_coins,
+  completed: m.progress >= m.target,
+  claimed: m.is_claimed,
+});
+
+const toBadge = (b: ApiBadge): Badge => ({
+  id: b.$id,
+  title: b.name,
+  description: b.description ?? '',
+  icon: b.icon ?? '\u{1F3C5}',
+  rarity: (b.rarity as Badge['rarity']) ?? 'common',
+  color: '#CCFF00',
+  unlocked: b.unlocked,
+  unlockedAt: b.unlocked_at ?? undefined,
+});
 import { SemiCircleProgress, LevelBadge } from '../../components/gamification/ProgressRing';
 import { RewardCard, StreakBanner, MissionCard, BadgeCard } from '../../components/gamification/GamificationCards';
 import { BadgeIcon } from '../../components/gamification/BadgeIcon';
@@ -44,9 +92,28 @@ const SectionHeader: React.FC<{
 
 // ─── PULSE GAMIFICATION SECTION (Level + Progression) ────────────────────────
 const LevelProgressSection: React.FC = () => {
-  const { currentPulse, totalXP, streakDays, currentLevel } = useGamificationStore();
-  const { level, percentage, remaining } = getLevelProgress(currentPulse);
-  const nextLevel = LEVELS.find(l => l.level === level.level + 1);
+  const { pulse, level: serverLevel, loading } = usePulseAndLevel();
+  const { streak } = useStreak();
+
+  // The level, the progress through it and the Pulse required next are all the
+  // server's. This page used to compute them from the current Pulse score as
+  // floor(pulse / 100) + 1, which disagreed with the server and could go *down*
+  // when Pulse was spent.
+  const currentPulse = Math.round(pulse?.total_pulse ?? 0);
+  const currentLevel = serverLevel?.current_level ?? 1;
+  const level = levelStyleFor(currentLevel);
+  const percentage = Math.round(serverLevel?.progress_percent ?? 0);
+  const remaining = Math.max(0, Math.round(serverLevel?.pulse_for_next ?? 0));
+  const lifetimePulse = Math.round(serverLevel?.total_pulse_ever ?? 0);
+  const streakDays = streak?.current_streak ?? 0;
+  const nextLevel = LEVELS.find(l => l.level === currentLevel + 1);
+
+  if (loading) {
+    return (
+      <div className="rounded-[24px] border border-border-muted h-72 bg-surface animate-shimmer"
+           aria-busy="true" aria-label="Loading your level" />
+    );
+  }
 
   return (
     <motion.div
@@ -74,8 +141,16 @@ const LevelProgressSection: React.FC = () => {
         <div className="flex flex-col md:flex-row items-center gap-8">
           {/* Semi-circle */}
           <div className="flex flex-col items-center gap-3">
-            <SemiCircleProgress pulse={currentPulse} size="lg" showLevelUp />
-            <LevelBadge pulse={currentPulse} />
+            <SemiCircleProgress
+              pulse={currentPulse}
+              levelNumber={currentLevel}
+              progressPercent={percentage}
+              pulseIntoLevel={lifetimePulse}
+              pulseForNext={remaining}
+              size="lg"
+              showLevelUp
+            />
+            <LevelBadge levelNumber={currentLevel} />
           </div>
 
           {/* Right stats */}
@@ -124,7 +199,10 @@ const LevelProgressSection: React.FC = () => {
             {/* Quick stats */}
             <div className="grid grid-cols-3 gap-3">
               {[
-                { label: 'Total XP', value: totalXP.toLocaleString(), icon: '⚡', color: '#a855f7' },
+                // "Total XP" was a separate invented currency (3,800 for every
+                // account). Lifetime earned Pulse is the real quantity levels
+                // track, and it is what the server reports.
+                { label: 'Lifetime Pulse', value: lifetimePulse.toLocaleString(), icon: '⚡', color: '#a855f7' },
                 { label: 'Streak', value: `${streakDays}d 🔥`, icon: '🔥', color: '#f97316' },
                 { label: 'Level', value: `#${currentLevel}`, icon: '🏅', color: level.color },
               ].map(s => (
@@ -207,7 +285,9 @@ const LevelProgressSection: React.FC = () => {
 
 // ─── DAILY REWARDS SECTION ────────────────────────────────────────────────────
 const DailyRewardsSection: React.FC = () => {
-  const { dailyRewards, streakDays, claimDailyReward } = useGamificationStore();
+  const { streak, rewards, claimDaily, claiming, loading } = useStreak();
+  const streakDays = streak?.current_streak ?? 0;
+  const dailyRewards = rewards.map(toReward);
 
   return (
     <motion.div
@@ -227,9 +307,17 @@ const DailyRewardsSection: React.FC = () => {
 
       {/* Reward cards strip */}
       <div className="flex gap-3 overflow-x-auto pb-2 mt-4" style={{ scrollbarWidth: 'none' }}>
-        {dailyRewards.map(reward => (
-          <RewardCard key={reward.day} reward={reward} onClaim={claimDailyReward} />
-        ))}
+        {loading
+          ? [0, 1, 2, 3, 4].map(i => (
+            <div key={i} className="w-24 h-40 flex-shrink-0 rounded-[16px] bg-elevated animate-shimmer" />
+          ))
+          : dailyRewards.map(reward => (
+            <RewardCard
+              key={reward.day}
+              reward={reward}
+              onClaim={() => { if (!claiming) void claimDaily(); }}
+            />
+          ))}
       </div>
 
       {/* Weekly bonus callout */}
@@ -240,7 +328,7 @@ const DailyRewardsSection: React.FC = () => {
           <p className="font-mono text-[10px] text-text-secondary mt-0.5">+100 Pulse · 2x XP Booster · Exclusive Title</p>
         </div>
         <div className="flex items-center gap-1 text-text-muted font-mono text-[10px]">
-          <Lock size={10} /> {7 - streakDays}d left
+          <Lock size={10} /> {Math.max(0, 7 - (dailyRewards.find(r => r.isToday)?.day ?? 1) + 1)}d left
         </div>
       </div>
     </motion.div>
@@ -249,8 +337,23 @@ const DailyRewardsSection: React.FC = () => {
 
 // ─── MISSIONS SECTION ─────────────────────────────────────────────────────────
 const MissionsSection: React.FC = () => {
-  const { missions, claimMissionReward } = useGamificationStore();
+  const { missions: apiMissions, claimMission, loading } = useMissions();
+  const missions = apiMissions.map(toMission);
+  const claimMissionReward = (id: string) => { void claimMission(id); };
   const [tab, setTab] = useState<'daily' | 'weekly'>('daily');
+
+  // After the hooks: an early return above useState changes the hook order
+  // between renders.
+  if (loading) {
+    return (
+      <div className="rounded-[20px] border border-border-muted bg-surface p-6 space-y-3"
+           aria-busy="true" aria-label="Loading missions">
+        {[0, 1, 2].map(i => (
+          <div key={i} className="h-20 rounded-xl bg-elevated animate-shimmer" />
+        ))}
+      </div>
+    );
+  }
 
   const filtered = missions.filter(m => m.category === tab);
   const completed = filtered.filter(m => m.completed).length;
@@ -321,8 +424,20 @@ const MissionsSection: React.FC = () => {
 
 // ─── ACHIEVEMENTS SECTION ─────────────────────────────────────────────────────
 const AchievementsSection: React.FC = () => {
-  const { badges } = useGamificationStore();
+  const { badges: apiBadges, loading } = useBadges();
+  const badges = apiBadges.map(toBadge);
   const [filter, setFilter] = useState<'all' | 'unlocked' | 'locked'>('all');
+
+  if (loading) {
+    return (
+      <div className="rounded-[20px] border border-border-muted bg-surface p-6 grid grid-cols-2 sm:grid-cols-4 gap-3"
+           aria-busy="true" aria-label="Loading achievements">
+        {[0, 1, 2, 3].map(i => (
+          <div key={i} className="h-28 rounded-xl bg-elevated animate-shimmer" />
+        ))}
+      </div>
+    );
+  }
   const filtered = filter === 'all' ? badges : badges.filter(b => filter === 'unlocked' ? b.unlocked : !b.unlocked);
 
   return (
@@ -851,8 +966,13 @@ const NAV_TABS = [
 
 export const PulseLobby: React.FC = () => {
   const [activeTab, setActiveTab] = useState('registered');
-  const { currentPulse, streakDays, missions } = useGamificationStore();
-  const { level } = getLevelProgress(currentPulse);
+  const { pulse, level: serverLevel } = usePulseAndLevel();
+  const { streak } = useStreak();
+  const { missions: apiMissions } = useMissions();
+  const currentPulse = Math.round(pulse?.total_pulse ?? 0);
+  const streakDays = streak?.current_streak ?? 0;
+  const missions = apiMissions.map(toMission);
+  const level = levelStyleFor(serverLevel?.current_level ?? 1);
 
   const pendingMissions = missions.filter(m => m.completed && !m.claimed).length;
 

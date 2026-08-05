@@ -2,16 +2,19 @@ import React from 'react';
 import { motion } from 'framer-motion';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { Zap, Gift, Target, Check, Lock, Trophy, ArrowRight, Star, History, Activity } from 'lucide-react';
-import { useGamificationStore } from '../../store/gamificationStore';
+import { useStreak, useMissions } from '@/hooks/useGamification';
 import { useCareer, useMatchHistory } from '@/hooks/useCareer';
 import { usePendingReport } from '@/hooks/usePendingReport';
 
 // ─── Daily Rewards Panel ─────────────────────────────────────────────────────
 const DailyRewardsPanel: React.FC = () => {
   const navigate = useNavigate();
-  const { dailyRewards, missions, claimDailyReward } = useGamificationStore();
-  const todayReward = dailyRewards.find(r => r.isToday);
-  const activeMissions = missions.filter(m => !m.completed).slice(0, 3);
+  const { rewards, claimDaily, claiming } = useStreak();
+  const { missions } = useMissions();
+  const todayReward = rewards.find(r => r.is_today);
+  const activeMissions = missions
+    .filter(m => m.progress < m.target && !m.is_claimed)
+    .slice(0, 3);
 
   return (
     <div className="space-y-4">
@@ -26,17 +29,19 @@ const DailyRewardsPanel: React.FC = () => {
           <span className="font-display text-[14px] tracking-widest" style={{ color: 'var(--text-primary)' }}>DAILY REWARDS</span>
         </div>
         <div className="grid grid-cols-4 gap-2 mb-3">
-          {dailyRewards.slice(0, 7).map((reward) => (
+          {rewards.slice(0, 7).map((reward) => (
             <motion.div key={reward.day} whileHover={{ scale: 1.05 }}
-              onClick={() => reward.isToday && !reward.claimed ? claimDailyReward(reward.day) : null}
+              onClick={() => {
+                if (reward.is_today && !reward.claimed && !claiming) void claimDaily();
+              }}
               className="flex flex-col items-center gap-1 p-2 rounded-[12px] cursor-pointer relative overflow-hidden"
               style={{
-                background: reward.claimed ? 'var(--accent-surface)' : reward.isToday ? 'rgba(255,213,74,0.1)' : 'var(--bg-elevated)',
-                border: `1px solid ${reward.claimed ? 'var(--accent-border)' : reward.isToday ? 'rgba(255,213,74,0.3)' : 'var(--border)'}`,
+                background: reward.claimed ? 'var(--accent-surface)' : reward.is_today ? 'rgba(255,213,74,0.1)' : 'var(--bg-elevated)',
+                border: `1px solid ${reward.claimed ? 'var(--accent-border)' : reward.is_today ? 'rgba(255,213,74,0.3)' : 'var(--border)'}`,
               }}>
               {reward.claimed ? (
                 <Check size={14} style={{ color: 'var(--accent-text)' }} />
-              ) : reward.isToday ? (
+              ) : reward.is_today ? (
                 <span className="text-lg">{reward.icon}</span>
               ) : reward.day > (todayReward?.day ?? 0) ? (
                 <Lock size={12} style={{ color: 'var(--text-muted)' }} />
@@ -54,7 +59,7 @@ const DailyRewardsPanel: React.FC = () => {
         </div>
         {todayReward && !todayReward.claimed && (
           <motion.button whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.97 }}
-            onClick={() => claimDailyReward(todayReward.day)}
+            onClick={() => { if (!claiming) void claimDaily(); }}
             className="w-full py-2.5 rounded-[12px] font-display text-[13px] tracking-wide flex items-center justify-center gap-2"
             style={{ background: '#FFD700', color: '#000', boxShadow: '0 4px 14px rgba(255,213,74,0.35)' }}>
             <Gift size={14} /> Claim Day {todayReward.day}
@@ -82,17 +87,17 @@ const DailyRewardsPanel: React.FC = () => {
         </div>
         <div className="space-y-2">
           {activeMissions.map((mission) => (
-            <div key={mission.id} className="p-2.5 rounded-[12px]" style={{ background: 'var(--bg-elevated)', border: '1px solid var(--border)' }}>
+            <div key={mission.mission_key} className="p-2.5 rounded-[12px]" style={{ background: 'var(--bg-elevated)', border: '1px solid var(--border)' }}>
               <div className="flex items-center gap-2 mb-1.5">
-                <span className="text-sm">{mission.icon}</span>
+                <span className="text-sm">🎯</span>
                 <span className="font-label text-[11px] font-semibold flex-1 truncate" style={{ color: 'var(--text-primary)' }}>{mission.title}</span>
-                <span className="font-mono text-[9px]" style={{ color: 'var(--accent-text)' }}>+{mission.reward}P</span>
+                <span className="font-mono text-[9px]" style={{ color: 'var(--accent-text)' }}>+{mission.reward_pulse}P</span>
               </div>
               <div className="h-1.5 rounded-full overflow-hidden" style={{ background: 'var(--bg-base)' }}>
-                <div className="h-full rounded-full" style={{ width: `${(mission.current / mission.target) * 100}%`, background: 'var(--accent)' }} />
+                <div className="h-full rounded-full" style={{ width: `${Math.min(100, (mission.progress / Math.max(1, mission.target)) * 100)}%`, background: 'var(--accent)' }} />
               </div>
               <div className="flex justify-between mt-1">
-                <span className="font-mono text-[8px]" style={{ color: 'var(--text-muted)' }}>{mission.current}/{mission.target}</span>
+                <span className="font-mono text-[8px]" style={{ color: 'var(--text-muted)' }}>{mission.progress}/{mission.target}</span>
               </div>
             </div>
           ))}

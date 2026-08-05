@@ -1,4 +1,3 @@
-import { create } from 'zustand';
 
 // ─── TYPES ──────────────────────────────────────────────────────────────────
 export interface GamificationLevel {
@@ -49,30 +48,6 @@ export interface Badge {
   unlockedAt?: string;
 }
 
-export interface GamificationState {
-  // Core
-  currentPulse: number;
-  totalXP: number;
-  currentLevel: number;
-  streakDays: number;
-  lastCheckin: string | null;
-
-  // Data
-  missions: Mission[];
-  dailyRewards: DailyReward[];
-  badges: Badge[];
-
-  // Actions
-  addPulse: (amount: number) => void;
-  claimDailyReward: (day: number) => void;
-  completeMission: (id: string) => void;
-  claimMissionReward: (id: string) => void;
-  updateMissionProgress: (id: string, progress: number) => void;
-  checkIn: () => void;
-  reset: () => void;
-}
-
-// ─── LEVEL SYSTEM ───────────────────────────────────────────────────────────
 export const getLevelTitle = (lvl: number): string => {
   if (lvl <= 10) return 'Rookie';
   if (lvl <= 20) return 'Challenger';
@@ -93,132 +68,27 @@ export const getLevelTitle = (lvl: number): string => {
 
 export const LEVELS: GamificationLevel[] = Array.from({ length: 150 }, (_, i) => {
   const lvl = i + 1;
-  const title = getLevelTitle(lvl);
   return {
     level: lvl,
-    title,
+    title: getLevelTitle(lvl),
+    // Kept for display continuity; the server decides which level an athlete is on
+    // and how far through it they are, so these bounds are not used to compute it.
     minPulse: (lvl - 1) * 100,
     maxPulse: lvl * 100,
     color: lvl > 100 ? '#CCFF00' : '#888888',
-    icon: lvl > 100 ? '👑' : '⚡'
+    icon: lvl > 100 ? '\u{1F451}' : '\u26A1',
   };
 });
 
-export const getLevelInfo = (pulse: number): GamificationLevel => {
-  const lvl = Math.min(150, Math.floor(pulse / 100) + 1);
-  return LEVELS[lvl - 1] || LEVELS[LEVELS.length - 1];
-};
-
-export const getLevelProgress = (pulse: number) => {
-  const level = getLevelInfo(pulse);
-  const range = level.maxPulse - level.minPulse;
-  const current = pulse - level.minPulse;
-  return {
-    level,
-    current,
-    required: range,
-    remaining: range - current,
-    percentage: Math.min(100, Math.round((current / range) * 100)),
-  };
-};
-
-// ─── INITIAL DATA ───────────────────────────────────────────────────────────
-const INITIAL_MISSIONS: Mission[] = [
-  { id: 'm1', title: 'Upload a Highlight', description: 'Share 1 sports highlight to your feed', icon: '🎥', category: 'daily', target: 1, current: 0, reward: 20, xpReward: 50, completed: false, claimed: false },
-  { id: 'm2', title: 'Join an Event', description: 'Register for 1 upcoming event', icon: '🏟️', category: 'daily', target: 1, current: 1, reward: 30, xpReward: 75, completed: true, claimed: false },
-  { id: 'm3', title: 'React to Posts', description: 'Like or react to 5 posts in the feed', icon: '⚡', category: 'daily', target: 5, current: 3, reward: 15, xpReward: 30, completed: false, claimed: false },
-  { id: 'm4', title: 'Complete a Match', description: 'Finish 1 full match in PULSE mode', icon: '🥊', category: 'daily', target: 1, current: 0, reward: 40, xpReward: 100, completed: false, claimed: false },
-  { id: 'm5', title: 'Message Teammates', description: 'Send messages to 3 teammates', icon: '💬', category: 'daily', target: 3, current: 2, reward: 10, xpReward: 25, completed: false, claimed: false },
-  { id: 'm6', title: 'Earn 50 Pulse', description: 'Accumulate 50 Pulse from any activities', icon: '🔋', category: 'daily', target: 50, current: 35, reward: 25, xpReward: 60, completed: false, claimed: false },
-  { id: 'm7', title: 'Win 3 Matches', description: 'Win 3 matches this week', icon: '🏆', category: 'weekly', target: 3, current: 1, reward: 100, xpReward: 250, completed: false, claimed: false },
-  { id: 'm8', title: 'Build a Full Squad', description: 'Form a complete team this week', icon: '👥', category: 'weekly', target: 1, current: 0, reward: 80, xpReward: 200, completed: false, claimed: false },
-];
-
-const INITIAL_REWARDS: DailyReward[] = [
-  { day: 1, label: 'Day 1',  pulseReward: 10,  icon: '⚡', claimed: true,  isToday: false, isLocked: false, isBonusDay: false },
-  { day: 2, label: 'Day 2',  pulseReward: 15,  icon: '⚡', claimed: true,  isToday: false, isLocked: false, isBonusDay: false },
-  { day: 3, label: 'Day 3',  pulseReward: 20,  icon: '🔋', claimed: true,  isToday: false, isLocked: false, isBonusDay: false },
-  { day: 4, label: 'Day 4',  pulseReward: 25,  icon: '🎯', claimed: false, isToday: true,  isLocked: false, isBonusDay: false },
-  { day: 5, label: 'Day 5',  pulseReward: 30,  xpBooster: 1.5, icon: '🚀', claimed: false, isToday: false, isLocked: true, isBonusDay: false },
-  { day: 6, label: 'Day 6',  pulseReward: 40,  icon: '💎', claimed: false, isToday: false, isLocked: true, isBonusDay: false },
-  { day: 7, label: 'BONUS',  pulseReward: 100, xpBooster: 2, icon: '👑', claimed: false, isToday: false, isLocked: true, isBonusDay: true },
-];
-
-const INITIAL_BADGES: Badge[] = [
-  { id: 'b1', title: 'MVP', description: 'Rated Most Valuable Player in a match', icon: '🏆', rarity: 'legendary', color: '#FFD700', unlocked: true, unlockedAt: '2025-05-10' },
-  { id: 'b2', title: 'Team Captain', description: 'Led a full squad to victory', icon: '⚡', rarity: 'epic', color: '#CCFF00', unlocked: true, unlockedAt: '2025-05-08' },
-  { id: 'b3', title: 'Event Champion', description: 'Won a competitive tournament', icon: '🥇', rarity: 'legendary', color: '#FF3B00', unlocked: false, progress: 1, maxProgress: 1 },
-  { id: 'b4', title: 'Winning Streak', description: 'Win 5 matches in a row', icon: '🔥', rarity: 'epic', color: '#f97316', unlocked: false, progress: 3, maxProgress: 5 },
-  { id: 'b5', title: 'Rising Athlete', description: 'Reach Level 3 on SPORTiX', icon: '📈', rarity: 'rare', color: '#3b82f6', unlocked: true, unlockedAt: '2025-05-01' },
-  { id: 'b6', title: 'Elite Performer', description: 'Maintain 90%+ rating for 30 days', icon: '💎', rarity: 'rare', color: '#a855f7', unlocked: false, progress: 12, maxProgress: 30 },
-  { id: 'b7', title: 'Social Pulse', description: 'Connect with 50 athletes', icon: '🤝', rarity: 'common', color: '#22c55e', unlocked: true, unlockedAt: '2025-04-28' },
-  { id: 'b8', title: 'First Blood', description: 'Win your very first match', icon: '🩸', rarity: 'common', color: '#ef4444', unlocked: true, unlockedAt: '2025-04-20' },
-];
-
-// ─── STORE ───────────────────────────────────────────────────────────────────
-export const useGamificationStore = create<GamificationState>((set) => ({
-  currentPulse: 2450,
-  totalXP: 3800,
-  currentLevel: 25,
-  streakDays: 3,
-  lastCheckin: null,
-  missions: INITIAL_MISSIONS,
-  dailyRewards: INITIAL_REWARDS,
-  badges: INITIAL_BADGES,
-
-  addPulse: (amount) => set((state) => {
-    const newPulse = state.currentPulse + amount;
-    const levelInfo = getLevelInfo(newPulse);
-    return { currentPulse: newPulse, currentLevel: levelInfo.level };
-  }),
-
-  claimDailyReward: (day) => set((state) => {
-    const rewards = state.dailyRewards.map(r =>
-      r.day === day ? { ...r, claimed: true } : r
-    );
-    const reward = state.dailyRewards.find(r => r.day === day);
-    return {
-      dailyRewards: rewards,
-      currentPulse: state.currentPulse + (reward?.pulseReward || 0),
-      streakDays: state.streakDays + 1,
-    };
-  }),
-
-  completeMission: (id) => set((state) => ({
-    missions: state.missions.map(m =>
-      m.id === id ? { ...m, completed: true, current: m.target } : m
-    ),
-  })),
-
-  claimMissionReward: (id) => set((state) => {
-    const mission = state.missions.find(m => m.id === id);
-    return {
-      missions: state.missions.map(m => m.id === id ? { ...m, claimed: true } : m),
-      currentPulse: state.currentPulse + (mission?.reward || 0),
-      totalXP: state.totalXP + (mission?.xpReward || 0),
-    };
-  }),
-
-  updateMissionProgress: (id, progress) => set((state) => ({
-    missions: state.missions.map(m =>
-      m.id === id ? { ...m, current: Math.min(m.target, progress), completed: progress >= m.target } : m
-    ),
-  })),
-
-  checkIn: () => set((state) => ({
-    lastCheckin: new Date().toISOString(),
-    streakDays: state.streakDays + 1,
-    currentPulse: state.currentPulse + 10,
-  })),
-
-  reset: () => set({
-    currentPulse: 0,
-    totalXP: 0,
-    currentLevel: 1,
-    streakDays: 0,
-    lastCheckin: null,
-    missions: INITIAL_MISSIONS,
-    dailyRewards: INITIAL_REWARDS,
-    badges: INITIAL_BADGES,
-  }),
-}));
+/**
+ * The palette, title and icon for a level number.
+ *
+ * This replaces getLevelProgress(pulse), which derived the level from the
+ * athlete's **current** Pulse as floor(pulse / 100) + 1. The server derives it
+ * from **lifetime** earned Pulse, so the two disagreed the moment anyone spent
+ * Pulse or lost any — and the client's answer could go down, which a level must
+ * never do. The number and the progress now come from /api/pulse/me/level; this
+ * module only says what that level looks like.
+ */
+export const levelStyleFor = (level: number): GamificationLevel =>
+  LEVELS[Math.max(0, Math.min(LEVELS.length - 1, level - 1))];

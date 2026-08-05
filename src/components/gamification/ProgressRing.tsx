@@ -1,17 +1,33 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { getLevelProgress } from '../../store/gamificationStore';
+import { levelStyleFor } from '../../store/gamificationStore';
 import { BadgeIcon } from './BadgeIcon';
 
 // ─── ANIMATED SEMICIRCLE PROGRESS ─────────────────────────────────────────────
 interface SemiCircleProps {
+  /** Total Pulse, shown as the headline number. */
   pulse: number;
+  /** The level the server says the athlete is on. */
+  levelNumber: number;
+  /** How far through that level, 0-100, from the server. */
+  progressPercent: number;
+  /** Pulse earned into the current level, and what the next one needs. */
+  pulseIntoLevel?: number;
+  pulseForNext?: number;
   size?: 'sm' | 'md' | 'lg';
   showLevelUp?: boolean;
 }
 
-export const SemiCircleProgress: React.FC<SemiCircleProps> = ({ pulse, size = 'md', showLevelUp = false }) => {
-  const { level, percentage, current, required } = getLevelProgress(pulse);
+export const SemiCircleProgress: React.FC<SemiCircleProps> = ({
+  pulse, levelNumber, progressPercent, pulseIntoLevel, pulseForNext,
+  size = 'md', showLevelUp = false,
+}) => {
+  // The level and the progress through it are the server's, passed in rather than
+  // recomputed from the current Pulse score.
+  const level = levelStyleFor(levelNumber);
+  const percentage = progressPercent;
+  const current = pulseIntoLevel ?? 0;
+  const required = pulseForNext ?? 0;
   const [displayPct, setDisplayPct] = useState(0);
   const [levelUpBurst, setLevelUpBurst] = useState(false);
   const prevPct = useRef(0);
@@ -163,11 +179,19 @@ export const SemiCircleProgress: React.FC<SemiCircleProps> = ({ pulse, size = 'm
 // ─── MINI PULSE WIDGET (for sidebar/feed) ────────────────────────────────────
 interface MiniPulseWidgetProps {
   pulse: number;
+  levelNumber: number;
+  progressPercent: number;
+  pulseIntoLevel?: number;
+  pulseForNext?: number;
   onClick?: () => void;
 }
 
-export const MiniPulseWidget: React.FC<MiniPulseWidgetProps> = ({ pulse, onClick }) => {
-  const { level, percentage, remaining } = getLevelProgress(pulse);
+export const MiniPulseWidget: React.FC<MiniPulseWidgetProps> = ({
+  pulse, levelNumber, progressPercent, pulseIntoLevel, pulseForNext, onClick,
+}) => {
+  const level = levelStyleFor(levelNumber);
+  const percentage = progressPercent;
+  const remaining = Math.max(0, (pulseForNext ?? 0) - (pulseIntoLevel ?? 0));
 
   return (
     <motion.button
@@ -206,8 +230,10 @@ export const MiniPulseWidget: React.FC<MiniPulseWidgetProps> = ({ pulse, onClick
 };
 
 // ─── LEVEL BADGE ─────────────────────────────────────────────────────────────
-export const LevelBadge: React.FC<{ pulse: number; size?: 'sm' | 'md' }> = ({ pulse, size = 'md' }) => {
-  const { level } = getLevelProgress(pulse);
+export const LevelBadge: React.FC<{ levelNumber: number; size?: 'sm' | 'md' }> = ({
+  levelNumber, size = 'md',
+}) => {
+  const level = levelStyleFor(levelNumber);
   return (
     <div
       className={`inline-flex items-center gap-1.5 px-2 py-1 rounded-lg font-mono font-bold uppercase tracking-widest ${size === 'sm' ? 'text-[9px]' : 'text-[10px]'}`}
