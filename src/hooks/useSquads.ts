@@ -14,6 +14,7 @@ import toast from 'react-hot-toast';
 import { api, ApiError } from '@/lib/api';
 import type {
   ApiSquad, ApiSquadMember, ApiSquadChemistry, SquadRole,
+  ApiSquadMatch, ApiLeadership,
 } from '@/types/api.types';
 
 export const squadKeys = {
@@ -26,6 +27,8 @@ export const squadKeys = {
   members: (id: string | undefined) => ['squads', id ?? null, 'members'] as const,
   chemistry: (id: string | undefined) => ['squads', id ?? null, 'chemistry'] as const,
   analytics: (id: string | undefined) => ['squads', id ?? null, 'analytics'] as const,
+  matches: (id: string | undefined) => ['squads', id ?? null, 'matches'] as const,
+  leadership: (id: string | undefined) => ['squads', id ?? null, 'leadership'] as const,
 };
 
 function unwrapList<T>(data: unknown): T[] {
@@ -104,6 +107,39 @@ export function useSquadAnalytics(squadId?: string) {
     analytics: query.data ?? null,
     loading: query.isPending && Boolean(squadId),
     error: (query.error as ApiError | null) ?? null,
+  };
+}
+
+export function useSquadMatches(squadId?: string) {
+  const query = useQuery<ApiSquadMatch[], ApiError>({
+    queryKey: squadKeys.matches(squadId),
+    enabled: Boolean(squadId),
+    queryFn: async () => unwrapList<ApiSquadMatch>(
+      (await api.get<{ data: unknown }>(`/api/squads/${squadId}/matches`)).data,
+    ),
+  });
+
+  return {
+    matches: query.data ?? [],
+    loading: Boolean(squadId) && query.isPending,
+    error: (query.error as ApiError | null) ?? null,
+    refresh: query.refetch,
+  };
+}
+
+export function useLeadership(squadId?: string) {
+  const query = useQuery<ApiLeadership, ApiError>({
+    queryKey: squadKeys.leadership(squadId),
+    enabled: Boolean(squadId),
+    queryFn: async () =>
+      (await api.get<{ data: ApiLeadership }>(`/api/squads/${squadId}/leadership`)).data,
+  });
+
+  return {
+    leadership: query.data ?? null,
+    loading: Boolean(squadId) && query.isPending,
+    error: (query.error as ApiError | null) ?? null,
+    refresh: query.refetch,
   };
 }
 

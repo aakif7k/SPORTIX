@@ -192,3 +192,106 @@ export interface ApiSquadMessage {
   created_at: string;
   $createdAt: string;
 }
+
+// ─── Squad match history ──────────────────────────────────────────────────────
+
+export interface ApiTopPerformer {
+  user_id: string;
+  full_name: string;
+  username: string;
+  avatar_url: string | null;
+  match_rating: number;
+  is_mvp: boolean;
+  stats_summary: string;
+  /** False until three teammates have confirmed the numbers. */
+  is_validated: boolean;
+}
+
+export interface ApiSquadMatch {
+  $id: string;
+  event_id: string | null;
+  home_squad_id: string | null;
+  away_squad_id: string | null;
+  sport: string;
+  opponent_name: string | null;
+  result: 'pending' | 'win' | 'loss' | 'draw';
+  score_home: number | null;
+  score_away: number | null;
+  status: 'active' | 'completed' | 'cancelled';
+  played_at: string | null;
+  chemistry_delta: number;
+  created_at: string;
+  $createdAt: string;
+  /** W/L/D, or null when the result was never entered. */
+  outcome: 'W' | 'L' | 'D' | null;
+  score: string | null;
+  top_performer: ApiTopPerformer | null;
+}
+
+// ─── Leadership ───────────────────────────────────────────────────────────────
+
+export interface LeadershipComponents {
+  attendance: number;
+  communication: number;
+  reliability: number;
+  squad_approval: number;
+  event_participation: number;
+}
+
+export interface ApiLeadershipStanding {
+  user_id: string;
+  full_name: string;
+  username: string;
+  avatar_url: string | null;
+  level: number;
+  pulse_score: number;
+  role: SquadRole;
+  joined_at: string | null;
+  components: LeadershipComponents;
+  score: number;
+}
+
+export interface ApiLeadershipRecommendation {
+  user_id: string;
+  full_name: string;
+  username: string;
+  avatar_url: string | null;
+  score: number;
+  components: LeadershipComponents;
+  current_role: SquadRole;
+  strengths: string[];
+  matches_analysed: number;
+}
+
+export interface ApiLeadershipBallot {
+  user_id: string;
+  full_name: string;
+  username: string;
+  avatar_url: string | null;
+  vote: 'approve' | 'reject' | null;
+}
+
+export interface ApiLeadershipVote {
+  candidate: { user_id: string; full_name: string; username: string; avatar_url: string | null };
+  approve: number;
+  reject: number;
+  total_members: number;
+  votes_needed: number;
+  my_vote: 'approve' | 'reject' | null;
+  opened_at: string | null;
+  closes_at: string | null;
+  is_closed: boolean;
+  ballots: ApiLeadershipBallot[];
+}
+
+export interface ApiLeadership {
+  squad_id: string;
+  captain: ApiLeadershipStanding | null;
+  captain_since: string | null;
+  is_captain: boolean;
+  component_labels: Record<keyof LeadershipComponents, string>;
+  standings: ApiLeadershipStanding[];
+  recommendation: ApiLeadershipRecommendation | null;
+  vote: ApiLeadershipVote | null;
+  roles: Array<{ role: SquadRole; member: ApiLeadershipStanding | null }>;
+}
