@@ -45,7 +45,13 @@ const DASH_TABS = [
 // nothing joins them. Both are honest empty states until then.
 
 // ─── Radar Chart ─────────────────────────────────────────────────────────────
-const RadarChart: React.FC<{ squad: any }> = ({ squad }) => {
+/** Reads only a win rate and the chemistry breakdown. */
+interface RadarSquad {
+  winRate: number;
+  chemistry: { overall: number; coordination?: number; trust?: number };
+}
+
+const RadarChart: React.FC<{ squad: RadarSquad }> = ({ squad }) => {
   const categories = [
     { name: 'Attack',      value: squad.winRate - 5 },
     { name: 'Defense',     value: squad.chemistry.overall - 4 },

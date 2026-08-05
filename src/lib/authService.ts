@@ -1,5 +1,6 @@
 import { account } from '@/lib/appwrite';
 import { api } from '@/lib/api';
+import { errorMessage } from '@/lib/errors';
 // Appwrite SDK v26+ removed the Models namespace — use inline types
 type AppwriteUser = {
   $id: string;
@@ -13,7 +14,7 @@ type AppwriteUser = {
   registration: string;
   accessedAt: string;
 };
-type AppwriteDocument = Record<string, any> & { $id: string; $createdAt: string; $updatedAt: string };
+type AppwriteDocument = Record<string, unknown> & { $id: string; $createdAt: string; $updatedAt: string };
 
 /* ─── Normalised user shape ──────────────────────────────────────────────────
  * The rest of the app uses currentUser.id — this adapter keeps that working
@@ -118,7 +119,9 @@ export function loginWithGoogle(): void {
   // After Google auth completes, Appwrite redirects to successUrl,
   // AuthContext.getCurrentUser() picks up the session on mount.
   account.createOAuth2Session(
-    'google' as any,
+    // The SDK types this as its OAuthProvider enum; 'google' is the literal it
+    // expects, and naming the cast keeps the value checked.
+    'google' as Parameters<typeof account.createOAuth2Session>[0],
     `${window.location.origin}/auth/callback`,   // success
     `${window.location.origin}/login`,            // failure
   );
@@ -199,8 +202,8 @@ export async function checkUsernameAvailable(username: string): Promise<boolean>
 }
 
 /* ─── USER-FRIENDLY ERROR MESSAGES ──────────────────────────────────────── */
-export function getAuthErrorMessage(error: any): string {
-  const msg: string = error?.message || (typeof error === 'string' ? error : '');
+export function getAuthErrorMessage(error: unknown): string {
+  const msg = errorMessage(error, '');
   if (msg.includes('user_already_exists') || msg.includes('already exists') || msg.includes('already registered')) {
     return 'An account with this email address already exists. Please log in.';
   }
@@ -219,31 +222,49 @@ export function getAuthErrorMessage(error: any): string {
   if (msg.includes('network') || msg.includes('fetch')) {
     return 'Network error. Check your internet connection.';
   }
-  return error?.message || 'Something went wrong. Please try again.';
+  return errorMessage(error, 'Something went wrong. Please try again.');
 }
 
-/* ─── Internal: Appwrite document → UserProfile ──────────────────────────── */
+/* ─── Internal: Appwrite document → UserProfile ────────────────────────────
+ *
+ * The document was typed `Record<string, any>`, so every read below compiled
+ * whatever it actually produced — a number landing in a string field, an object
+ * landing in a boolean. These narrow instead, which is what the `any` was standing
+ * in for.
+ */
+const str = (v: unknown, fallback = ''): string =>
+  typeof v === 'string' ? v : typeof v === 'number' ? String(v) : fallback;
+
+const bool = (v: unknown, fallback: boolean): boolean =>
+  typeof v === 'boolean' ? v : fallback;
+
+const num = (v: unknown, fallback: number): number =>
+  typeof v === 'number' && Number.isFinite(v) ? v : fallback;
+
+const strList = (v: unknown): string[] =>
+  Array.isArray(v) ? v.filter((x): x is string => typeof x === 'string') : [];
+
 function docToProfile(doc: AppwriteDocument): UserProfile {
   return {
     id:                     doc.$id,
-    full_name:              doc.full_name        ?? '',
-    username:               doc.username         ?? '',
-    email:                  doc.email            ?? '',
-    role:                   doc.role             ?? 'athlete',
-    sport:                  doc.sport            ?? '',
-    sports:                 doc.sports           ?? [],
-    experience_level:       doc.experience_level ?? 'amateur',
-    location:               doc.location         ?? '',
-    avatar_url:             doc.avatar_url       ?? null,
-    bio:                    doc.bio              ?? '',
-    is_open_to_recruit:     doc.is_open_to_recruit     ?? false,
-    is_active:              doc.is_active              ?? true,
-    is_onboarding_complete: doc.is_onboarding_complete ?? false,
-    pulse_score:            doc.pulse_score      ?? 100,
-    level:                  doc.level            ?? 1,
-    coins_balance:          doc.coins_balance    ?? 0,
-    login_streak:           doc.login_streak     ?? 0,
-    created_at:             doc.created_at       ?? doc.$createdAt,
-    updated_at:             doc.updated_at       ?? doc.$updatedAt,
+    full_name:              str(doc.full_name),
+    username:               str(doc.username),
+    email:                  str(doc.email),
+    role:                   str(doc.role, 'athlete'),
+    sport:                  str(doc.sport),
+    sports:                 strList(doc.sports),
+    experience_level:       str(doc.experience_level, 'amateur'),
+    location:               str(doc.location),
+    avatar_url:             typeof doc.avatar_url === 'string' ? doc.avatar_url : null,
+    bio:                    str(doc.bio),
+    is_open_to_recruit:     bool(doc.is_open_to_recruit, false),
+    is_active:              bool(doc.is_active, true),
+    is_onboarding_complete: bool(doc.is_onboarding_complete, false),
+    pulse_score:            num(doc.pulse_score, 100),
+    level:                  num(doc.level, 1),
+    coins_balance:          num(doc.coins_balance, 0),
+    login_streak:           num(doc.login_streak, 0),
+    created_at:             str(doc.created_at) || doc.$createdAt,
+    updated_at:             str(doc.updated_at) || doc.$updatedAt,
   };
 }

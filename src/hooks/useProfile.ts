@@ -27,10 +27,11 @@ export function useMyProfile() {
   const queryClient = useQueryClient();
   const enabled = Boolean(user?.id);
 
-  const profileQuery = useQuery<any, ApiError>({
+  const profileQuery = useQuery<Record<string, unknown>, ApiError>({
     queryKey: qk.profile.me(),
     enabled,
-    queryFn: async () => (await api.get<{ data: any }>('/api/users/me')).data,
+    queryFn: async () =>
+      (await api.get<{ data: Record<string, unknown> }>('/api/users/me')).data,
   });
 
   const statsQuery = useQuery<ProfileStats, ApiError>({
@@ -61,7 +62,7 @@ export function useMyProfile() {
 
   const update = useMutation({
     mutationFn: async (updates: Record<string, unknown>) =>
-      (await api.put<{ data: any }>('/api/users/me', updates)).data,
+      (await api.put<{ data: Record<string, unknown> }>('/api/users/me', updates)).data,
     onSuccess: async () => {
       toast.success('Profile updated!');
       await queryClient.invalidateQueries({ queryKey: qk.profile.all });

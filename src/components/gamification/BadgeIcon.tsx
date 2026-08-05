@@ -145,7 +145,7 @@ export const BadgeIcon: React.FC<BadgeIconProps> = ({
     transition: {
       duration: level > 100 ? 3.5 : 4,
       repeat: Infinity,
-      ease: 'easeInOut' as any,
+      ease: 'easeInOut' as const,
     }
   } : {};
 

@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import type { Squad, ChatMessage, Tournament, Athlete } from '../types/pulse.types';
+import type { MatchResult, Squad, ChatMessage, Tournament, Athlete } from '../types/pulse.types';
 import { useAuthStore } from './authStore';
 
 interface SquadStoreState {
@@ -47,7 +47,7 @@ const mockAthletes: Athlete[] = [
   { uid: 'cu1', name: 'Alex Rivera (You)', avatar: 'https://images.pexels.com/photos/1486064/pexels-photo-1486064.jpeg?cs=srgb&dl=pexels-nkhajotia-1486064.jpg&fm=jpg', sport: 'Football', position: 'RW', pulseScore: 721, tier: 'CONTENDER', compatibility: 100, role: 'captain', readiness: 'Ready', level: 24, distance: 0 }
 ];
 
-const mockMatchHistory: any[] = [
+const mockMatchHistory: MatchResult[] = [
   {
     matchId: 'm1',
     squadId: 'squad-1',
@@ -56,7 +56,11 @@ const mockMatchHistory: any[] = [
     score: '3 - 1',
     date: '2026-05-18',
     chemistryDelta: 8,
-    topPerformer: { uid: 'u1', name: 'Marcus Reid', avatar: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=150', statsSummary: '2 Goals, 1 Assist' }
+    topPerformer: { uid: 'u1', name: 'Marcus Reid', avatar: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=150', statsSummary: '2 Goals, 1 Assist' },
+    // The type requires these; a fixture match has no submissions or votes.
+    playerStats: {},
+    validations: {},
+    retentionVotes: {},
   },
   {
     matchId: 'm2',
@@ -66,7 +70,11 @@ const mockMatchHistory: any[] = [
     score: '2 - 2',
     date: '2026-05-14',
     chemistryDelta: 2,
-    topPerformer: { uid: 'u2', name: 'Zaid Al-Hassan', avatar: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=150', statsSummary: '1 Goal, 85% Pass Accuracy' }
+    topPerformer: { uid: 'u2', name: 'Zaid Al-Hassan', avatar: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=150', statsSummary: '1 Goal, 85% Pass Accuracy' },
+    // The type requires these; a fixture match has no submissions or votes.
+    playerStats: {},
+    validations: {},
+    retentionVotes: {},
   },
   {
     matchId: 'm3',
@@ -76,7 +84,10 @@ const mockMatchHistory: any[] = [
     score: '1 - 0',
     date: '2026-05-10',
     chemistryDelta: 5,
-    topPerformer: { uid: 'u3', name: 'Priya Nair', avatar: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=150', statsSummary: '6 Saves, Clean Sheet' }
+    topPerformer: { uid: 'u3', name: 'Priya Nair', avatar: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=150', statsSummary: '6 Saves, Clean Sheet' },
+    playerStats: {},
+    validations: {},
+    retentionVotes: {},
   }
 ];
 
@@ -176,7 +187,7 @@ const loadLocalState = () => {
   }
 };
 
-const saveToLocalStorage = (key: string, value: any) => {
+const saveToLocalStorage = (key: string, value: unknown) => {
   try {
     localStorage.setItem(key, JSON.stringify(value));
   } catch (e) {

@@ -6,6 +6,7 @@ import {
   MapPin, Info, Camera, Search, ChevronRight, Eye, EyeOff, Users,
   Mail, Lock, UserCircle2, AtSign
 } from 'lucide-react';
+import type { LucideIcon } from 'lucide-react';
 import { Button } from '../../components/ui/Button';
 import { Input } from '../../components/ui/Input';
 import type { UserRole } from '../../types';
@@ -19,7 +20,7 @@ import toast from 'react-hot-toast';
 
 /* ─── Constants ─────────────────────────────────────────────────────── */
 
-const ROLES: { id: UserRole; icon: any; title: string; desc: string; color: string }[] = [
+const ROLES: { id: UserRole; icon: LucideIcon; title: string; desc: string; color: string }[] = [
   { id: 'athlete',   icon: Dumbbell,    title: 'Athlete',    desc: 'Compete, get discovered, build your legacy', color: 'from-volt/20 to-volt/5' },
   { id: 'recruiter', icon: Briefcase,   title: 'Recruiter',  desc: 'Scout elite talent across 20+ sports',       color: 'from-blue-400/20 to-blue-400/5' },
   { id: 'coach',     icon: Award,       title: 'Coach',      desc: 'Manage athletes, track performance',         color: 'from-orange-400/20 to-orange-400/5' },
@@ -265,7 +266,7 @@ export const SignupPage: React.FC = () => {
       });
       toast.success('Account created! Welcome to SPORTiX ⚡');
       navigate('/onboarding');
-    } catch (err: any) {
+    } catch (err: unknown) {
       toast.error(getAuthErrorMessage(err));
     } finally {
       setIsLoading(false);

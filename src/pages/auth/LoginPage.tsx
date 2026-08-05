@@ -4,6 +4,7 @@ import { motion } from 'framer-motion';
 import { Zap, Mail, Lock, Eye, EyeOff, AlertTriangle, AlertCircle, Loader2, ArrowRight, ShieldCheck } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
 import toast from 'react-hot-toast';
+import { errorMessage } from '@/lib/errors';
 
 export const LoginPage: React.FC = () => {
   const [email, setEmail]               = useState('');
@@ -24,8 +25,8 @@ export const LoginPage: React.FC = () => {
       await login(email, password);
       toast.success('Welcome back to SPORTiX! ⚡');
       navigate('/app/feed');
-    } catch (err: any) {
-      const raw: string = err?.message || '';
+    } catch (err: unknown) {
+      const raw: string = errorMessage(err) || '';
       const isNotFound =
         raw.toLowerCase().includes('user_not_found') ||
         raw.toLowerCase().includes('invalid credentials') ||
@@ -34,7 +35,7 @@ export const LoginPage: React.FC = () => {
       if (isNotFound) {
         setNoAccount(true);
       } else {
-        setError(err.message || 'Login failed. Check your email and password.');
+        setError(errorMessage(err) || 'Login failed. Check your email and password.');
       }
     } finally {
       setIsLoading(false);

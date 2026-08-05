@@ -276,7 +276,7 @@ export const SquadOverview: React.FC = () => {
           ].map((tab) => (
             <button
               key={tab.id}
-              onClick={() => setActiveBottomTab(tab.id as any)}
+              onClick={() => setActiveBottomTab(tab.id as typeof activeBottomTab)}
               className={`pb-2.5 border-b-2 font-bold uppercase tracking-wider transition-colors flex-shrink-0 ${
                 activeBottomTab === tab.id ? 'border-volt text-volt' : 'border-transparent text-text-secondary hover:text-text-primary'
               }`}
@@ -326,7 +326,7 @@ export const SquadOverview: React.FC = () => {
                       <label className="block text-text-secondary mb-1">Session Type</label>
                       <select 
                         value={eventType}
-                        onChange={(e) => setEventType(e.target.value as any)}
+                        onChange={(e) => setEventType(e.target.value as typeof eventType)}
                         className="w-full bg-surface border border-border-muted rounded-lg p-2 text-text-primary focus:outline-none focus:border-volt"
                       >
                         <option value="practice">Practice</option>

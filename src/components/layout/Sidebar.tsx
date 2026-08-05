@@ -198,7 +198,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ className = '' }) => {
               >
                 <div className="w-10 h-10 rounded-2xl overflow-hidden border border-[#CCFF00]/40 shadow-[0_0_12px_rgba(204,255,0,0.2)] bg-elevated">
                   <img 
-                    src={user?.avatar || (user as any)?.avatar_url || 'https://i.pravatar.cc/150?img=33'} 
+                    src={user?.avatar || 'https://i.pravatar.cc/150?img=33'} 
                     alt={user?.name || 'Athlete'} 
                     className="w-full h-full object-cover" 
                   />
@@ -227,7 +227,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ className = '' }) => {
               >
                 <div className="relative flex-shrink-0">
                   <img 
-                    src={user?.avatar || (user as any)?.avatar_url || 'https://i.pravatar.cc/150?img=33'} 
+                    src={user?.avatar || 'https://i.pravatar.cc/150?img=33'} 
                     alt={user?.name || 'Athlete'} 
                     className="w-10 h-10 rounded-2xl object-cover border border-[#CCFF00]/50 shadow-md bg-elevated"
                   />

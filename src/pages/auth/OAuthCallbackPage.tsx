@@ -63,7 +63,7 @@ export const OAuthCallbackPage: React.FC = () => {
           toast.success('Google account verified! Let\'s set up your PlayerDNA ⚡');
           navigate('/onboarding', { replace: true });
         }
-      } catch (err: any) {
+      } catch (err: unknown) {
         console.error('OAuth callback fallback:', err);
         navigate('/onboarding', { replace: true });
       }

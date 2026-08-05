@@ -6,6 +6,7 @@ import {
   Users, ChevronRight, UserCircle2, AtSign,
   Dumbbell, Briefcase, Award, CalendarDays
 } from 'lucide-react';
+import type { LucideIcon } from 'lucide-react';
 import { GLOBAL_SPORTS } from '@/constants/sports';
 import { Button } from '../../components/ui/Button';
 import { useAuth } from '@/context/AuthContext';
@@ -13,10 +14,12 @@ import { useAuthStore } from '@/store/authStore';
 import { checkUsernameAvailable, getUserProfile, updateUserProfile } from '@/lib/authService';
 import toast from 'react-hot-toast';
 import type { UserRole } from '@/types';
+import { errorMessage } from '@/lib/errors';
+import type { User } from '../../types';
 
 /* ─── Constants ─────────────────────────────────────────────────────── */
 
-const ROLES: { id: UserRole; icon: any; title: string; desc: string }[] = [
+const ROLES: { id: UserRole; icon: LucideIcon; title: string; desc: string }[] = [
   { id: 'athlete',   icon: Dumbbell,    title: 'Athlete',   desc: 'Compete, get discovered, build your legacy' },
   { id: 'recruiter', icon: Briefcase,   title: 'Recruiter', desc: 'Scout elite talent across 20+ sports' },
   { id: 'coach',     icon: Award,       title: 'Coach',     desc: 'Manage athletes, track performance' },
@@ -258,7 +261,7 @@ export const OnboardingPage: React.FC = () => {
   };
 
   const visibleSports = React.useMemo(() => {
-    if (sportSearch.trim()) return GLOBAL_SPORTS.filter((s: any) => s.label.toLowerCase().includes(sportSearch.toLowerCase()));
+    if (sportSearch.trim()) return GLOBAL_SPORTS.filter((s) => s.label.toLowerCase().includes(sportSearch.toLowerCase()));
     return GLOBAL_SPORTS.slice(0, 12);
   }, [sportSearch]);
 
@@ -271,13 +274,15 @@ export const OnboardingPage: React.FC = () => {
       ...currentUser,
       name: fullName,
       username: username.toLowerCase().trim(),
-      role: role as any,
-      sport: primarySport as any,
-      sports: [primarySport, ...interestedSports].filter(Boolean) as any,
-      experienceLevel: level as any,
+      // The store's User types these as taxonomy unions and the values come from
+      // that same taxonomy, so each is narrowed rather than erased.
+      role: role as User['role'],
+      sport: primarySport as User['sport'],
+      sports: [primarySport, ...interestedSports].filter(Boolean) as User['sports'],
+      experienceLevel: level as User['experienceLevel'],
       location,
       bio,
-      avatar: photoPreview || (currentUser as any)?.avatar_url || (currentUser as any)?.avatar || '',
+      avatar: photoPreview || currentUser?.avatar_url || '',
       isOnboardingComplete: true,
     };
 
@@ -300,8 +305,8 @@ export const OnboardingPage: React.FC = () => {
         avatar_url: photoPreview || null,
         is_onboarding_complete: true,
       } as never);
-    } catch (err: any) {
-      console.warn('Appwrite profiles collection missing, saved onboarding state locally:', err?.message);
+    } catch (err: unknown) {
+      console.warn('Appwrite profiles collection missing, saved onboarding state locally:', errorMessage(err));
     } finally {
       setIsLoading(false);
       toast.success("Profile set up! Welcome to SPORTiX ⚡");
@@ -552,7 +557,7 @@ export const OnboardingPage: React.FC = () => {
                 </div>
 
                 <div className="grid grid-cols-3 gap-2 max-h-60 overflow-y-auto pr-0.5 mb-4">
-                  {visibleSports.map((sport: any) => {
+                  {visibleSports.map((sport) => {
                     const isPrimary    = primarySport === sport.id;
                     const isInterested = interestedSports.includes(sport.id);
                     return (

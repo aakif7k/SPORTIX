@@ -22,7 +22,7 @@
  */
 import { api } from '@/lib/api';
 
-type Json = Record<string, any>;
+type Json = Record<string, unknown>;
 
 /** The backend wraps every success as {success, data}. */
 interface Envelope<T> { success: boolean; data: T }
@@ -145,78 +145,104 @@ export interface ProfileStats {
 
 function authorOf(d: Json) {
   return {
-    full_name: d.author_full_name ?? d.author_name ?? '',
-    username: d.author_username ?? '',
-    avatar_url: d.author_avatar_url ?? null,
-    sport: d.author_sport ?? '',
+    full_name: readStr(d.author_full_name) || readStr(d.author_name),
+    username: readStr(d.author_username),
+    avatar_url: readStrOrNull(d.author_avatar_url),
+    sport: readStr(d.author_sport),
   };
 }
 
+/**
+ * Field readers for an Appwrite document.
+ *
+ * `Json` was `Record<string, any>`, so every read below compiled regardless of what
+ * the field actually held — a number in a string slot, an object in a boolean. These
+ * narrow, which is the checking the `any` was suppressing.
+ */
+const readStr = (v: unknown, fallback = ''): string =>
+  typeof v === 'string' ? v : typeof v === 'number' ? String(v) : fallback;
+
+const readStrOrNull = (v: unknown): string | null =>
+  typeof v === 'string' ? v : null;
+
+const readNum = (v: unknown, fallback = 0): number =>
+  typeof v === 'number' && Number.isFinite(v) ? v : fallback;
+
+const readBool = (v: unknown, fallback = false): boolean =>
+  typeof v === 'boolean' ? v : fallback;
+
+/** One of a known set, falling back rather than letting an unknown value through. */
+const readEnum = <T extends string>(v: unknown, allowed: readonly T[], fallback: T): T =>
+  typeof v === 'string' && (allowed as readonly string[]).includes(v) ? (v as T) : fallback;
+
+const readStrList = (v: unknown): string[] =>
+  Array.isArray(v) ? v.filter((x): x is string => typeof x === 'string') : [];
+
 function toPost(d: Json): DbPost {
   return {
-    id: d.$id ?? d.id,
-    author_id: d.author_id,
-    author_name: d.author_full_name ?? d.author_name ?? '',
-    author_username: d.author_username ?? '',
-    author_avatar_url: d.author_avatar_url ?? null,
-    author_sport: d.author_sport ?? '',
-    content: d.content ?? '',
-    media_urls: d.media_urls ?? [],
-    media_type: d.media_type ?? 'none',
-    post_type: d.post_type ?? 'general',
-    sport_tag: d.sport_tag ?? null,
-    location_tag: d.location_tag ?? null,
-    likes_count: d.likes_count ?? 0,
-    comments_count: d.comments_count ?? 0,
-    created_at: d.created_at ?? d.$createdAt,
-    is_liked: d.is_liked ?? false,
+    id: readStr(d.$id) || readStr(d.id),
+    author_id: readStr(d.author_id),
+    author_name: readStr(d.author_full_name) || readStr(d.author_name),
+    author_username: readStr(d.author_username),
+    author_avatar_url: readStrOrNull(d.author_avatar_url),
+    author_sport: readStr(d.author_sport),
+    content: readStr(d.content),
+    media_urls: readStrList(d.media_urls),
+    media_type: readEnum(d.media_type, ['none', 'image', 'video', 'multi_image'] as const, 'none'),
+    post_type: readEnum(d.post_type, ['general', 'highlight', 'achievement', 'training'] as const, 'general'),
+    sport_tag: readStrOrNull(d.sport_tag),
+    location_tag: readStrOrNull(d.location_tag),
+    likes_count: readNum(d.likes_count),
+    comments_count: readNum(d.comments_count),
+    created_at: readStr(d.created_at) || readStr(d.$createdAt),
+    is_liked: readBool(d.is_liked, false),
     author: authorOf(d),
   };
 }
 
 function toComment(d: Json): DbComment {
   return {
-    id: d.$id ?? d.id,
-    post_id: d.post_id,
-    author_id: d.author_id,
-    author_name: d.author_name ?? d.author_full_name ?? '',
-    author_avatar_url: d.author_avatar_url ?? null,
-    content: d.content ?? '',
-    created_at: d.created_at ?? d.$createdAt,
+    id: readStr(d.$id) || readStr(d.id),
+    post_id: readStr(d.post_id),
+    author_id: readStr(d.author_id),
+    author_name: readStr(d.author_name) || readStr(d.author_full_name),
+    author_avatar_url: readStrOrNull(d.author_avatar_url),
+    content: readStr(d.content),
+    created_at: readStr(d.created_at) || readStr(d.$createdAt),
   };
 }
 
 function toStory(d: Json): DbStory {
   return {
-    id: d.$id ?? d.id,
-    author_id: d.author_id,
-    author_name: d.author_full_name ?? d.author_name ?? '',
-    author_username: d.author_username ?? '',
-    author_avatar: d.author_avatar_url ?? null,
-    media_url: d.media_url,
-    media_type: d.media_type ?? 'image',
-    caption: d.caption ?? null,
-    sport_tag: d.sport_tag ?? null,
-    view_count: d.view_count ?? 0,
-    created_at: d.created_at ?? d.$createdAt,
-    expires_at: d.expires_at,
-    is_seen: d.is_seen ?? false,
+    id: readStr(d.$id) || readStr(d.id),
+    author_id: readStr(d.author_id),
+    author_name: readStr(d.author_full_name) || readStr(d.author_name),
+    author_username: readStr(d.author_username),
+    author_avatar: readStrOrNull(d.author_avatar_url),
+    media_url: readStr(d.media_url),
+    media_type: readEnum(d.media_type, ['image', 'video'] as const, 'image'),
+    caption: readStrOrNull(d.caption),
+    sport_tag: readStrOrNull(d.sport_tag),
+    view_count: readNum(d.view_count),
+    created_at: readStr(d.created_at) || readStr(d.$createdAt),
+    expires_at: readStr(d.expires_at),
+    is_seen: readBool(d.is_seen, false),
   };
 }
 
 function toReel(d: Json): DbReel {
   return {
-    id: d.$id ?? d.id,
-    author_id: d.author_id,
-    video_url: d.video_url,
-    thumbnail_url: d.thumbnail_url ?? null,
-    caption: d.caption ?? null,
-    sport_tag: d.sport_tag ?? null,
-    likes_count: d.likes_count ?? 0,
-    comments_count: d.comments_count ?? 0,
-    views_count: d.views_count ?? 0,
-    created_at: d.created_at ?? d.$createdAt,
-    is_liked: d.is_liked ?? false,
+    id: readStr(d.$id) || readStr(d.id),
+    author_id: readStr(d.author_id),
+    video_url: readStr(d.video_url),
+    thumbnail_url: readStrOrNull(d.thumbnail_url),
+    caption: readStrOrNull(d.caption),
+    sport_tag: readStrOrNull(d.sport_tag),
+    likes_count: readNum(d.likes_count),
+    comments_count: readNum(d.comments_count),
+    views_count: readNum(d.views_count),
+    created_at: readStr(d.created_at) || readStr(d.$createdAt),
+    is_liked: readBool(d.is_liked, false),
     author: authorOf(d),
   };
 }
@@ -336,12 +362,15 @@ export async function getActiveStories(_authUid: string): Promise<DbStoryGroup[]
   // here keeps StoryBar working with both.
   if (raw.length && Array.isArray(raw[0]?.stories)) {
     return raw.map(g => ({
-      author_id: g.author_id,
-      author_name: g.author_full_name ?? g.author_name ?? '',
-      author_avatar: g.author_avatar_url ?? null,
-      author_username: g.author_username ?? '',
+      author_id: readStr(g.author_id),
+      author_name: readStr(g.author_full_name) || readStr(g.author_name),
+      author_avatar: readStrOrNull(g.author_avatar_url),
+      author_username: readStr(g.author_username),
       stories: (g.stories as Json[]).map(toStory),
-      has_unseen: g.has_unseen ?? (g.stories as Json[]).some(s => !s.is_seen),
+      // A group may state it, or it is derived from the stories themselves.
+      has_unseen: typeof g.has_unseen === 'boolean'
+        ? g.has_unseen
+        : (g.stories as Json[]).some(story => !readBool(story.is_seen)),
     }));
   }
 
@@ -469,18 +498,18 @@ export async function getFollowCounts(
 ): Promise<{ followers: number; following: number }> {
   const res = await api.get<Envelope<Json>>('/api/users/me/stats');
   return {
-    followers: res.data.followers ?? res.data.followers_count ?? 0,
-    following: res.data.following ?? res.data.following_count ?? 0,
+    followers: readNum(res.data.followers) || readNum(res.data.followers_count),
+    following: readNum(res.data.following) || readNum(res.data.following_count),
   };
 }
 
 export async function getProfileStats(_authUid: string): Promise<ProfileStats> {
   const res = await api.get<Envelope<Json>>('/api/users/me/stats');
   return {
-    posts: res.data.posts ?? res.data.posts_count ?? 0,
-    reels: res.data.reels ?? res.data.reels_count ?? 0,
-    followers: res.data.followers ?? res.data.followers_count ?? 0,
-    following: res.data.following ?? res.data.following_count ?? 0,
+    posts: readNum(res.data.posts) || readNum(res.data.posts_count),
+    reels: readNum(res.data.reels) || readNum(res.data.reels_count),
+    followers: readNum(res.data.followers) || readNum(res.data.followers_count),
+    following: readNum(res.data.following) || readNum(res.data.following_count),
   };
 }
 

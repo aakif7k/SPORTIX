@@ -20,7 +20,7 @@ export const ForgotPasswordPage: React.FC = () => {
       await forgotPassword(email);
       setSent(true);
       toast.success("Reset email sent! Check your inbox.");
-    } catch (err: any) {
+    } catch (err: unknown) {
       toast.error(getAuthErrorMessage(err));
     } finally {
       setIsLoading(false);

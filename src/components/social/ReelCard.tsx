@@ -169,12 +169,14 @@ export const ReelCard: React.FC<ReelCardProps> = ({
 
         {/* Music & view count */}
         <div className="flex items-center justify-between">
-          {(reel as any).music_label && (
+          {/* music_label is not on DbReel: the column does not exist, so this only ever
+    renders if the API starts sending one. */}
+        {'music_label' in reel && typeof reel.music_label === 'string' && (
             <div className="flex items-center gap-1.5">
               <div className="w-4 h-4 rounded-full bg-white/20 flex items-center justify-center">
                 <Music size={8} className="text-white" />
               </div>
-              <span className="text-white/70 text-[11px]">{(reel as any).music_label}</span>
+              <span className="text-white/70 text-[11px]">{reel.music_label}</span>
             </div>
           )}
           <span className="text-white/50 text-[10px] font-mono ml-auto">{formatCount(reel.views_count)} views</span>

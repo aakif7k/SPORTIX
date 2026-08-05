@@ -166,7 +166,7 @@ export const EventBrowse: React.FC = () => {
             ].map(tab => (
               <button
                 key={tab.id}
-                onClick={() => setFilterTab(tab.id as any)}
+                onClick={() => setFilterTab(tab.id as typeof filterTab)}
                 className={`flex-1 sm:flex-initial px-4 py-2 rounded-xl text-xs font-mono font-bold uppercase transition-all ${
                   filterTab === tab.id
                     ? 'bg-[#FF6B00] text-black shadow-sm'

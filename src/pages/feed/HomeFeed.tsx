@@ -11,6 +11,8 @@ import { PostCard } from '@/components/social/PostCard';
 import { StoryBar } from '@/components/social/StoryBar';
 import { StoryViewer } from '@/components/social/StoryViewer';
 import { useStories } from '@/hooks/useStories';
+import type { DbPost, DbStoryGroup } from '@/services/socialService';
+import type { Post } from '@/hooks/useFeed';
 
 const CATEGORIES = ['All', 'Training', 'Highlights', 'Achievements', 'Events'];
 
@@ -100,13 +102,28 @@ const ReelsPreviewRow: React.FC<{ onOpenReels: () => void }> = ({ onOpenReels })
   );
 };
 
+/**
+ * The feed row as PostCard wants it.
+ *
+ * useFeed's Post and socialService's DbPost describe the same row under different
+ * names — `$id`/`author_full_name` against `id`/`author_name`. `post as any` was
+ * papering over that, which meant PostCard's own prop type was checking nothing.
+ * Mapping here makes the disagreement visible; collapsing the two shapes is a
+ * follow-up in its own right.
+ */
+const toCardPost = (post: Post): DbPost => ({
+  ...post,
+  id: post.$id,
+  author_name: post.author_full_name,
+});
+
 export const HomeFeed: React.FC = () => {
   const navigate = useNavigate();
   const { user } = useAuth();
   const currentUserId = user?.id;
 
   const { myGroup, othersGroups, viewStory } = useStories();
-  const [activeStoryGroup, setActiveStoryGroup] = useState<any>(null);
+  const [activeStoryGroup, setActiveStoryGroup] = useState<DbStoryGroup | null>(null);
   const [activeGroupIndex, setActiveGroupIndex] = useState(0);
 
   const {
@@ -118,8 +135,8 @@ export const HomeFeed: React.FC = () => {
   const [activeCategory, setActiveCategory] = useState('All');
   const [isComposerOpen, setIsComposerOpen] = useState(false);
 
-  const handleOpenStoryViewer = (group: any) => {
-    const idx = othersGroups.findIndex((g: any) => g.author_id === group.author_id);
+  const handleOpenStoryViewer = (group: DbStoryGroup) => {
+    const idx = othersGroups.findIndex((g) => g.author_id === group.author_id);
     setActiveGroupIndex(idx >= 0 ? idx : 0);
     setActiveStoryGroup(group);
   };
@@ -167,7 +184,7 @@ export const HomeFeed: React.FC = () => {
         </div>
         <StoryBar
           currentUserName={user?.name ?? 'You'}
-          currentUserAvatar={(user as any)?.avatar_url || (user as any)?.avatar || null}
+          currentUserAvatar={user?.avatar_url || null}
           myGroup={myGroup}
           othersGroups={othersGroups}
           onOpenViewer={handleOpenStoryViewer}
@@ -252,7 +269,7 @@ export const HomeFeed: React.FC = () => {
         {posts.map((post) => (
           <PostCard
             key={post.$id}
-            post={post as any}
+            post={toCardPost(post)}
             onLike={likePost}
             onDelete={deletePost}
           />

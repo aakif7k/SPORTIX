@@ -5,6 +5,7 @@ import {
   AtSign, Hash, Play, Briefcase,
   Camera, Save, Check, Bell, Star, Award, ChevronDown,
 } from 'lucide-react';
+import type { LucideIcon } from 'lucide-react';
 import type { User as UserType, SportCategory, ExperienceLevel, PerformanceData } from '../../types';
 import { useAuthStore } from '../../store/authStore';
 import { SPORT_CATEGORIES, SPORT_POSITIONS } from '@/constants/sports';
@@ -14,7 +15,7 @@ import { Toggle } from '../ui/index';
 interface SectionProps {
   id: string;
   label: string;
-  icon: any;
+  icon: LucideIcon;
   accentColor?: string;
   open: boolean;
   onToggle: () => void;
@@ -371,7 +372,7 @@ export const ProfileEditDrawer: React.FC<Props> = ({ athlete, onClose }) => {
                 <TextInput value={draft.dateOfBirth} onChange={v => set('dateOfBirth', v)} type="date" />
               </Field>
               <Field label="Role">
-                <SelectInput value={draft.role} onChange={v => set('role', v as any)}
+                <SelectInput value={draft.role} onChange={v => set('role', v as DraftState['role'])}
                   options={[
                     { value: 'athlete', label: 'Athlete' },
                     { value: 'coach', label: 'Coach' },
@@ -602,7 +603,7 @@ export const ProfileEditDrawer: React.FC<Props> = ({ athlete, onClose }) => {
                   <p className="font-label text-sm font-medium text-white">{label}</p>
                   <p className="text-[10px] text-text-secondary font-label mt-0.5">{desc}</p>
                 </div>
-                <Toggle checked={draft[key] as boolean} onChange={v => set(key, v as any)} />
+                <Toggle checked={draft[key] as boolean} onChange={v => set(key, v as DraftState[typeof key])} />
               </div>
             ))}
             <div className="p-3 rounded-xl bg-hot/5 border border-hot/20">
@@ -626,7 +627,7 @@ export const ProfileEditDrawer: React.FC<Props> = ({ athlete, onClose }) => {
                   <p className="font-label text-sm font-medium text-white">{label}</p>
                   <p className="text-[10px] text-text-secondary font-label mt-0.5">{desc}</p>
                 </div>
-                <Toggle checked={draft[key] as boolean} onChange={v => set(key, v as any)} />
+                <Toggle checked={draft[key] as boolean} onChange={v => set(key, v as DraftState[typeof key])} />
               </div>
             ))}
           </Section>

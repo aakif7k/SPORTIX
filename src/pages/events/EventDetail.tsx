@@ -146,7 +146,7 @@ const MATCH_SCHEDULE = [
 ];
 
 const stagger = { visible: { transition: { staggerChildren: 0.06 } } };
-const fadeUp  = { hidden: { opacity: 0, y: 18 }, visible: { opacity: 1, y: 0, transition: { duration: 0.4, ease: 'easeOut' as any } } };
+const fadeUp  = { hidden: { opacity: 0, y: 18 }, visible: { opacity: 1, y: 0, transition: { duration: 0.4, ease: 'easeOut' as const } } };
 
 // ─── Event Detail ─────────────────────────────────────────────────────────────
 export const EventDetail: React.FC = () => {
@@ -656,7 +656,7 @@ export const EventDetail: React.FC = () => {
         }}>
         <div className="flex gap-1.5 overflow-x-auto" style={{ scrollbarWidth: 'none' }}>
           {TABS.map(tab => (
-            <motion.button key={tab.id} onClick={() => setActiveTab(tab.id as any)}
+            <motion.button key={tab.id} onClick={() => setActiveTab(tab.id as typeof activeTab)}
               whileTap={{ scale: 0.95 }}
               className="relative flex items-center gap-1.5 px-4 py-2 rounded-full text-xs font-label font-semibold flex-shrink-0 transition-all"
               style={{

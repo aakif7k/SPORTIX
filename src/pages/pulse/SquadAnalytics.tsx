@@ -23,12 +23,19 @@ import { Zap, Calendar } from 'lucide-react';
 // Recharts compares the `content` element's type to decide whether to reuse the
 // tooltip; a component defined during render is a new type each time, so it was
 // remounted on every hover. Hoisted to keep the identity stable.
-const CustomTooltip = ({ active, payload, label }: any) => {
+/** Recharts hands a tooltip these three; the rest of its props are unused. */
+interface TooltipPayload { name?: string; value?: number | string; color?: string }
+
+const CustomTooltip = ({ active, payload, label }: {
+  active?: boolean;
+  payload?: TooltipPayload[];
+  label?: string | number;
+}) => {
   if (active && payload && payload.length) {
     return (
       <div className="bg-surface border border-border-muted rounded-[10px] p-3 font-mono text-[10px] space-y-1 shadow-card">
         <p className="text-text-primary font-bold">{label}</p>
-        {payload.map((p: any, idx: number) => (
+        {payload.map((p, idx: number) => (
           <p key={idx} style={{ color: p.color || 'var(--accent)' }}>
             {p.name}: <strong className="text-text-primary">{p.value}%</strong>
           </p>

@@ -7,6 +7,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import type { DbPost } from '../../services/socialService';
 import { SportBadge } from '../ui/Badge';
 import { useAuth } from '@/context/AuthContext';
+import type { SportCategory } from '../../types';
 
 interface PostCardProps {
   post: DbPost;
@@ -201,7 +202,7 @@ export const PostCard: React.FC<PostCardProps> = ({ post, onLike, onDelete }) =>
           <div>
             <div className="flex items-center gap-1.5">
               <span className="text-white font-semibold text-[13px] leading-tight">{authorName}</span>
-              {authorSport && <SportBadge sport={authorSport as any} size="sm" />}
+              {authorSport && <SportBadge sport={authorSport as SportCategory} size="sm" />}
             </div>
             <div className="flex items-center gap-1.5 mt-0.5">
               {post.location_tag && (

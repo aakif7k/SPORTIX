@@ -94,7 +94,18 @@ export const AthleteProfile: React.FC = () => {
     );
   }
 
-  const userStatsAny = (profileUser.stats || {}) as any;
+  /**
+   * The radar's six attributes.
+   *
+   * They are not columns on a profile — a PlayerDNA radar needs per-skill ratings
+   * that nothing computes yet — so every one falls back below. Typed rather than
+   * cast to `any` so adding a real source is a compile error away.
+   */
+  interface RadarAttributes {
+    pace?: number; shooting?: number; passing?: number;
+    dribbling?: number; defense?: number; physicality?: number;
+  }
+  const userStatsAny = (profileUser.stats || {}) as RadarAttributes;
 
   const radarData = [
     { subject: 'Pace', A: userStatsAny.pace || 88, fullMark: 100 },
