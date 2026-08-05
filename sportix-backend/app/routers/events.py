@@ -1,11 +1,12 @@
 from fastapi import APIRouter, Depends, Query
 from typing import Optional
 from app.core.dependencies import get_current_user
+from app.schemas.message import MessageCreate
 from app.schemas.event import (
     EventCreate, EventUpdate, EventJoin, ParticipantStatusUpdate,
     EventAnnouncement,
 )
-from app.services import event_service
+from app.services import event_service, messaging_service
 
 router = APIRouter()
 
@@ -110,4 +111,28 @@ async def announce_to_participants(
 ):
     """Notify every entrant, which is what the broadcast box always claimed."""
     data = await event_service.announce(event_id, payload.message, user["id"])
+    return {"success": True, "data": data}
+
+
+# ─── Event discussion ─────────────────────────────────────────────────────────
+# EventDiscussion kept its thread in component state. conversations has carried
+# is_event_chat and event_id since phase 2 with nothing ever creating one.
+
+@router.get("/{event_id}/discussion")
+async def get_event_discussion(event_id: str, user=Depends(get_current_user)):
+    """The event's thread, created on first use. Entrants only."""
+    conversation = await messaging_service.get_or_create_event_thread(event_id, user["id"])
+    data = await messaging_service.list_messages(conversation["$id"], user["id"])
+    return {"success": True, "data": {"conversation": conversation, **data}}
+
+
+@router.post("/{event_id}/discussion", status_code=201)
+async def post_to_event_discussion(
+    event_id: str, payload: MessageCreate, user=Depends(get_current_user),
+):
+    conversation = await messaging_service.get_or_create_event_thread(event_id, user["id"])
+    data = await messaging_service.send_message(
+        conversation["$id"], user["id"], payload.content,
+        payload.media_url, payload.media_type.value if payload.media_type else None,
+    )
     return {"success": True, "data": data}

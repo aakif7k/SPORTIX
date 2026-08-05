@@ -571,6 +571,96 @@ def main() -> int:
           empty.get("current_ssr") is None and empty.get("total_matches") == 0,
           f"current_ssr={empty.get('current_ssr')!r} total={empty.get('total_matches')!r}")
 
+    # --- crews and event discussion -------------------------------------------
+    step("event crews and discussion")
+    r = client.get(f"/api/crews/event/{event_id}", headers=auth_header)
+    check("an athlete with no crew gets null, not a 404",
+          r.status_code == 200 and data_of(r).get("crew") is None,
+          f"{r.status_code} {body(r)}")
+
+    r = client.post(f"/api/crews/event/{event_id}", headers=auth_header,
+                    json={"name": f"Smoke Crew {tag}"})
+    check("POST /api/crews/event/{id} -> 201", r.status_code == 201, f"{r.status_code} {body(r)}")
+    crew = data_of(r)
+    crew_id = crew.get("$id", "")
+    check("the creator is captain and first member",
+          crew.get("is_captain") is True and len(crew.get("members") or []) == 1,
+          f"crew={crew!r}")
+    # crew_id existed on event_participants from the start with nothing writing it.
+    roster = data_of(client.get(f"/api/events/{event_id}/participants",
+                                headers=auth_header)).get("items", [])
+    mine = next((p for p in roster if p.get("user_id") == uid), {})
+    check("the event entry is linked to the crew",
+          mine.get("crew_id") == crew_id and mine.get("entry_type") == "crew",
+          f"crew_id={mine.get('crew_id')!r} entry_type={mine.get('entry_type')!r}")
+
+    check("a second crew for the same event is refused",
+          client.post(f"/api/crews/event/{event_id}", headers=auth_header,
+                      json={"name": "Another"}).status_code == 400)
+    check("a blank crew name is refused",
+          client.post(f"/api/crews/event/{event_id}", headers=auth_header,
+                      json={"name": "   "}).status_code == 422)
+
+    partner_uid = validators[0]["data"].get("user_id", "")
+    r = client.post(f"/api/crews/{crew_id}/members", headers=auth_header,
+                    json={"user_id": partner_uid, "position": "ST"})
+    check("the captain can add a member", r.status_code == 201, f"{r.status_code} {body(r)}")
+    added = data_of(r)
+    check("the roster carries joined profiles and a readiness",
+          len(added.get("members") or []) == 2
+          and all(m.get("full_name") is not None and m.get("readiness")
+                  for m in added["members"]),
+          f"members={added.get('members')!r}")
+    check("members_count is kept honest",
+          added.get("members_count") == 2, f"members_count={added.get('members_count')!r}")
+    check("a non-captain cannot add members",
+          client.post(f"/api/crews/{crew_id}/members",
+                      headers=partner_header_early(validators),
+                      json={"user_id": uid}).status_code == 403)
+    check("adding the same athlete twice is refused",
+          client.post(f"/api/crews/{crew_id}/members", headers=auth_header,
+                      json={"user_id": partner_uid}).status_code == 400)
+    check("the captain cannot be removed",
+          client.delete(f"/api/crews/{crew_id}/members/{uid}",
+                        headers=auth_header).status_code == 400)
+
+    r = client.put(f"/api/crews/{crew_id}", headers=auth_header,
+                   json={"name": f"Renamed {tag}"})
+    check("the captain can rename the crew",
+          r.status_code == 200 and data_of(r).get("name") == f"Renamed {tag}",
+          f"{r.status_code} {body(r)}")
+
+    r = client.delete(f"/api/crews/{crew_id}/members/{partner_uid}", headers=auth_header)
+    check("removing a member unlinks their entry", r.status_code == 200,
+          f"{r.status_code} {body(r)}")
+
+    # --- event discussion ---
+    r = client.get(f"/api/events/{event_id}/discussion", headers=auth_header)
+    check("GET the event discussion -> 200", r.status_code == 200, f"{r.status_code} {body(r)}")
+    thread = data_of(r)
+    check("the thread is an event chat bound to the event",
+          (thread.get("conversation") or {}).get("is_event_chat") is True
+          and (thread.get("conversation") or {}).get("event_id") == event_id,
+          f"conversation={thread.get('conversation')!r}")
+    created_docs.append(("conversations", (thread.get("conversation") or {}).get("$id", "")))
+
+    r = client.post(f"/api/events/{event_id}/discussion", headers=auth_header,
+                    json={"content": f"see you all there {tag}"})
+    check("posting to the discussion -> 201", r.status_code == 201, f"{r.status_code} {body(r)}")
+    again = data_of(client.get(f"/api/events/{event_id}/discussion", headers=auth_header))
+    check("the message is in the thread",
+          any(tag in str(m.get("content", "")) for m in again.get("items") or []),
+          f"{len(again.get('items') or [])} message(s)")
+    # Opening it twice must not mint a second thread.
+    check("the thread is reused, not recreated",
+          (again.get("conversation") or {}).get("$id")
+          == (thread.get("conversation") or {}).get("$id"),
+          "a second event thread was created")
+    check("a non-entrant cannot read the discussion",
+          client.get(f"/api/events/{event_id}/discussion",
+                     headers={"Authorization": f"Bearer {validators[2]['data'].get('jwt','')}"}
+                     ).status_code == 403)
+
     # --- organizer roster management ------------------------------------------
     step("organizer: confirm, remove and announce")
     partner_id_early = validators[0]["data"].get("user_id", "")

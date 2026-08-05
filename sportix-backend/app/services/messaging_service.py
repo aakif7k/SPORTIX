@@ -327,3 +327,86 @@ async def send_squad_message(squad_id: str, user_id: str, content: str,
         "announcement_data": json.dumps(announcement_data) if announcement_data else None,
         "created_at": now,
     }, permissions=_read_grants([m["user_id"] for m in members if m.get("user_id")]))
+
+
+# ─── Event discussion ─────────────────────────────────────────────────────────
+# EventDiscussion kept its thread in component state, so a message vanished on
+# navigation and no other entrant ever saw it. The conversations collection has
+# carried is_event_chat and event_id since phase 2 with nothing creating one.
+
+async def get_or_create_event_thread(event_id: str, user_id: str) -> dict:
+    """
+    The discussion thread for an event, created on first use.
+
+    Membership is the event's roster: anyone entered in the event can post. The
+    per-message read grants therefore cover the entrants at the time of writing,
+    which is what realtime delivery needs.
+    """
+    entrants = _event_entrants(event_id)
+    if user_id not in entrants:
+        raise PermissionError("Only entrants can use this event's discussion")
+
+    rows = db.list_documents(DB_ID, CONVERSATIONS, queries=[
+        Q.equal("event_id", event_id), Q.equal("is_event_chat", True), Q.limit(1),
+    ]).get("documents", [])
+    if rows:
+        conversation = rows[0]
+        _ensure_member(conversation["$id"], user_id)
+        return conversation
+
+    event_name = ""
+    try:
+        event_name = db.get_document(
+            DB_ID, settings.collection_events, event_id).get("title", "")
+    except AppwriteException:
+        logger.warning("event %s has no document", event_id)
+
+    now = now_iso()
+    conversation = db.create_document(DB_ID, CONVERSATIONS, ID.unique(), {
+        "participant_ids": sorted(entrants)[:10],
+        "is_event_chat": True,
+        "event_id": event_id,
+        "event_name": event_name,
+        "created_at": now,
+    })
+    # Every entrant gets a membership row, which is what list_conversations and the
+    # unread counts read.
+    for uid in entrants:
+        db.create_document(DB_ID, MEMBERS, ID.unique(), {
+            "conversation_id": conversation["$id"],
+            "user_id": uid,
+            "joined_at": now,
+            "created_at": now,
+        })
+    return conversation
+
+
+def _event_entrants(event_id: str) -> set[str]:
+    rows = db.list_documents(DB_ID, settings.collection_event_participants, queries=[
+        Q.equal("event_id", event_id), Q.limit(200),
+    ]).get("documents", [])
+    return {r["user_id"] for r in rows
+            if r.get("user_id") and r.get("status") != "withdrawn"}
+
+
+def _ensure_member(conversation_id: str, user_id: str) -> None:
+    """
+    Add a late entrant to an existing event thread.
+
+    Someone who joins the event after the thread was created has no membership
+    row, so without this they could read nothing and their unread count would be
+    meaningless.
+    """
+    rows = db.list_documents(DB_ID, MEMBERS, queries=[
+        Q.equal("conversation_id", conversation_id),
+        Q.equal("user_id", user_id), Q.limit(1),
+    ]).get("documents", [])
+    if rows:
+        return
+    now = now_iso()
+    db.create_document(DB_ID, MEMBERS, ID.unique(), {
+        "conversation_id": conversation_id,
+        "user_id": user_id,
+        "joined_at": now,
+        "created_at": now,
+    })
