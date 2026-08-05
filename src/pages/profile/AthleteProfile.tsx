@@ -7,7 +7,7 @@ import {
 } from 'lucide-react';
 import { RadarChart, PolarGrid, PolarAngleAxis, Radar, ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip } from 'recharts';
 import { useAuthStore } from '../../store/authStore';
-import { useSquadStore } from '../../store/squadStore';
+import { useMySquads } from '@/hooks/useSquads';
 import { usePublicProfile } from '@/hooks/useProfile';
 import type { User } from '../../types';
 import { VerifiedBadge } from '../../components/ui/Badge';
@@ -59,8 +59,10 @@ export const AthleteProfile: React.FC = () => {
   const [editOpen, setEditOpen] = useState(false);
   const [openToRecruit, setOpenToRecruit] = useState(true);
 
-  const { squads } = useSquadStore();
-  const userSquad = squads[0] || null;
+  // The store's squads were seeded from mockData, so every profile showed the
+  // same fictional squad.
+  const { squads } = useMySquads();
+  const userSquad = squads[0] ?? null;
 
   if (profileLoading) {
     return (
@@ -346,10 +348,10 @@ export const AthleteProfile: React.FC = () => {
                           {userSquad.sport}
                         </span>
                       </div>
-                      <p className="font-mono text-xs text-text-muted">Formation: {userSquad.formation}</p>
+                      <p className="font-mono text-xs text-text-muted">Formation: {userSquad.formation ?? 'Not set'}</p>
                       <div className="pt-2 border-t border-white/5 flex items-center justify-between text-xs font-mono">
                         <span className="text-text-muted">Squad Chemistry</span>
-                        <span className="text-[#CCFF00] font-bold">{userSquad.chemistry.overall}%</span>
+                        <span className="text-[#CCFF00] font-bold">{Math.round(userSquad.chemistry_score)}%</span>
                       </div>
                     </div>
                   ) : (

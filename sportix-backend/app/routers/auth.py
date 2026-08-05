@@ -1,4 +1,4 @@
-from fastapi import APIRouter, HTTPException, status, Request, Response
+from fastapi import APIRouter, HTTPException, Query, status, Request, Response
 from app.core.rate_limit import limiter, AUTH_LIMIT
 from app.schemas.user import (
     UserCreate, UserLogin, ForgotPasswordRequest, ChangePasswordRequest,
@@ -78,3 +78,19 @@ async def change_password(request: Request, response: Response,
         current_user["id"], payload.old_password, payload.new_password
     )
     return {"success": True, "data": result}
+
+
+@router.get("/username-available")
+@limiter.limit(AUTH_LIMIT)
+async def username_available(request: Request, response: Response, username: str = Query(..., min_length=1)):
+    """
+    Whether a username can be registered. Deliberately unauthenticated: it is
+    needed *during* signup.
+
+    The browser used to answer this by querying the profiles collection with the
+    Appwrite SDK, and returned "available" whenever the query failed. At signup
+    there is no session, so the read was always denied and every username came
+    back available — then registration failed on the unique index instead.
+    """
+    taken = await auth_service.username_taken(username)
+    return {"success": True, "data": {"username": username, "available": not taken}}

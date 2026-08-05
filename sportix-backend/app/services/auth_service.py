@@ -338,3 +338,21 @@ async def delete_account(user_id: str) -> dict:
 
     logger.info("account deleted for %s", user_id)
     return {"message": "Account deleted."}
+
+
+async def username_taken(username: str) -> bool:
+    """
+    Whether a username is already registered.
+
+    Compared case-insensitively by lowering both sides, because the unique index
+    on profiles.username is exact and two accounts differing only in case would
+    otherwise both be allowed through.
+    """
+    wanted = username.strip().lower()
+    if not wanted:
+        return True
+    res = db.list_documents(
+        settings.appwrite_database_id, settings.collection_users,
+        queries=[Query.equal("username", wanted), Query.limit(1)],
+    )
+    return int(res.get("total", 0)) > 0

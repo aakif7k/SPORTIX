@@ -7,6 +7,7 @@ import {
 } from 'lucide-react';
 import { useAuthStore } from '../../store/authStore';
 import { useThemeStore } from '../../store/themeStore';
+import { useSettings } from '@/hooks/useSettings';
 import { testAIConnection } from '../../services/aiService';
 
 // ─── NEON TOGGLE ─────────────────────────────────────────────────────────────
@@ -97,13 +98,25 @@ export const SettingsPage: React.FC = () => {
   const { user } = useAuthStore();
   const { theme, setTheme } = useThemeStore();
 
+  const { notifications, privacy, loading, saveAll, saving } = useSettings();
+
   const [activeTab, setActiveTab] = useState('general');
   const [dataSaver, setDataSaver] = useState(false);
+  // Seeded once from the server, then edited locally until Save. A useState
+  // initialiser cannot do it because the preferences are not loaded on first
+  // render.
+  const [seeded, setSeeded] = useState(false);
   const [privateAccount, setPrivateAccount] = useState(false);
-  const [pushLikes, setPushLikes] = useState(true);
-  const [pushMentions, setPushMentions] = useState(true);
-  const [isSaving, setIsSaving] = useState(false);
+  const [matchReminders, setMatchReminders] = useState(true);
+  const [autoSquadInvites, setAutoSquadInvites] = useState(true);
   const [saveSuccess, setSaveSuccess] = useState(false);
+
+  if (!loading && !seeded) {
+    setSeeded(true);
+    setPrivateAccount(Boolean(privacy.private_profile));
+    setMatchReminders(notifications.match_reminders !== false);
+    setAutoSquadInvites(notifications.autosquad_invites !== false);
+  }
 
   // AI Diagnostic Test
   const [aiTestStatus, setAiTestStatus] = useState<'idle' | 'testing' | 'ok' | 'error'>('idle');
@@ -116,13 +129,19 @@ export const SettingsPage: React.FC = () => {
     setAiTestMsg(res.message);
   };
 
-  const handleSave = () => {
-    setIsSaving(true);
-    setTimeout(() => {
-      setIsSaving(false);
+  const handleSave = async () => {
+    // This used to be a one-second setTimeout followed by "Saved" — nothing was
+    // written, so every toggle reverted on navigation.
+    try {
+      await saveAll(
+        { match_reminders: matchReminders, autosquad_invites: autoSquadInvites },
+        { private_profile: privateAccount },
+      );
       setSaveSuccess(true);
       setTimeout(() => setSaveSuccess(false), 3000);
-    }, 1000);
+    } catch {
+      // useSettings surfaced the reason; the toggles keep their edited values.
+    }
   };
 
   const TABS = [
@@ -155,10 +174,10 @@ export const SettingsPage: React.FC = () => {
 
         <button
           onClick={handleSave}
-          disabled={isSaving}
+          disabled={saving}
           className="px-6 py-2.5 rounded-2xl bg-[#CCFF00] hover:bg-[#b8e600] text-black font-mono font-bold text-xs uppercase tracking-wider transition-all shadow-[0_0_20px_rgba(204,255,0,0.3)] disabled:opacity-50"
         >
-          {isSaving ? 'Saving...' : 'Save Preferences'}
+          {saving ? 'Saving...' : 'Save Preferences'}
         </button>
       </div>
 
@@ -281,16 +300,16 @@ export const SettingsPage: React.FC = () => {
             <SettingRow
               label="Tournament & Match Reminders"
               desc="Receive push alerts 30 minutes before kick-off"
-              active={pushLikes}
-              onChange={() => setPushLikes(!pushLikes)}
+              active={matchReminders}
+              onChange={() => setMatchReminders(!matchReminders)}
               color="#A855F7"
               icon={<Bell size={18} />}
             />
             <SettingRow
               label="AutoSquad Match Invites"
               desc="Instant alert when AI finds a 90%+ compatible team"
-              active={pushMentions}
-              onChange={() => setPushMentions(!pushMentions)}
+              active={autoSquadInvites}
+              onChange={() => setAutoSquadInvites(!autoSquadInvites)}
               color="#00D4FF"
               icon={<Zap size={18} />}
             />

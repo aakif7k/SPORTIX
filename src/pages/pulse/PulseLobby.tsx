@@ -59,7 +59,7 @@ const toBadge = (b: ApiBadge): Badge => ({
 import { SemiCircleProgress, LevelBadge } from '../../components/gamification/ProgressRing';
 import { RewardCard, StreakBanner, MissionCard, BadgeCard } from '../../components/gamification/GamificationCards';
 import { BadgeIcon } from '../../components/gamification/BadgeIcon';
-import { useSquadStore } from '../../store/squadStore';
+import { useMySquads } from '@/hooks/useSquads';
 import { useAISettingsStore } from '../../store/aiSettingsStore';
 
 // ─── SECTION HEADER ──────────────────────────────────────────────────────────
@@ -494,118 +494,41 @@ interface GeneratedHistoryItem {
 
 const RegisteredSection: React.FC = () => {
   const navigate = useNavigate();
-  const { squads } = useSquadStore();
+  const { squads } = useMySquads();
   const { nearbyRadius } = useAISettingsStore();
   const [selectedSquadId, setSelectedSquadId] = useState<string | null>(null);
   const [archiveMode, setArchiveMode] = useState<'dashboard' | 'squads'>('dashboard');
   const [selectedMonthFilter, setSelectedMonthFilter] = useState<string>('all');
 
   // Combine store squads (active) and mock archived squads for a complete history
-  const activeSquadsList = squads.map(s => ({
-    id: s.squadId,
-    name: s.name,
-    sport: s.sport,
-    date: s.createdAt || '2026-05-19',
-    compatibility: s.pulseAvg ? Math.min(99, Math.round(s.pulseAvg / 10)) : 88,
+  // Compatibility was `pulseAvg / 10` with a fallback of 88, and each member
+  // carried an invented distance and compatibility. The squad's real chemistry
+  // score is the honest number; the roster is fetched per squad by SquadOverview,
+  // so this archive lists squads rather than faking their members.
+  const activeSquadsList = squads.map(sq => ({
+    id: sq.$id,
+    name: sq.name,
+    sport: sq.sport,
+    date: (sq.created_at ?? sq.$createdAt ?? '').slice(0, 10),
+    compatibility: Math.round(sq.chemistry_score),
     status: 'active' as const,
-    chemistry: s.chemistry,
-    membersCount: s.members.length,
-    members: s.members.map(m => ({
-      name: m.name,
-      avatar: m.avatar,
-      position: m.position || 'CM',
-      level: m.level || 20,
-      distance: m.distance || 3.5,
-      compatibility: m.compatibility || 85
-    }))
+    chemistry: {
+      overall: Math.round(sq.chemistry_score),
+      trust: Math.round(sq.trust),
+      coordination: Math.round(sq.coordination),
+      communication: Math.round(sq.communication),
+    },
+    membersCount: sq.members_count,
+    members: [],
   }));
 
-  const mockGeneratedHistory: GeneratedHistoryItem[] = [
-    ...activeSquadsList,
-    {
-      id: 'gen-squad-5',
-      name: 'Alpha Force',
-      sport: 'Basketball',
-      date: '2026-06-12',
-      compatibility: 92,
-      status: 'completed',
-      chemistry: { overall: 90, trust: 88, coordination: 94, communication: 88 },
-      membersCount: 5,
-      members: [
-        { name: 'Devon Clarke', avatar: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150', position: 'Guard', level: 68, distance: 3.1, compatibility: 92 },
-        { name: 'Zaid Al-Hassan', avatar: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=150', position: 'Forward', level: 79, distance: 2.5, compatibility: 90 }
-      ]
-    },
-    {
-      id: 'gen-squad-3',
-      name: 'Cyber Spectres',
-      sport: 'Valorant',
-      date: '2026-05-02',
-      compatibility: 68,
-      status: 'declined',
-      chemistry: { overall: 64, trust: 60, coordination: 68, communication: 64 },
-      membersCount: 5,
-      members: [
-        { name: 'Priya Nair', avatar: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=150', position: 'Sentinel', level: 72, distance: 6.1, compatibility: 72 },
-        { name: 'Devon Clarke', avatar: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150', position: 'Duelist', level: 68, distance: 8.2, compatibility: 65 },
-        { name: 'Zaid Al-Hassan', avatar: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=150', position: 'Controller', level: 79, distance: 4.5, compatibility: 78 }
-      ]
-    },
-    {
-      id: 'gen-squad-4',
-      name: 'Vanguard Elite',
-      sport: 'Football',
-      date: '2026-04-20',
-      compatibility: 89,
-      status: 'completed',
-      chemistry: { overall: 85, trust: 88, coordination: 82, communication: 85 },
-      membersCount: 6,
-      xpEarned: 1250,
-      members: [
-        { name: 'Marcus Reid', avatar: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=150', position: 'ST', level: 84, distance: 1.2, compatibility: 90 },
-        { name: 'Aisha Mensah', avatar: 'https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?w=150', position: 'LW', level: 81, distance: 3.3, compatibility: 88 }
-      ]
-    },
-    {
-      id: 'gen-squad-6',
-      name: 'Spin Masters',
-      sport: 'Tennis',
-      date: '2026-04-05',
-      compatibility: 84,
-      status: 'completed',
-      chemistry: { overall: 80, trust: 82, coordination: 78, communication: 80 },
-      membersCount: 2,
-      members: [
-        { name: 'Aisha Mensah', avatar: 'https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?w=150', position: 'Player 1', level: 81, distance: 2.1, compatibility: 85 }
-      ]
-    },
-    {
-      id: 'gen-squad-7',
-      name: 'Apex Predators',
-      sport: 'Athletics',
-      date: '2026-03-18',
-      compatibility: 76,
-      status: 'completed',
-      chemistry: { overall: 72, trust: 70, coordination: 75, communication: 71 },
-      membersCount: 4,
-      members: [
-        { name: 'Devon Clarke', avatar: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150', position: 'Runner', level: 68, distance: 4.5, compatibility: 78 }
-      ]
-    },
-    {
-      id: 'gen-squad-8',
-      name: 'Neon Racers',
-      sport: 'Athletics',
-      date: '2026-03-02',
-      compatibility: 62,
-      status: 'declined',
-      chemistry: { overall: 58, trust: 60, coordination: 55, communication: 60 },
-      membersCount: 3,
-      members: [
-        { name: 'Priya Nair', avatar: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=150', position: 'Runner', level: 72, distance: 5.2, compatibility: 64 }
-      ]
-    }
-  ];
+  // 86 lines of invented squad history used to sit here — "Alpha Force",
+  // "Cyber Spectres", "Vanguard Elite" and friends, with fabricated chemistry
+  // breakdowns, per-member distances and compatibility scores. Every athlete saw
+  // the same five squads. The archive is the athlete's real squads; AutoSquad
+  // history (accepted and declined suggestions) is available from
+  // /api/autosquad/history and is a separate feature from squad membership.
+  const generatedHistory: GeneratedHistoryItem[] = activeSquadsList;
 
   interface GroupedItems<T> {
     monthKey: string;
@@ -642,7 +565,7 @@ const RegisteredSection: React.FC = () => {
     return result;
   };
 
-  const sortedSquads = [...mockGeneratedHistory].sort((a, b) => b.date.localeCompare(a.date));
+  const sortedSquads = [...generatedHistory].sort((a, b) => b.date.localeCompare(a.date));
   const dashboardSquads = sortedSquads.slice(0, 3);
 
   const renderSquadCard = (squad: GeneratedHistoryItem) => {
@@ -852,17 +775,17 @@ const RegisteredSection: React.FC = () => {
             <div className="flex gap-3 font-mono text-[10px]">
               <div className="px-4 py-2 bg-surface border border-border-muted/50 rounded-xl text-center min-w-[80px] shadow-sm">
                 <span className="text-text-muted block uppercase text-[8px] font-bold">TOTAL</span>
-                <span className="text-sm font-bold text-text-primary mt-0.5 block">{mockGeneratedHistory.length}</span>
+                <span className="text-sm font-bold text-text-primary mt-0.5 block">{generatedHistory.length}</span>
               </div>
               <div className="px-4 py-2 bg-surface border border-border-muted/50 rounded-xl text-center min-w-[80px] shadow-sm">
                 <span className="text-sm font-bold text-volt mt-0.5 block">
-                  {Math.round(mockGeneratedHistory.reduce((acc, cur) => acc + cur.compatibility, 0) / mockGeneratedHistory.length)}%
+                  {Math.round(generatedHistory.reduce((acc, cur) => acc + cur.compatibility, 0) / generatedHistory.length)}%
                 </span>
                 <span className="text-text-muted block uppercase text-[8px] font-bold">AVG FIT</span>
               </div>
               <div className="px-4 py-2 bg-surface border border-border-muted/50 rounded-xl text-center min-w-[80px] shadow-sm">
                 <span className="text-sm font-bold text-cyan mt-0.5 block">
-                  {mockGeneratedHistory.filter(s => s.status === 'completed' || s.status === 'active').length}
+                  {generatedHistory.filter(s => s.status === 'completed' || s.status === 'active').length}
                 </span>
                 <span className="text-text-muted block uppercase text-[8px] font-bold">SUCCESS</span>
               </div>
@@ -887,11 +810,11 @@ const RegisteredSection: React.FC = () => {
                   >
                     <span>ALL TIMELINE</span>
                     <span className={`px-2 py-0.5 rounded text-[8px] font-mono ${selectedMonthFilter === 'all' ? 'bg-volt-text/10 text-volt-text' : 'bg-base text-text-muted border border-border-muted/30'}`}>
-                      {mockGeneratedHistory.length}
+                      {generatedHistory.length}
                     </span>
                   </button>
 
-                  {getSortedMonthGroups(mockGeneratedHistory).map(group => (
+                  {getSortedMonthGroups(generatedHistory).map(group => (
                     <button
                       key={group.monthKey}
                       onClick={() => setSelectedMonthFilter(group.monthKey)}
@@ -913,7 +836,7 @@ const RegisteredSection: React.FC = () => {
 
             {/* Right Column: Month Timeline list */}
             <div className="lg:col-span-9 space-y-8">
-              {getSortedMonthGroups(mockGeneratedHistory)
+              {getSortedMonthGroups(generatedHistory)
                 .filter(group => selectedMonthFilter === 'all' || group.monthKey === selectedMonthFilter)
                 .map(group => (
                   <div key={group.monthKey} className="space-y-4">

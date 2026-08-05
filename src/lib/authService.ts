@@ -1,4 +1,4 @@
-import { account, databases, Query, DATABASE_ID, COLLECTIONS } from '@/lib/appwrite';
+import { account } from '@/lib/appwrite';
 import { api } from '@/lib/api';
 // Appwrite SDK v26+ removed the Models namespace — use inline types
 type AppwriteUser = {
@@ -146,11 +146,15 @@ export async function getCurrentUser(): Promise<AuthUser | null> {
 
 /* ─── GET USER PROFILE ───────────────────────────────────────────────────── */
 export async function getUserProfile(uid: string): Promise<UserProfile | null> {
+  // Read through the API like everything else. The direct SDK read worked only
+  // because profiles grants Role.users() read for realtime, and it skipped the
+  // joins and derived fields the endpoint adds.
   try {
-    const doc = await databases.getDocument(DATABASE_ID, COLLECTIONS.PROFILES, uid);
-    return docToProfile(doc);
-  } catch (err) {
-    console.warn('getUserProfile: profiles collection not found or uncreated:', err);
+    const res = await api.get<{ data: AppwriteDocument }>(
+      `/api/users/${encodeURIComponent(uid)}`,
+    );
+    return docToProfile(res.data);
+  } catch {
     return null;
   }
 }
@@ -177,14 +181,19 @@ export async function updateUserProfile(
 
 /* ─── CHECK USERNAME AVAILABLE ───────────────────────────────────────────── */
 export async function checkUsernameAvailable(username: string): Promise<boolean> {
+  // This used to query the profiles collection with the browser SDK and return
+  // `true` whenever the query threw. During signup there is no session, so the
+  // read was always denied and every username reported as available — then
+  // registration failed on the unique index instead. The endpoint is public for
+  // exactly this reason, and compares case-insensitively.
   try {
-    const res = await databases.listDocuments(
-      DATABASE_ID,
-      COLLECTIONS.PROFILES,
-      [Query.equal('username', username.toLowerCase().trim()), Query.limit(1)],
+    const res = await api.get<{ data: { available: boolean } }>(
+      `/api/auth/username-available?username=${encodeURIComponent(username.trim())}`,
     );
-    return res.total === 0;
+    return res.data.available;
   } catch {
+    // Do not claim a name is free when the check itself failed: let the caller
+    // proceed and have registration be the authority.
     return true;
   }
 }

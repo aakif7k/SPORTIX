@@ -240,6 +240,20 @@ def main() -> int:
           f"got {jwt[:40]!r} -- a session secret is not a JWT")
     uid = author["data"].get("user_id", "")
 
+    # The browser used to answer this by querying profiles with the SDK and
+    # returning "available" whenever the query threw -- which, with no session
+    # during signup, was always.
+    r = client.get(f"/api/auth/username-available?username={author['payload']['username']}")
+    check("a taken username reports unavailable, without a session",
+          r.status_code == 200 and data_of(r).get("available") is False,
+          f"{r.status_code} {body(r)}")
+    r = client.get(f"/api/auth/username-available?username=definitely_free_{tag}")
+    check("a free username reports available",
+          data_of(r).get("available") is True, f"{body(r)}")
+    r = client.get(f"/api/auth/username-available?username={author['payload']['username'].upper()}")
+    check("the check is case-insensitive",
+          data_of(r).get("available") is False, f"{body(r)}")
+
     check("duplicate username is rejected",
           client.post("/api/auth/register", json=author["payload"]).status_code < 500)
 
