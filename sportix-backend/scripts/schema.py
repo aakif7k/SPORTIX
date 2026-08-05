@@ -524,7 +524,13 @@ COLLECTIONS: list[Collection] = [
         "user_streaks", "User Streaks",
         attrs=[
             ID_("user_id", required=True), I("current_streak", default=0), I("longest_streak", default=0),
-            S("last_active_date", 10), D("updated_at", required=True),
+            S("last_active_date", 10),
+            # Distinct from last_active_date, which login stamps to advance the
+            # streak. Whether today's reward has been collected is a separate fact,
+            # and reusing one date for both meant logging in silently consumed the
+            # day's claim.
+            S("last_claimed_date", 10),
+            D("updated_at", required=True),
         ],
         indexes=[UNIQUE("user_id")],
     ),

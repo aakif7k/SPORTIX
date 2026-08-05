@@ -36,6 +36,15 @@ import zlib
 import httpx
 from fastapi.testclient import TestClient
 
+# Windows consoles default to cp1252, and assertion details can contain emoji (the
+# streak ladder's icons, for one). Without this a genuine failure is replaced by a
+# UnicodeEncodeError, hiding the very detail needed to diagnose it.
+for _stream in (sys.stdout, sys.stderr):
+    try:
+        _stream.reconfigure(encoding="utf-8", errors="replace")
+    except AttributeError:
+        pass
+
 passed = 0
 failed = 0
 created_users: list[str] = []
@@ -205,7 +214,11 @@ def main() -> int:
         payload = {
             "email": f"smoke_{role}_{tag}@sportix.test",
             "password": "SmokeTest12345",
-            "full_name": f"Smoke {role.title()}",
+            # A token that appears ONLY in full_name: the username is
+            # smoke_<role>_<tag>, so a hit on this can only have come from
+            # full_name matching. Previously this searched "Smoke", which every
+            # leftover account also matched, so the assertion measured litter.
+            "full_name": f"Zephyr{tag} {role.title()}",
             "username": f"smoke_{role}_{tag}"[:29],
             "role": "athlete", "sport": "football", "sports": ["football"],
             "experience_level": "amateur", "location": "Berlin", "city": "Berlin",
@@ -450,6 +463,54 @@ def main() -> int:
           "awaiting_validation" in pending,
           f"keys={sorted(pending.keys())!r}")
 
+    # --- daily streak ladder --------------------------------------------------
+    step("daily streak rewards")
+    r = client.get("/api/missions/streak", headers=auth_header)
+    streak = data_of(r)
+    check("GET /api/missions/streak -> 200", r.status_code == 200, f"{r.status_code} {body(r)}")
+    # The calendar was seven hardcoded rows with days 1-3 always claimed and day 4
+    # always "today", identical for every account.
+    check("the ladder has seven rungs", len(streak.get("rewards") or []) == 7,
+          f"{len(streak.get('rewards') or [])} rung(s)")
+    # Registering logged the account in, which starts the streak at day 1 -- but
+    # starting a streak is not the same as having collected its reward.
+    check("nothing is claimed before the reward is collected",
+          streak.get("claimed_today") is False
+          and all(not rung.get("claimed") for rung in streak.get("rewards") or []),
+          f"claimed_today={streak.get('claimed_today')!r}")
+    check("the current streak day is the claimable one",
+          next((rung["day"] for rung in streak.get("rewards") or []
+                if rung.get("is_today")), None) == max(1, streak.get("current_streak", 1)),
+          f"streak={streak.get('current_streak')!r} rewards={streak.get('rewards')!r}")
+
+    r = client.post("/api/missions/streak/claim", headers=auth_header)
+    claim = data_of(r)
+    check("POST /api/missions/streak/claim -> 200", r.status_code == 200,
+          f"{r.status_code} {body(r)}")
+    check("claiming pays out the current day's rung",
+          claim.get("day") == 1 and claim.get("current_streak") == 1
+          and float(claim.get("pulse_awarded") or 0) == 10
+          and int(claim.get("coins_awarded") or 0) == 5,
+          f"claim={claim!r}")
+    # Claiming twice in a day must not pay twice.
+    check("a second claim on the same day is refused",
+          client.post("/api/missions/streak/claim", headers=auth_header
+                      ).status_code == 400)
+    # balance is an int column and award() wrote the float it was given, so any
+    # float-typed award 400'd and the caller saw a silently unchanged balance.
+    wallet = data_of(client.get("/api/coins/balance", headers=auth_header))
+    check("the coin reward reached the wallet",
+          int(wallet.get("balance") or 0) >= 5,
+          f"balance={wallet.get('balance')!r}")
+    check("total_earned is maintained, not left at zero",
+          int(wallet.get("total_earned") or 0) >= 5,
+          f"total_earned={wallet.get('total_earned')!r}")
+
+    after = data_of(client.get("/api/missions/streak", headers=auth_header))
+    check("the ladder reports today as claimed",
+          after.get("claimed_today") is True and after.get("current_streak") == 1,
+          f"claimed_today={after.get('claimed_today')!r} streak={after.get('current_streak')!r}")
+
     # --- career and history ---------------------------------------------------
     step("career history and aggregates")
     r = client.get("/api/matches/me/history", headers=auth_header)
@@ -655,12 +716,13 @@ def main() -> int:
 
     # The new-message picker searches people by name, which only matched
     # username before -- so typing a name found nobody.
-    r = client.get(f"/api/search/?type=users&q=Smoke", headers=auth_header)
+    r = client.get(f"/api/search/?type=users&q=Zephyr{tag}", headers=auth_header)
     found = (data_of(r).get("users") or [])
     check("user search matches on full_name, not just username",
           any(u.get("$id") == partner_id for u in found),
-          f"{len(found)} hit(s) for 'Smoke', partner {partner_id} not among them")
-    r = client.get("/api/search/?type=users&q=Smoke&sport=badminton", headers=auth_header)
+          f"{len(found)} hit(s) for the full_name-only token, "
+          f"partner {partner_id} not among them")
+    r = client.get(f"/api/search/?type=users&q=Zephyr{tag}&sport=badminton", headers=auth_header)
     check("the sport filter is actually applied to search",
           not (data_of(r).get("users") or []),
           f"got {len(data_of(r).get('users') or [])} football players filtered by badminton")

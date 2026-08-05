@@ -169,20 +169,7 @@ async def get_history(user_id: str) -> dict:
             "total": len(rows)}
 
 
-async def get_streak(user_id: str) -> dict:
-    rows = db.list_documents(DB_ID, STREAKS, queries=[
-        Q.equal("user_id", user_id), Q.limit(1),
-    ]).get("documents", [])
-    if rows:
-        r = rows[0]
-        return {
-            "user_id": user_id,
-            "current_streak": int(r.get("current_streak", 0)),
-            "longest_streak": int(r.get("longest_streak", 0)),
-            "last_active_date": r.get("last_active_date"),
-        }
-    return {"user_id": user_id, "current_streak": 0, "longest_streak": 0,
-            "last_active_date": None}
+
 
 
 async def get_weekly(user_id: str) -> dict:
@@ -238,3 +225,181 @@ async def _update_streak(user_id: str) -> None:
         "last_active_date": today_str,
         "updated_at": now,
     })
+
+
+# --- Daily streak rewards -----------------------------------------------------
+# The 7-day reward calendar on PulseLobby was seven hardcoded rows in
+# gamificationStore, with days 1-3 permanently claimed, day 4 permanently "today",
+# and claiming only mutating local state. user_streaks tracked a streak but nothing
+# rewarded it.
+#
+# The ladder is defined here rather than stored, because it is a product rule and
+# not per-user data: day N always pays the same. The streak row is the only state,
+# and last_active_date is what makes claiming idempotent -- a second claim on the
+# same day is refused rather than paying twice.
+
+STREAK_LADDER = [
+    {"day": 1, "label": "Day 1", "pulse": 10, "coins": 5, "icon": "\u26a1"},
+    {"day": 2, "label": "Day 2", "pulse": 15, "coins": 10, "icon": "\u26a1"},
+    {"day": 3, "label": "Day 3", "pulse": 20, "coins": 15, "icon": "\U0001f50b"},
+    {"day": 4, "label": "Day 4", "pulse": 25, "coins": 20, "icon": "\U0001f3af"},
+    {"day": 5, "label": "Day 5", "pulse": 30, "coins": 25, "icon": "\U0001f680",
+     "xp_booster": 1.5},
+    {"day": 6, "label": "Day 6", "pulse": 40, "coins": 35, "icon": "\U0001f48e"},
+    {"day": 7, "label": "BONUS", "pulse": 100, "coins": 100, "icon": "\U0001f451",
+     "xp_booster": 2.0, "is_bonus_day": True},
+]
+
+LADDER_LENGTH = len(STREAK_LADDER)
+
+
+def _today() -> str:
+    from datetime import datetime, timezone
+    return datetime.now(timezone.utc).date().isoformat()
+
+
+def _yesterday() -> str:
+    from datetime import datetime, timedelta, timezone
+    return (datetime.now(timezone.utc).date() - timedelta(days=1)).isoformat()
+
+
+def _streak_row(user_id: str) -> dict | None:
+    rows = db.list_documents(DB_ID, STREAKS, queries=[
+        Q.equal("user_id", user_id), Q.limit(1),
+    ]).get("documents", [])
+    return rows[0] if rows else None
+
+
+def _ladder_state(current_streak: int, claimed_today: bool) -> list[dict]:
+    """
+    The calendar as the UI draws it.
+
+    The position in the ladder cycles every 7 days, so a 9-day streak is on day 2
+    of its second lap rather than off the end of the board.
+    """
+    # The rung the athlete is standing on. Position cycles every 7 days, so a
+    # 9-day streak is on day 2 of its second lap rather than off the end of the
+    # board.
+    position = (current_streak - 1) % LADDER_LENGTH + 1 if current_streak > 0 else 1
+
+    # Rungs strictly below the current one are behind you. The current rung is
+    # claimed only if today's reward has been collected -- being on day 3 with
+    # nothing claimed means day 3 is the one to press, not day 4.
+    claimed_through = position if claimed_today else position - 1
+
+    out = []
+    for rung in STREAK_LADDER:
+        day = rung["day"]
+        out.append({
+            **rung,
+            "claimed": day <= claimed_through,
+            "is_today": day == position,
+            "is_locked": day > position,
+        })
+    return out
+
+
+async def get_streak(user_id: str) -> dict:
+    row = _streak_row(user_id)
+    current = int(row.get("current_streak", 0)) if row else 0
+    longest = int(row.get("longest_streak", 0)) if row else 0
+    last_active = row.get("last_active_date") if row else None
+    # Login stamps last_active_date to advance the streak; whether today's reward
+    # has been collected is a separate marker, or logging in would silently consume
+    # the claim.
+    claimed_today = str((row or {}).get("last_claimed_date") or "")[:10] == _today()
+
+    return {
+        "user_id": user_id,
+        "current_streak": current,
+        "longest_streak": longest,
+        "last_active_date": last_active,
+        "claimed_today": claimed_today,
+        "rewards": _ladder_state(current, claimed_today),
+    }
+
+
+async def claim_daily_reward(user_id: str) -> dict:
+    """
+    Claim today's rung of the streak ladder.
+
+    Idempotent by date: claiming twice in a day is a ValueError rather than a
+    second payout. A gap of more than one day resets the streak to 1, which is what
+    makes it a streak.
+    """
+    from app.services import coins_service, pulse_service
+
+    row = _streak_row(user_id)
+    today = _today()
+
+    if str((row or {}).get("last_claimed_date") or "")[:10] == today:
+        raise ValueError("Today's reward has already been claimed")
+
+    # The streak itself is maintained by _update_streak on login, so claiming reads
+    # it rather than advancing it a second time. A user who has logged in today is
+    # already on day N; one who somehow claims without a streak row starts at 1.
+    last_active = str((row or {}).get("last_active_date") or "")[:10]
+    current = int((row or {}).get("current_streak", 0))
+    if current <= 0:
+        current = 1
+    elif last_active != today:
+        # Claiming is itself activity, so it advances a stale streak the same way a
+        # login would.
+        current = current + 1 if last_active == _yesterday() else 1
+    longest = max(int((row or {}).get("longest_streak", 0)), current)
+
+    position = (current - 1) % LADDER_LENGTH
+    rung = STREAK_LADDER[position]
+
+    now = now_iso()
+    if row:
+        db.update_document(DB_ID, STREAKS, row["$id"], {
+            "current_streak": current,
+            "longest_streak": longest,
+            "last_active_date": today,
+            "last_claimed_date": today,
+            "updated_at": now,
+        })
+    else:
+        db.create_document(DB_ID, STREAKS, ID.unique(), {
+            "user_id": user_id,
+            "current_streak": current,
+            "longest_streak": longest,
+            "last_active_date": today,
+            "last_claimed_date": today,
+            "created_at": now,
+            "updated_at": now,
+        })
+
+    # The streak row is written first: if an award fails the streak still advanced,
+    # which is recoverable, whereas paying out twice is not.
+    awarded_pulse, awarded_coins = 0.0, 0
+    try:
+        award = await pulse_service.award_pulse(
+            user_id=user_id, source="streak", amount=float(rung["pulse"]),
+            reason=f"Day {rung['day']} login streak", component="activity",
+        )
+        awarded_pulse = float(rung["pulse"])
+    except Exception:
+        award = {}
+        logger.warning("streak Pulse award failed for %s", user_id, exc_info=True)
+
+    try:
+        await coins_service.award(user_id, int(rung["coins"]),
+                                  f"Day {rung['day']} login streak", source="reward")
+        awarded_coins = int(rung["coins"])
+    except Exception:
+        logger.warning("streak coin award failed for %s", user_id, exc_info=True)
+
+    return {
+        "day": rung["day"],
+        "current_streak": current,
+        "longest_streak": longest,
+        "pulse_awarded": awarded_pulse,
+        "coins_awarded": awarded_coins,
+        "xp_booster": rung.get("xp_booster"),
+        "total_pulse": award.get("total_pulse"),
+        "level": award.get("level"),
+        "leveled_up": award.get("leveled_up", False),
+        "rewards": _ladder_state(current, True),
+    }

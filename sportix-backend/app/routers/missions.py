@@ -33,3 +33,15 @@ async def get_streak(user=Depends(get_current_user)):
 async def get_weekly_summary(user=Depends(get_current_user)):
     data = await mission_service.get_weekly(user["id"])
     return {"success": True, "data": data}
+
+
+@router.post("/streak/claim")
+async def claim_daily_reward(user=Depends(get_current_user)):
+    """
+    Claim today's rung of the 7-day login-streak ladder.
+
+    The calendar on PulseLobby was seven hardcoded rows with days 1-3 permanently
+    claimed and day 4 permanently "today"; claiming only changed local state.
+    """
+    data = await mission_service.claim_daily_reward(user["id"])
+    return {"success": True, "data": data}
