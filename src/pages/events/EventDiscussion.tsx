@@ -1,11 +1,12 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion } from 'framer-motion';
 import {
-  ChevronLeft, Send, Pin, BarChart2,
-  Megaphone, Trash2, Bell, X
+  ChevronLeft, Send, Pin, Megaphone, Bell,
 } from 'lucide-react';
 import { useAuthStore } from '../../store/authStore';
+import { useEvent, useEventParticipants } from '@/hooks/useEvents';
+import { useEventDiscussion } from '@/hooks/useCrew';
 
 
 // ─── Mock Discussion Data ─────────────────────────────────────────────────────
@@ -19,63 +20,22 @@ interface DiscussionMessage {
   timestamp: string;
   reactions: { emoji: string; count: number; reacted: boolean }[];
   pinned?: boolean;
-  pollData?: { question: string; options: { text: string; votes: number; voted: boolean }[] };
   isAdmin?: boolean;
 }
 
-const INITIAL_MESSAGES: DiscussionMessage[] = [
-  {
-    id: 'm1', sender: 'Event Admin', senderId: 'admin', avatar: '', type: 'announcement',
-    content: 'Welcome to the official discussion group for this event! Rules: be respectful, no spam, and coordinate effectively.',
-    timestamp: '2 hours ago', reactions: [], pinned: true, isAdmin: true
-  },
-  {
-    id: 'm2', sender: 'Marcus Reid', senderId: 'u1', avatar: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=80',
-    type: 'text', content: 'Who else is joining as solo? Looking for a squad to team up with.',
-    timestamp: '1h 45m ago', reactions: [{ emoji: '⚡', count: 4, reacted: false }, { emoji: '✅', count: 2, reacted: false }]
-  },
-  {
-    id: 'm3', sender: 'Priya Nair', senderId: 'u3', avatar: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=80',
-    type: 'poll', content: '',
-    pollData: {
-      question: 'What time works best for warm-up?',
-      options: [
-        { text: '30 mins before', votes: 8, voted: false },
-        { text: '1 hour before', votes: 5, voted: false },
-        { text: 'No warm-up needed', votes: 2, voted: false },
-      ]
-    },
-    timestamp: '1h 20m ago', reactions: []
-  },
-  {
-    id: 'm4', sender: 'Zaid Al-Hassan', senderId: 'u2', avatar: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=80',
-    type: 'text', content: 'Iron Pulse FC is registered! We are ready. Good luck to all teams.',
-    timestamp: '58m ago', reactions: [{ emoji: '🔥', count: 7, reacted: false }]
-  },
-  {
-    id: 'm5', sender: 'Event Admin', senderId: 'admin', avatar: '', type: 'announcement',
-    content: 'Reminder: Gates open 2 hours before the first match. Bring your SPORTiX ID for verification.',
-    timestamp: '30m ago', reactions: [], isAdmin: true
-  },
-  {
-    id: 'm6', sender: 'Aisha Mensah', senderId: 'u5', avatar: 'https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?w=80',
-    type: 'text', content: 'Can someone share the event parking details? Joining with a full crew.',
-    timestamp: '15m ago', reactions: [{ emoji: '✅', count: 1, reacted: false }]
-  },
-];
-
-const REACTIONS = ['⚡', '🔥', '✅', '👍', '🏆', '💪'];
 
 // ─── Message Bubble ───────────────────────────────────────────────────────────
+/**
+ * A message in the thread.
+ *
+ * Reactions, pinning and deleting were removed with the local state that backed
+ * them: the messages collection has no columns for any of the three, so every one
+ * of those controls changed only what this one browser tab displayed.
+ */
 const MessageBubble: React.FC<{
   msg: DiscussionMessage;
   isMe: boolean;
-  isAdmin: boolean;
-  onDelete: (id: string) => void;
-  onPin: (id: string) => void;
-  onReact: (msgId: string, emoji: string) => void;
-}> = ({ msg, isMe, isAdmin, onDelete, onPin, onReact }) => {
-  const [showReactionPicker, setShowReactionPicker] = useState(false);
+}> = ({ msg, isMe }) => {
 
   if (msg.type === 'announcement') {
     return (
@@ -89,46 +49,15 @@ const MessageBubble: React.FC<{
             <p className="font-mono text-[11px] text-text-primary leading-relaxed font-bold">{msg.content}</p>
             <span className="font-mono text-[8px] text-text-muted mt-1 block">{msg.timestamp}</span>
           </div>
-          {isAdmin && (
-            <button onClick={() => onDelete(msg.id)} className="text-text-muted hover:text-red-400 transition-colors flex-shrink-0">
-              <Trash2 size={11} />
-            </button>
-          )}
+
         </div>
       </motion.div>
     );
   }
 
-  if (msg.type === 'poll' && msg.pollData) {
-    const total = msg.pollData.options.reduce((s, o) => s + o.votes, 0);
-    return (
-      <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} className="my-3 mx-2">
-        <div className="rounded-[16px] p-4 border border-plasma/20 bg-plasma-dim shadow-sm">
-          <div className="flex items-center gap-2 mb-1">
-            <img src={msg.avatar} alt={msg.sender} className="w-6 h-6 rounded-full object-cover border border-border-muted" />
-            <span className="font-mono text-[10px] text-plasma font-bold">{msg.sender}</span>
-            <BarChart2 size={11} className="text-plasma" />
-          </div>
-          <p className="font-mono text-[12px] text-text-primary mb-3 font-bold">{msg.pollData.question}</p>
-          <div className="space-y-2">
-            {msg.pollData.options.map((opt, i) => {
-              const pct = total > 0 ? Math.round((opt.votes / total) * 100) : 0;
-              return (
-                <div key={i} className="rounded-[10px] overflow-hidden border border-border-muted relative cursor-pointer hover:border-plasma/40 bg-surface transition-all">
-                  <div className="absolute inset-0 rounded-[10px] bg-plasma/10" style={{ width: `${pct}%` }} />
-                  <div className="relative flex items-center justify-between px-3 py-2">
-                    <span className="font-mono text-[10px] text-text-primary">{opt.text}</span>
-                    <span className="font-mono text-[9px] text-plasma font-bold">{pct}%</span>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-          <span className="font-mono text-[8px] text-text-muted mt-2 block">{total} votes · {msg.timestamp}</span>
-        </div>
-      </motion.div>
-    );
-  }
+  // The poll branch was removed with the poll composer: messages has no poll
+  // columns, so a rendered poll could only ever have come from local state, and
+  // its vote buttons changed nothing. Squad chat has real polls.
 
   return (
     <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}
@@ -157,49 +86,11 @@ const MessageBubble: React.FC<{
 
           {/* Hover actions */}
           <div className={`absolute top-0 ${isMe ? 'right-full mr-2' : 'left-full ml-2'} flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity`}>
-            <button onClick={() => setShowReactionPicker(r => !r)}
-              className="w-6 h-6 rounded-full bg-elevated border border-border-muted flex items-center justify-center text-text-muted hover:text-text-primary text-[11px] font-bold">+</button>
-            <button onClick={() => onPin(msg.id)}
-              className="w-6 h-6 rounded-full bg-elevated border border-border-muted flex items-center justify-center text-text-muted hover:text-volt">
-              <Pin size={10} />
-            </button>
-            {(isMe || isAdmin) && (
-              <button onClick={() => onDelete(msg.id)}
-                className="w-6 h-6 rounded-full bg-elevated border border-border-muted flex items-center justify-center text-text-muted hover:text-red-400">
-                <Trash2 size={10} />
-              </button>
-            )}
           </div>
 
-          {/* Reaction picker */}
-          <AnimatePresence>
-            {showReactionPicker && (
-              <motion.div initial={{ opacity: 0, scale: 0.8, y: 5 }} animate={{ opacity: 1, scale: 1, y: 0 }} exit={{ opacity: 0, scale: 0.8 }}
-                className="absolute bottom-full mb-2 left-0 flex gap-1 p-2 rounded-xl z-10 shadow-xl bg-surface border border-border-muted">
-                {REACTIONS.map(emoji => (
-                  <button key={emoji} onClick={() => { onReact(msg.id, emoji); setShowReactionPicker(false); }}
-                    className="text-lg hover:scale-125 transition-transform">{emoji}</button>
-                ))}
-              </motion.div>
-            )}
-          </AnimatePresence>
+
         </div>
 
-        {/* Reactions */}
-        {msg.reactions.length > 0 && (
-          <div className={`flex gap-1 mt-1 flex-wrap ${isMe ? 'justify-end' : ''}`}>
-            {msg.reactions.map((r, i) => (
-              <button key={i} onClick={() => onReact(msg.id, r.emoji)}
-                className="flex items-center gap-0.5 px-2 py-0.5 rounded-full text-[10px] transition-all"
-                style={{
-                  background: r.reacted ? 'var(--volt-dim)' : 'var(--bg-elevated)',
-                  border: r.reacted ? '1px solid var(--volt)' : '1px solid var(--border)'
-                }}>
-                {r.emoji} <span className="font-mono text-[9px] text-text-primary">{r.count}</span>
-              </button>
-            ))}
-          </div>
-        )}
 
         <span className={`font-mono text-[8px] text-text-muted mt-0.5 ${isMe ? 'mr-1' : 'ml-1'}`}>{msg.timestamp}</span>
       </div>
@@ -212,81 +103,62 @@ export const EventDiscussion: React.FC = () => {
   const { id } = useParams();
   const navigate = useNavigate();
   const user = useAuthStore(state => state.user);
-  const currentUserId = user?.id || 'cu1';
-  const currentUserName = user?.name || 'Alex Rivera';
-  const currentUserAvatar = user?.avatar || 'https://images.pexels.com/photos/1486064/pexels-photo-1486064.jpeg?cs=srgb&dl=pexels-nkhajotia-1486064.jpg&fm=jpg';
+  const currentUserId = user?.id || '';
 
-  const [messages, setMessages] = useState<DiscussionMessage[]>(INITIAL_MESSAGES);
+  // The thread is the event's own conversation, delivered live. This page kept its
+  // messages in component state, so a message vanished on navigation and no other
+  // entrant ever saw it.
+  const {
+    messages: apiMessages, loading, error, refresh, sendMessage, sending,
+  } = useEventDiscussion(id);
+  // "48 live" was a hardcoded number. The entrant count is real.
+  const { participants } = useEventParticipants(id);
+
+  const messages: DiscussionMessage[] = apiMessages.map(m => ({
+    id: m.$id,
+    sender: m.sender?.full_name || 'Athlete',
+    senderId: m.sender_id,
+    avatar: m.sender?.avatar_url ?? '',
+    type: 'text',
+    content: m.content,
+    timestamp: new Date(m.created_at).toLocaleTimeString([], {
+      hour: '2-digit', minute: '2-digit',
+    }),
+    // Reactions, pinning and polls have no columns on the messages collection, so
+    // they are gone rather than kept as page-local illusions that nobody else saw.
+    reactions: [],
+  }));
+
+  const { event } = useEvent(id);
+  // "isAdmin" was hardcoded true "for demo", so every entrant saw moderator
+  // controls. The organizer is the real thing.
+  const isAdmin = Boolean(event && currentUserId && event.organizer_id === currentUserId);
+
   const [input, setInput] = useState('');
-  const [isAdmin] = useState(true); // current user is admin for demo
-  const [showPollCreator, setShowPollCreator] = useState(false);
-  const [pollQuestion, setPollQuestion] = useState('');
-  const [pollOptions, setPollOptions] = useState(['', '']);
-  const [liveCount] = useState(48);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [messages]);
+  }, [messages.length]);
 
-  const handleSend = () => {
-    if (!input.trim()) return;
-    const msg: DiscussionMessage = {
-      id: `m${Date.now()}`,
-      sender: currentUserName,
-      senderId: currentUserId,
-      avatar: currentUserAvatar,
-      type: 'text',
-      content: input.trim(),
-      timestamp: 'just now',
-      reactions: [],
-    };
-    setMessages(prev => [...prev, msg]);
+  const handleSend = async () => {
+    const content = input.trim();
+    if (!content || sending) return;
     setInput('');
+    try {
+      await sendMessage(content);
+    } catch {
+      // Restored so nothing typed is lost; the hook reported the reason.
+      setInput(content);
+    }
   };
 
-  const handleDelete = (msgId: string) => {
-    setMessages(prev => prev.filter(m => m.id !== msgId));
-  };
 
-  const handlePin = (msgId: string) => {
-    setMessages(prev => prev.map(m => m.id === msgId ? { ...m, pinned: !m.pinned } : m));
-  };
 
-  const handleReact = (msgId: string, emoji: string) => {
-    setMessages(prev => prev.map(m => {
-      if (m.id !== msgId) return m;
-      const existing = m.reactions.find(r => r.emoji === emoji);
-      if (existing) {
-        return { ...m, reactions: m.reactions.map(r => r.emoji === emoji ? { ...r, count: r.reacted ? r.count - 1 : r.count + 1, reacted: !r.reacted } : r).filter(r => r.count > 0) };
-      }
-      return { ...m, reactions: [...m.reactions, { emoji, count: 1, reacted: true }] };
-    }));
-  };
 
-  const handleCreatePoll = () => {
-    if (!pollQuestion.trim() || pollOptions.filter(o => o.trim()).length < 2) return;
-    const msg: DiscussionMessage = {
-      id: `poll${Date.now()}`,
-      sender: currentUserName,
-      senderId: currentUserId,
-      avatar: currentUserAvatar,
-      type: 'poll',
-      content: '',
-      pollData: {
-        question: pollQuestion,
-        options: pollOptions.filter(o => o.trim()).map(text => ({ text, votes: 0, voted: false })),
-      },
-      timestamp: 'just now',
-      reactions: [],
-    };
-    setMessages(prev => [...prev, msg]);
-    setPollQuestion('');
-    setPollOptions(['', '']);
-    setShowPollCreator(false);
-  };
 
-  const pinnedMessages = messages.filter(m => m.pinned);
+  // Nothing can be pinned without a column for it.
+  const pinnedMessages: DiscussionMessage[] = [];
 
   return (
     <div className="max-w-2xl mx-auto flex flex-col text-text-primary" style={{ height: 'calc(100vh - 80px)' }}>
@@ -303,7 +175,9 @@ export const EventDiscussion: React.FC = () => {
             <h1 className="font-display text-[17px] text-text-primary tracking-wider leading-none">DISCUSSION GROUP</h1>
             <div className="flex items-center gap-2 mt-1">
               <div className="w-1.5 h-1.5 rounded-full bg-volt animate-pulse" />
-              <span className="font-mono text-[9px] text-text-muted">{liveCount} participants online</span>
+              <span className="font-mono text-[9px] text-text-muted">
+                {participants.length} entrant{participants.length === 1 ? '' : 's'}
+              </span>
             </div>
           </div>
         </div>
@@ -329,72 +203,53 @@ export const EventDiscussion: React.FC = () => {
 
       {/* Messages Area */}
       <div className="flex-1 overflow-y-auto px-1 py-2" style={{ scrollbarWidth: 'thin' }}>
-        {messages.map(msg => (
+        {loading ? (
+          <div className="space-y-3 p-2" aria-busy="true" aria-label="Loading the discussion">
+            {[0, 1, 2].map(i => (
+              <div key={i} className="h-14 rounded-[14px] bg-elevated animate-shimmer" />
+            ))}
+          </div>
+        ) : error ? (
+          <div className="m-2 p-5 rounded-[14px] bg-elevated border border-border-muted text-center space-y-2">
+            <p className="font-mono text-[11px] text-text-primary font-bold uppercase">
+              Discussion did not load
+            </p>
+            <p className="font-mono text-[10px] text-text-muted">{error.message}</p>
+            <button onClick={() => refresh()}
+              className="px-3 py-1.5 rounded-[8px] bg-volt text-volt-text font-mono text-[9px] font-bold uppercase">
+              Retry
+            </button>
+          </div>
+        ) : messages.length === 0 ? (
+          <div className="m-2 p-6 rounded-[14px] bg-elevated border border-border-muted text-center space-y-1.5">
+            <p className="font-mono text-[11px] text-text-primary font-bold uppercase">
+              Nothing said yet
+            </p>
+            <p className="font-mono text-[10px] text-text-muted">
+              Everyone entered in this event sees what you post here.
+            </p>
+          </div>
+        ) : messages.map(msg => (
           <MessageBubble
             key={msg.id}
             msg={msg}
             isMe={msg.senderId === currentUserId}
-            isAdmin={isAdmin}
-            onDelete={handleDelete}
-            onPin={handlePin}
-            onReact={handleReact}
           />
         ))}
         <div ref={messagesEndRef} />
       </div>
 
-      {/* Poll Creator */}
-      <AnimatePresence>
-        {showPollCreator && (
-          <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: 20 }}
-            className="flex-shrink-0 mx-2 mb-2 rounded-[16px] p-4 border border-plasma/25 bg-plasma-dim">
-            <div className="flex items-center justify-between mb-3">
-              <span className="font-mono text-[11px] text-plasma font-bold">CREATE POLL</span>
-              <button onClick={() => setShowPollCreator(false)} className="text-text-muted hover:text-text-primary"><X size={13} /></button>
-            </div>
-            <input value={pollQuestion} onChange={e => setPollQuestion(e.target.value)} placeholder="Poll question..."
-              className="w-full px-3 py-2 rounded-[10px] bg-surface border border-border-muted text-text-primary font-mono text-[11px] outline-none focus:border-plasma mb-2" />
-            {pollOptions.map((opt, i) => (
-              <input key={i} value={opt} onChange={e => setPollOptions(prev => prev.map((o, j) => j === i ? e.target.value : o))}
-                placeholder={`Option ${i + 1}`}
-                className="w-full px-3 py-2 rounded-[10px] bg-surface border border-border-muted text-text-primary font-mono text-[11px] outline-none focus:border-plasma mb-1.5" />
-            ))}
-            <div className="flex gap-2 mt-2">
-              <button onClick={() => setPollOptions(prev => [...prev, ''])}
-                className="font-mono text-[10px] text-plasma hover:underline font-bold">+ Add option</button>
-              <button onClick={handleCreatePoll}
-                className="ml-auto px-4 py-1.5 rounded-[8px] bg-plasma font-mono text-[10px] font-bold"
-                style={{ color: '#ffffff' }}>
-                Post Poll
-              </button>
-            </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
+      {/* The poll creator was removed with the state behind it: the messages
+          collection has no poll columns, so a "posted" poll existed only in this
+          tab. Squad chat has real polls (squad_messages.poll_data). */}
 
       {/* Input Bar */}
       <div className="flex-shrink-0 px-2 pb-3">
         <div className="flex items-center gap-2 rounded-[16px] px-3 py-2 border border-border-muted bg-elevated shadow-sm">
-          {/* Quick actions */}
-          <button onClick={() => setShowPollCreator(p => !p)}
-            className="w-7 h-7 rounded-full bg-plasma/10 flex items-center justify-center text-plasma hover:scale-110 transition-all flex-shrink-0 border border-plasma/20">
-            <BarChart2 size={13} />
-          </button>
-          {isAdmin && (
-            <button onClick={() => {
-              const ann: DiscussionMessage = {
-                id: `ann${Date.now()}`,
-                sender: 'Event Admin', senderId: 'admin', avatar: '',
-                type: 'announcement', content: 'New announcement from admin.', timestamp: 'just now',
-                reactions: [], isAdmin: true
-              };
-              setMessages(prev => [...prev, ann]);
-            }}
-              className="w-7 h-7 rounded-full bg-warning/10 flex items-center justify-center text-warning hover:scale-110 transition-all flex-shrink-0 border border-warning/20">
-              <Megaphone size={13} />
-            </button>
-          )}
-
+          {/* The poll and announcement buttons are gone: the poll had no columns
+              to live in, and the announcement pushed a canned "New announcement
+              from admin." into local state. Organizer announcements go out as
+              notifications from the Manage screen, which reaches everyone. */}
           {/* Text input */}
           <input
             value={input}

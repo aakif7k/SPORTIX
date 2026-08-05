@@ -3,30 +3,38 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   ChevronLeft, Settings, UserPlus, Crown, Shield,
-  Zap, Check, X, MoreVertical, Megaphone,
+  Zap, Check, X, MoreVertical,
   UserMinus, Edit2, LogOut, Trash2, Lock
 } from 'lucide-react';
 import { useEvent } from '@/hooks/useEvents';
+import { useCrew } from '@/hooks/useCrew';
 import { useAuthStore } from '../../store/authStore';
 
 // ─── Mock Crew Data ───────────────────────────────────────────────────────────
-const MOCK_CREW = [
-  { id: 'cu1', name: 'Alex Rivera (You)', avatar: 'https://images.pexels.com/photos/1486064/pexels-photo-1486064.jpeg?cs=srgb&dl=pexels-nkhajotia-1486064.jpg&fm=jpg', role: 'admin',   sport: 'Football', status: 'Ready',   pulseScore: 721, level: 24  },
-  { id: 'u1', name: 'Marcus Reid',       avatar: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=150', role: 'member',  sport: 'Football', status: 'Ready',   pulseScore: 847, level: 84  },
-  { id: 'u2', name: 'Zaid Al-Hassan',    avatar: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=150', role: 'member',  sport: 'Football', status: 'Maybe',   pulseScore: 793, level: 79  },
-  { id: 'u5', name: 'Aisha Mensah',      avatar: 'https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?w=150', role: 'member',  sport: 'Football', status: 'Ready',   pulseScore: 812, level: 81  },
-  { id: 'u3', name: 'Priya Nair',        avatar: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=150', role: 'member',  sport: 'Football', status: 'Offline', pulseScore: 721, level: 72  },
-];
+const READINESS_COLOR: Record<string, string> = {
+  ready: 'var(--accent)',
+  maybe: 'var(--warning)',
+  unavailable: 'var(--text-muted)',
+};
 
-const STATUS_COLOR: Record<string, string> = {
-  Ready: 'var(--accent)', Maybe: 'var(--warning)', Offline: 'var(--text-muted)'
+const READINESS_LABEL: Record<string, string> = {
+  ready: 'Ready',
+  maybe: 'Maybe',
+  unavailable: 'Unavailable',
 };
 
 type SettingsAction =
   | 'changeAdmin' | 'rename' | 'permissions' | 'invite' | 'leave' | 'delete';
 
 // ─── Settings Modal ───────────────────────────────────────────────────────────
-const CrewSettingsModal: React.FC<{ onClose: () => void; crewName: string; onRename: (n: string) => void }> = ({ onClose, crewName, onRename }) => {
+const CrewSettingsModal: React.FC<{
+  onClose: () => void;
+  crewName: string;
+  onRename: (n: string) => void;
+  onDisband: () => void;
+  members: Array<{ user_id: string; full_name: string; avatar_url: string | null; level: number }>;
+  currentUserId: string;
+}> = ({ onClose, crewName, onRename, onDisband, members, currentUserId }) => {
   const [view, setView] = useState<SettingsAction | null>(null);
   const [newName, setNewName] = useState(crewName);
 
@@ -115,16 +123,25 @@ const CrewSettingsModal: React.FC<{ onClose: () => void; crewName: string; onRen
           {view === 'changeAdmin' && (
             <div className="space-y-2">
               <p className="font-mono text-[10px] text-text-muted mb-3">Select a new crew admin:</p>
-              {MOCK_CREW.filter(m => m.id !== (useAuthStore.getState().user?.id || 'cu1')).map(m => (
-                <button key={m.id} className="w-full flex items-center gap-3 p-3 rounded-[12px] border border-border bg-elevated hover:border-accent/30 transition-all">
-                  <img src={m.avatar} alt={m.name} className="w-8 h-8 rounded-full object-cover flex-shrink-0" />
+              {/* Real crew members. crew_members has captain and member and no
+                  transfer endpoint, so this lists who could take over rather than
+                  claiming to hand the captaincy across. */}
+              {members.filter(m => m.user_id !== currentUserId).map(m => (
+                <button key={m.user_id} disabled
+                  className="w-full flex items-center gap-3 p-3 rounded-[12px] border border-border bg-elevated opacity-60 cursor-not-allowed transition-all">
+                  <img src={m.avatar_url ?? undefined} alt={m.full_name} className="w-8 h-8 rounded-full object-cover flex-shrink-0" />
                   <div className="flex-1 text-left">
-                    <div className="font-mono text-[11px] text-text-primary">{m.name}</div>
+                    <div className="font-mono text-[11px] text-text-primary">{m.full_name || 'Athlete'}</div>
                     <div className="font-mono text-[9px] text-text-muted">Lvl {m.level}</div>
                   </div>
                   <Crown size={13} className="text-text-muted" />
                 </button>
               ))}
+              {members.length <= 1 && (
+                <p className="font-mono text-[10px] text-text-muted">
+                  There is nobody else in the crew yet.
+                </p>
+              )}
             </div>
           )}
 
@@ -142,7 +159,10 @@ const CrewSettingsModal: React.FC<{ onClose: () => void; crewName: string; onRen
               </div>
               <div className="flex gap-3">
                 <button onClick={() => setView(null)} className="flex-1 py-3 rounded-[12px] border border-border font-mono text-[11px] text-text-muted hover:text-text-primary">Cancel</button>
-                <button onClick={onClose} className="flex-1 py-3 rounded-[12px] bg-danger font-mono text-[11px] text-white font-bold hover:opacity-90">
+                {/* Both confirmations used to just close the modal. Leaving and
+                    disbanding are the same call for a captain — the only member who
+                    reaches this dialog — so both disband. */}
+                <button onClick={onDisband} className="flex-1 py-3 rounded-[12px] bg-danger font-mono text-[11px] text-white font-bold hover:opacity-90">
                   {view === 'leave' ? 'Leave' : 'Delete'}
                 </button>
               </div>
@@ -164,19 +184,90 @@ export const EventCrewPage: React.FC = () => {
   // The store held a copy of every event seeded from mockData; the event this
   // page is about comes from the API.
   const { event } = useEvent(id);
-  const [crew, setCrew] = useState(MOCK_CREW);
-  const [crewName, setCrewName] = useState('Iron Pulse FC');
+  const {
+    crew: apiCrew, loading, error, refresh,
+    createCrew, renameCrew, removeMember, disbandCrew, busy,
+  } = useCrew(id);
+
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [memberMenu, setMemberMenu] = useState<string | null>(null);
-  const [inviteSent, setInviteSent] = useState(false);
+  const [newCrewName, setNewCrewName] = useState('');
+  const [inviteCopied, setInviteCopied] = useState(false);
 
-  const readyCount = crew.filter(m => m.status === 'Ready').length;
-  const chemScore = Math.round((readyCount / crew.length) * 100);
+  const crew = apiCrew?.members ?? [];
+  const crewName = apiCrew?.name ?? '';
+  const isCaptain = apiCrew?.is_captain ?? false;
+  // Readiness comes from each athlete's event entry, so this counts confirmations
+  // rather than a status typed into the page.
+  const readyCount = apiCrew?.ready_count ?? 0;
+  const readyPct = crew.length ? Math.round((readyCount / crew.length) * 100) : 0;
 
   const handleKick = (memberId: string) => {
-    setCrew(prev => prev.filter(m => m.id !== memberId));
     setMemberMenu(null);
+    if (!apiCrew) return;
+    void removeMember({ crewId: apiCrew.$id, userId: memberId });
   };
+
+  if (loading) {
+    return (
+      <div className="max-w-2xl mx-auto pb-20 space-y-5" aria-busy="true" aria-label="Loading your crew">
+        <div className="h-10 w-2/3 rounded-[10px] bg-elevated animate-shimmer" />
+        <div className="h-32 rounded-[18px] bg-elevated animate-shimmer" />
+        {[0, 1, 2].map(i => (
+          <div key={i} className="h-16 rounded-[16px] bg-elevated animate-shimmer" />
+        ))}
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="max-w-md mx-auto py-16 text-center space-y-3">
+        <p className="font-display text-[16px] text-text-primary uppercase tracking-wide">
+          Crew did not load
+        </p>
+        <p className="font-mono text-[11px] text-text-secondary">{error.message}</p>
+        <button onClick={() => refresh()}
+          className="px-4 py-2 rounded-[10px] bg-accent text-black font-mono text-[10px] font-bold uppercase">
+          Retry
+        </button>
+      </div>
+    );
+  }
+
+  // Having no crew is the normal starting state, and the page had no way to form
+  // one — the roster was simply always there.
+  if (!apiCrew) {
+    return (
+      <div className="max-w-md mx-auto py-16 space-y-4 text-center">
+        <div>
+          <h1 className="font-display text-[22px] text-text-primary tracking-wider uppercase">
+            No crew yet
+          </h1>
+          <p className="font-mono text-[11px] text-text-muted mt-1">
+            Form a crew for {event?.title ?? 'this event'} and invite athletes into it.
+          </p>
+        </div>
+        <input
+          value={newCrewName}
+          onChange={e => setNewCrewName(e.target.value)}
+          placeholder="Crew name"
+          className="w-full h-10 rounded-[10px] bg-elevated border border-border px-3 font-mono text-[12px] text-text-primary focus:outline-none focus:border-accent"
+        />
+        <button
+          onClick={() => { if (newCrewName.trim() && !busy) void createCrew(newCrewName.trim()); }}
+          disabled={!newCrewName.trim() || busy}
+          className="w-full py-3 rounded-[10px] bg-accent text-black font-condensed font-bold text-[14px] uppercase tracking-wider disabled:opacity-40"
+        >
+          {busy ? 'Forming…' : 'Form crew'}
+        </button>
+        <button onClick={() => navigate(`/app/events/${id}`)}
+          className="font-mono text-[10px] text-text-muted hover:text-text-primary uppercase tracking-wider">
+          Back to the event
+        </button>
+      </div>
+    );
+  }
 
   return (
     <div className="max-w-2xl mx-auto pb-20 space-y-5" style={{ color: 'var(--text-primary)' }}>
@@ -208,7 +299,7 @@ export const EventCrewPage: React.FC = () => {
             <div className="font-mono text-[10px] text-text-secondary mt-0.5">{crew.length} Members · {event?.sport}</div>
           </div>
           <div className="text-right">
-            <div className="font-display text-[24px] text-accent">{chemScore}%</div>
+            <div className="font-display text-[24px] text-accent">{readyPct}%</div>
             <div className="font-mono text-[8px] text-text-muted">CREW CHEMISTRY</div>
           </div>
         </div>
@@ -220,7 +311,7 @@ export const EventCrewPage: React.FC = () => {
             <span className="font-mono text-[9px] text-accent">{readyCount}/{crew.length} Ready</span>
           </div>
           <div className="h-1.5 rounded-full bg-border overflow-hidden">
-            <motion.div initial={{ width: 0 }} animate={{ width: `${(readyCount / crew.length) * 100}%` }}
+            <motion.div initial={{ width: 0 }} animate={{ width: `${readyPct}%` }}
               transition={{ duration: 0.8 }} className="h-full rounded-full bg-accent" />
           </div>
         </div>
@@ -228,9 +319,9 @@ export const EventCrewPage: React.FC = () => {
         {/* Stats mini grid */}
         <div className="grid grid-cols-3 gap-2 mt-4">
           {[
-            { label: 'Avg Level', value: Math.round(crew.reduce((s, m) => s + m.level, 0) / crew.length) },
+            { label: 'Avg Level', value: crew.length ? Math.round(crew.reduce((s, m) => s + m.level, 0) / crew.length) : 0 },
             { label: 'Ready',     value: `${readyCount}/${crew.length}` },
-            { label: 'Avg Pulse', value: Math.round(crew.reduce((s, m) => s + m.pulseScore, 0) / crew.length) },
+            { label: 'Avg Pulse', value: crew.length ? Math.round(crew.reduce((s, m) => s + m.pulse_score, 0) / crew.length) : 0 },
           ].map((s, i) => (
             <div key={i} className="rounded-[12px] p-2.5 bg-elevated border border-border text-center">
               <div className="font-display text-[16px] text-accent">{s.value}</div>
@@ -240,17 +331,23 @@ export const EventCrewPage: React.FC = () => {
         </div>
       </motion.div>
 
-      {/* Invite button */}
+      {/* Invite button. It used to flip a flag and claim "Invite Link Copied!"
+          without copying anything. */}
       <motion.button whileHover={{ scale: 1.01 }} whileTap={{ scale: 0.98 }}
-        onClick={() => setInviteSent(true)}
+        onClick={() => {
+          const link = `${window.location.origin}/app/events/${id}`;
+          navigator.clipboard?.writeText(link)
+            .then(() => setInviteCopied(true))
+            .catch(() => setInviteCopied(false));
+        }}
         initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.08 }}
         className="w-full flex items-center justify-center gap-2 py-3.5 rounded-[16px] border font-mono text-[12px] font-bold transition-all"
         style={{
-          background: inviteSent ? 'var(--accent-surface)' : 'var(--bg-elevated)',
-          borderColor: inviteSent ? 'var(--accent-border)' : 'var(--border)',
-          color: inviteSent ? 'var(--accent-text)' : 'var(--text-muted)'
+          background: inviteCopied ? 'var(--accent-surface)' : 'var(--bg-elevated)',
+          borderColor: inviteCopied ? 'var(--accent-border)' : 'var(--border)',
+          color: inviteCopied ? 'var(--accent-text)' : 'var(--text-muted)'
         }}>
-        {inviteSent ? <><Check size={14} /> Invite Link Copied!</> : <><UserPlus size={14} /> Invite Friends</>}
+        {inviteCopied ? <><Check size={14} /> Event link copied</> : <><UserPlus size={14} /> Invite friends</>}
       </motion.button>
 
       {/* Members list */}
@@ -260,45 +357,51 @@ export const EventCrewPage: React.FC = () => {
         </div>
 
         {crew.map((member, i) => (
-          <motion.div key={member.id} initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: i * 0.04 }}
-            className={`flex items-center gap-3 rounded-[16px] p-4 border border-border ${member.id === currentUserId ? 'bg-accent-surface' : 'bg-elevated'}`}>
+          <motion.div key={member.$id} initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: i * 0.04 }}
+            className={`flex items-center gap-3 rounded-[16px] p-4 border border-border ${member.user_id === currentUserId ? 'bg-accent-surface' : 'bg-elevated'}`}>
 
             {/* Avatar */}
             <div className="relative flex-shrink-0">
-              <img src={member.avatar} alt={member.name} className="w-10 h-10 rounded-full object-cover" />
+              <img src={member.avatar_url ?? undefined} alt={member.full_name} className="w-10 h-10 rounded-full object-cover" />
               <div className="absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full border-2 border-[var(--bg-surface)]"
-                style={{ background: STATUS_COLOR[member.status] }} />
+                style={{ background: READINESS_COLOR[member.readiness] }} />
             </div>
 
             {/* Info */}
             <div className="flex-1 min-w-0">
               <div className="flex items-center gap-2">
-                <span className="font-mono text-[12px] text-text-primary truncate font-bold">{member.name}</span>
-                {member.role === 'admin' && (
-                  <span className="px-1.5 py-0.5 rounded bg-accent-surface border border-accent-border font-mono text-[7px] text-accent font-bold">ADMIN</span>
+                <span className="font-mono text-[12px] text-text-primary truncate font-bold">
+                  {member.full_name || 'Athlete'}
+                  {member.user_id === currentUserId && ' (You)'}
+                </span>
+                {member.role === 'captain' && (
+                  <span className="px-1.5 py-0.5 rounded bg-accent-surface border border-accent-border font-mono text-[7px] text-accent font-bold">CAPTAIN</span>
                 )}
               </div>
               <div className="flex items-center gap-2 mt-0.5">
-                <span className="font-mono text-[9px]" style={{ color: STATUS_COLOR[member.status] }}>{member.status}</span>
-                <span className="font-mono text-[9px] text-text-muted">· Lvl {member.level} · {member.pulseScore}P</span>
+                <span className="font-mono text-[9px]" style={{ color: READINESS_COLOR[member.readiness] }}>
+                  {READINESS_LABEL[member.readiness]}
+                </span>
+                <span className="font-mono text-[9px] text-text-muted">· Lvl {member.level} · {Math.round(member.pulse_score)}P</span>
               </div>
             </div>
 
-            {/* Admin actions (not for self) */}
-            {member.id !== currentUserId && (
+            {/* Captain actions (not for self) */}
+            {member.user_id !== currentUserId && isCaptain && (
               <div className="relative flex-shrink-0">
-                <button onClick={() => setMemberMenu(memberMenu === member.id ? null : member.id)}
+                <button onClick={() => setMemberMenu(memberMenu === member.$id ? null : member.$id)}
                   className="w-7 h-7 rounded-full bg-elevated flex items-center justify-center text-text-muted hover:text-text-primary transition-all">
                   <MoreVertical size={13} />
                 </button>
                 <AnimatePresence>
-                  {memberMenu === member.id && (
+                  {memberMenu === member.$id && (
                     <motion.div initial={{ opacity: 0, scale: 0.9, y: -5 }} animate={{ opacity: 1, scale: 1, y: 0 }} exit={{ opacity: 0, scale: 0.9 }}
                       className="absolute right-0 top-9 z-20 rounded-[12px] overflow-hidden shadow-xl w-40 premium-card bg-surface border border-border">
+                      {/* "Make Admin" and "Send Message" only closed the menu:
+                          crew_members has no admin role beyond captain, and there
+                          is no per-crew DM. Removing is the action that exists. */}
                       {[
-                        { label: 'Make Admin', icon: <Crown size={11} />, color: 'var(--warning)', action: () => setMemberMenu(null) },
-                        { label: 'Send Message', icon: <Megaphone size={11} />, color: 'var(--accent)', action: () => setMemberMenu(null) },
-                        { label: 'Remove Player', icon: <UserMinus size={11} />, color: 'var(--danger)', action: () => handleKick(member.id) },
+                        { label: 'Remove Player', icon: <UserMinus size={11} />, color: 'var(--danger)', action: () => handleKick(member.user_id) },
                       ].map((opt, i) => (
                         <button key={i} onClick={opt.action}
                           className="w-full flex items-center gap-2.5 px-3.5 py-2.5 hover:bg-hover transition-all text-left"
@@ -351,7 +454,16 @@ export const EventCrewPage: React.FC = () => {
           <CrewSettingsModal
             onClose={() => setSettingsOpen(false)}
             crewName={crewName}
-            onRename={name => { setCrewName(name); setSettingsOpen(false); }}
+            members={crew}
+            currentUserId={currentUserId}
+            onRename={name => {
+              void renameCrew({ crewId: apiCrew.$id, name });
+              setSettingsOpen(false);
+            }}
+            onDisband={() => {
+              void disbandCrew(apiCrew.$id).then(() => navigate(`/app/events/${id}`));
+              setSettingsOpen(false);
+            }}
           />
         )}
       </AnimatePresence>
