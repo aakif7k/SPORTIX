@@ -88,14 +88,13 @@ shared filesystem.
 
 ## Verification status, honestly
 
-Everything above except the container build has been run:
-
-- All static gates, the 608-test backend suite, the 31-test frontend suite, the
-  production `vite build`, and the 184-assertion live smoke test — all green.
-- **The Docker image has not been built.** The Docker CLI is present on the
-  development machine but its engine is not running, so `docker build` could not be
-  executed. The Dockerfile is written and reviewed but unverified; expect to debug
-  it on first build.
+- All static gates, the 620-test backend suite, the 31-test frontend suite, the
+  production `vite build`, and the 205-assertion live smoke test — all green.
+- **The container is built and verified.** `docker build` succeeds (229 MB), the
+  container starts, `/health` answers 200 within two seconds, Docker's own
+  healthcheck reports `healthy`, it runs as the non-root `sportix` user, and a real
+  registration through the container against live Appwrite succeeds. The test
+  account it created was purged afterwards.
 - The CI workflow's steps are each verified by running the same commands locally
   with a clean environment. The workflow itself has not been executed by GitHub
-  Actions.
+  Actions — that happens on the first push.
