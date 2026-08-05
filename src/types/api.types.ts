@@ -295,3 +295,71 @@ export interface ApiLeadership {
   vote: ApiLeadershipVote | null;
   roles: Array<{ role: SquadRole; member: ApiLeadershipStanding | null }>;
 }
+
+// ─── Tournaments ──────────────────────────────────────────────────────────────
+
+export type TournamentStatus = 'registering' | 'in_progress' | 'full' | 'completed';
+
+export interface ApiTournament {
+  $id: string;
+  name: string;
+  sport: string;
+  format: 'knockout' | 'league' | 'group_knockout';
+  status: TournamentStatus;
+  squad_ids: string[];
+  current_round: number;
+  venue: string | null;
+  starts_at: string | null;
+  ends_at: string | null;
+  prize_pool: string | null;
+  max_squads: number;
+  created_at: string;
+  $createdAt: string;
+  // Added by the server so the page needs no second request.
+  squads_count: number;
+  slots_left: number | null;
+  my_registered_squad_ids: string[];
+  is_registered: boolean;
+}
+
+export interface ApiStandingsRow {
+  squad_id: string;
+  name: string;
+  sport: string;
+  logo_url: string | null;
+  pulse_avg: number;
+  chemistry_score: number;
+  played: number;
+  wins: number;
+  losses: number;
+  draws: number;
+  scored: number;
+  conceded: number;
+  difference: number;
+  points: number;
+  position: number;
+}
+
+export interface ApiBracketMatch {
+  $id: string;
+  squad_a_id: string | null;
+  squad_a_name: string | null;
+  squad_a_score: number | null;
+  squad_b_id: string | null;
+  squad_b_name: string | null;
+  squad_b_score: number | null;
+  winner_id: string | null;
+  status: 'tbd' | 'scheduled' | 'completed';
+  scheduled_at: string | null;
+}
+
+export interface ApiBracketRound {
+  round: number;
+  name: string;
+  matches: ApiBracketMatch[];
+}
+
+export interface ApiTournamentDetail extends ApiTournament {
+  standings: ApiStandingsRow[];
+  bracket: ApiBracketRound[];
+}
