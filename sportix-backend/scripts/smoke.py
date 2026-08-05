@@ -429,6 +429,16 @@ def main() -> int:
     })
     check("POST /api/events/ -> 2xx", r.status_code < 300, f"{r.status_code} {body(r)}")
     event_id = data_of(r).get("$id", "")
+    # browse was the last list endpoint returning Appwrite's raw shape.
+    r = client.get("/api/events/", headers=auth_header)
+    listing = data_of(r)
+    check("event browse returns the paginated envelope",
+          all(k in listing for k in ("items", "total", "page", "limit", "has_more")),
+          f"keys={sorted(listing.keys())!r}")
+    check("the event just created is in the listing",
+          any(e.get("$id") == event_id for e in listing.get("items") or []),
+          f"{len(listing.get('items') or [])} event(s)")
+
     r = client.post(f"/api/events/{event_id}/join", headers=auth_header,
                     json={"squad_id": squad_id, "entry_type": "squad"})
     check("POST /api/events/{id}/join -> 2xx", r.status_code < 300, f"{r.status_code} {body(r)}")

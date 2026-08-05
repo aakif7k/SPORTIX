@@ -8,10 +8,10 @@ import { useSquadMutations, useMyInvites, useSquadActivity } from '@/hooks/useSq
 import { useSquadStore } from '../../store/squadStore';
 import { useAISettingsStore } from '../../store/aiSettingsStore';
 import { BadgeIcon } from '../../components/gamification/BadgeIcon';
-import { Sparkles, Zap, Trash2, Check,
-  Lock, Users, MessageSquare,
+import { Sparkles, Zap, Check,
+  Users, MessageSquare,
   Activity, Shield,
-  Star, Brain, ArrowRight,
+  Star, Brain,
   CheckCircle2
 } from 'lucide-react';
 import { PendingReportBanner } from '../../components/performance/PendingReportBanner';
@@ -120,7 +120,7 @@ export const SquadFormation: React.FC = () => {
   const navigate = useNavigate();
   const { nearbyRadius } = useAISettingsStore();
   const {
-    squads, generatedSquads, declineGeneratedSquad,
+    squads,
   } = useSquadStore();
 
   const initialType = searchParams.get('type') || 'solo';
@@ -128,7 +128,6 @@ export const SquadFormation: React.FC = () => {
   const [selectedSport, setSelectedSport] = useState('Football');
   const [gameplayCategory, setGameplayCategory] = useState<'Amateur' | 'Semi-Pro' | 'Professional'>('Semi-Pro');
   const [status, setStatus] = useState<'selection' | 'matching'>('selection');
-  const [selectedDraftId, setSelectedDraftId] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState('generate');
   const [squadName, setSquadName] = useState('');
   const [forming, setForming] = useState(false);
@@ -169,13 +168,6 @@ export const SquadFormation: React.FC = () => {
     }
   };
 
-  const handleDecline = (id: string) => {
-    declineGeneratedSquad(id);
-    if (selectedDraftId === id) {
-      const rem = generatedSquads.filter(s => s.squadId !== id);
-      setSelectedDraftId(rem.length > 0 ? rem[0].squadId : null);
-    }
-  };
 
   /**
    * Turn the suggestion into a real squad.
@@ -208,7 +200,6 @@ export const SquadFormation: React.FC = () => {
     }
   };
 
-  const activeSquad = generatedSquads.find(s => s.squadId === selectedDraftId) || generatedSquads[0] || null;
 
   /**
    * The athletes the server selected, joined to their full rows.
@@ -323,19 +314,18 @@ export const SquadFormation: React.FC = () => {
               Configure your parameters and click Generate to let the Gemini AI engine scan nearby athletes and build your perfect squad.
             </p>
           </div>
-          <div className="grid grid-cols-3 gap-3 w-full max-w-xs">
-            {[['3', 'Max Daily'], [remainingGenerations.toString(), 'Remaining'], [generatedSquads.length.toString(), 'Drafts']].map(([val, label]) => (
+          <div className="grid grid-cols-1 gap-3 w-full max-w-[10rem]">
+            {/* Was three tiles: a hardcoded "3" for Max Daily, Remaining, and a
+                "Drafts" count over squadStore.generatedSquads — which nothing has
+                written since generation moved to the server, so it read 0 forever.
+                The quota is the server's, and it reports what is left. */}
+            {[[remainingGenerations.toString(), 'Generations left']].map(([val, label]) => (
               <div key={label} className="rounded-[12px] p-3 bg-base border border-border-muted/50 text-center">
                 <div className="font-display text-[22px] text-volt">{val}</div>
                 <div className="font-mono text-[9px] text-text-muted">{label}</div>
               </div>
             ))}
           </div>
-          {generatedSquads.length > 0 && (
-            <button onClick={() => setActiveTab('results')} className="flex items-center gap-2 font-mono text-[11px] text-volt hover:underline">
-              View {generatedSquads.length} Generated Result{generatedSquads.length !== 1 ? 's' : ''} <ArrowRight size={12} />
-            </button>
-          )}
         </div>
       </div>
     </div>
@@ -344,66 +334,11 @@ export const SquadFormation: React.FC = () => {
   // ─── Tab: Results ────────────────────────────────────────────────────────
   const renderResults = () => (
     <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
-      {/* Left: Draft list */}
-      <div className="lg:col-span-4 space-y-4">
-        <div className="p-5 rounded-[20px] bg-surface border border-border-muted/50 space-y-3 shadow-card">
-          <div className="flex items-center justify-between">
-            <h3 className="font-display text-[13px] text-text-secondary tracking-wider uppercase">Generated Results</h3>
-            <span style={{ backgroundColor: 'var(--volt-dim)' }} className="font-mono text-[9px] px-1.5 py-0.5 rounded text-volt border border-volt/20">
-              {generatedSquads.length}/3 DAILY
-            </span>
-          </div>
-          {[0, 1, 2].map(idx => {
-            const draft = generatedSquads[idx];
-            const isSelected = activeSquad?.squadId === draft?.squadId;
-            if (draft) {
-              return (
-                <motion.div key={draft.squadId} onClick={() => setSelectedDraftId(draft.squadId)} whileHover={{ scale: 1.01 }}
-                  style={{ backgroundColor: isSelected ? 'var(--volt-dim)' : 'transparent' }}
-                  className={`p-4 rounded-[12px] border cursor-pointer transition-all ${
-                    isSelected ? 'border-volt shadow-card' : 'border-border-muted/50 hover:border-border-muted'
-                  }`}>
-                  <div className="flex items-center justify-between mb-2">
-                    <p className="font-display text-[12px] tracking-wide text-text-primary truncate">{draft.name.toUpperCase()}</p>
-                    <button onClick={e => { e.stopPropagation(); handleDecline(draft.squadId); }}
-                      className="p-1 rounded hover:bg-danger-dim text-text-secondary hover:text-danger transition-colors">
-                      <Trash2 size={12} />
-                    </button>
-                  </div>
-                  <div className="grid grid-cols-3 gap-1 font-mono text-[8px]">
-                    <div className="text-center p-1 rounded bg-base">
-                      <div className="text-volt font-bold">{draft.chemistry.overall}%</div>
-                      <div className="text-text-muted">Chem</div>
-                    </div>
-                    <div className="text-center p-1 rounded bg-base">
-                      <div className="text-text-primary font-bold">{draft.winRate}%</div>
-                      <div className="text-text-muted">Win%</div>
-                    </div>
-                    <div className="text-center p-1 rounded bg-base">
-                      <div className="text-cyan font-bold">{draft.members.length}</div>
-                      <div className="text-text-muted">Players</div>
-                    </div>
-                  </div>
-                  {/* Suggested Captain */}
-                  {draft.members.find(m => m.role === 'captain') && (
-                    <div className="mt-2 flex items-center gap-1.5">
-                      <span className="font-mono text-[8px] text-text-muted">AI Captain:</span>
-                      <span className="font-mono text-[8px] text-gold font-bold">
-                        {draft.members.find(m => m.role === 'captain')?.name}
-                      </span>
-                    </div>
-                  )}
-                </motion.div>
-              );
-            }
-            return (
-              <div key={idx} className="p-4 rounded-[12px] border border-dashed border-border-muted/50 bg-base flex items-center justify-center py-5 text-text-secondary font-mono text-[10px]">
-                <Lock size={11} className="mr-1.5" /> DRAFT SLOT #{idx + 1} EMPTY
-              </div>
-            );
-          })}
-        </div>
-      </div>
+      {/* A three-slot draft column used to sit here, over
+          squadStore.generatedSquads. Nothing has written that list since squad
+          generation moved to the server, so every slot was permanently empty and
+          each rendered a fabricated chemistry percentage and win rate. The
+          suggestion the server returns is shown on the right instead. */}
 
       {/* Right: Squad detail */}
       <div className="lg:col-span-8">
@@ -698,7 +633,7 @@ export const SquadFormation: React.FC = () => {
 
   // ─── Tab: AI Insights ────────────────────────────────────────────────────
   const renderInsights = () => {
-    const squad = squads[0] || generatedSquads[0];
+    const squad = squads[0];
     return (
       <div className="space-y-5">
         {squad ? (
@@ -863,7 +798,7 @@ export const SquadFormation: React.FC = () => {
 
   // ─── Tab: Chemistry Overview ─────────────────────────────────────────────
   const renderChemistry = () => {
-    const squad = squads[0] || generatedSquads[0];
+    const squad = squads[0];
     if (!squad) return (
       <div className="p-10 text-center rounded-[24px] border border-dashed border-border-muted bg-surface shadow-card">
         <Zap size={28} className="text-text-muted mx-auto mb-3" />
@@ -955,9 +890,9 @@ export const SquadFormation: React.FC = () => {
                 activeTab === tab.id ? 'bg-volt text-volt-text shadow-glow-volt-sm font-bold' : 'text-text-secondary hover:text-text-primary hover:bg-elevated'
               }`}>
               {tab.icon} {tab.label}
-              {tab.id === 'results' && generatedSquads.length > 0 && (
+              {tab.id === 'results' && suggestion && (
                 <span className="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-volt text-volt-text text-[8px] font-bold flex items-center justify-center">
-                  {generatedSquads.length}
+                  {suggestion.selected.length}
                 </span>
               )}
               {tab.id === 'invitations' && invites.length > 0 && (

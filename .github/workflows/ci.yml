@@ -54,6 +54,14 @@ jobs:
     defaults:
       run:
         working-directory: sportix-backend
+    # Settings() requires these three, and importing any gate imports config. They
+    # are placeholders: the static gates never open a connection, and the test suite
+    # intercepts Appwrite at the transport layer. Locally these come from
+    # sportix-backend/.env, which is why the gates passed here and failed in CI.
+    env:
+      APPWRITE_PROJECT_ID: ci-placeholder-project
+      APPWRITE_API_KEY: ci-placeholder-key
+      SECRET_KEY: ci-not-a-real-secret-key-value
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -81,11 +89,6 @@ jobs:
 
       - name: Tests
         run: python -m pytest -q
-        env:
-          # conftest intercepts Appwrite at the transport layer, so the suite needs
-          # no project — but config refuses to construct without a secret key.
-          SECRET_KEY: ci-not-a-real-secret-key-value
-          APPWRITE_API_KEY: ci-placeholder
 
   live:
     name: Live smoke
@@ -97,6 +100,12 @@ jobs:
     defaults:
       run:
         working-directory: sportix-backend
+    env:
+      APPWRITE_PROJECT_ID: ${{ secrets.APPWRITE_PROJECT_ID }}
+      APPWRITE_API_KEY: ${{ secrets.APPWRITE_API_KEY }}
+      APPWRITE_DATABASE_ID: ${{ secrets.APPWRITE_DATABASE_ID }}
+      SECRET_KEY: ${{ secrets.SECRET_KEY }}
+      GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -109,14 +118,7 @@ jobs:
       - name: Schema matches the live project
         if: env.APPWRITE_API_KEY != ''
         run: python -m scripts.verify_schema
-        env:
-          APPWRITE_API_KEY: ${{ secrets.APPWRITE_API_KEY }}
-          SECRET_KEY: ${{ secrets.SECRET_KEY }}
 
       - name: End-to-end smoke
         if: env.APPWRITE_API_KEY != ''
         run: python -m scripts.smoke
-        env:
-          APPWRITE_API_KEY: ${{ secrets.APPWRITE_API_KEY }}
-          SECRET_KEY: ${{ secrets.SECRET_KEY }}
-          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}

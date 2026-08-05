@@ -1,14 +1,14 @@
 /**
  * Events, on the API.
  *
- * These screens read from eventStore, which is seeded from mockData: nothing
- * persisted, and a refresh discarded every event anyone created. These hooks
- * replace that store page by page.
+ * These screens read from eventStore, which was seeded from mockData: nothing
+ * persisted, and a refresh discarded every event anyone created. eventStore now
+ * holds only AutoSquad UI state.
  *
- * event_service.browse returns Appwrite's raw list ({documents, total}) rather
- * than the paginated envelope, so `unwrapList` accepts either. That is a real
- * inconsistency in the backend rather than defensive noise — worth normalising
- * once every list endpoint is confirmed to agree.
+ * `unwrapList` still accepts several shapes because different endpoints nest their
+ * list under `items`, `documents` or a domain key. Every list endpoint returns the
+ * paginated envelope now — browse was the last exception — but the tolerance is
+ * cheap and keeps one shape change from breaking a page.
  */
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import toast from 'react-hot-toast';

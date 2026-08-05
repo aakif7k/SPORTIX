@@ -32,7 +32,20 @@ async def browse(
         queries.append(Q.equal("status", status))
     if skill_level:
         queries.append(Q.equal("skill_level", skill_level))
-    return db.list_documents(DB_ID, settings.collection_events, queries=queries)
+
+    # The paginated envelope every other list endpoint returns. This was the last
+    # one handing back Appwrite's raw {documents, total}, which worked only because
+    # the client unwraps both shapes — so a caller could not tell whether more pages
+    # existed without doing the arithmetic itself.
+    res = db.list_documents(DB_ID, settings.collection_events, queries=queries)
+    total = int(res.get("total", 0))
+    return {
+        "items": res.get("documents", []),
+        "total": total,
+        "page": page,
+        "limit": limit,
+        "has_more": (page + 1) * limit < total,
+    }
 
 
 async def create(user_id: str, payload: EventCreate) -> dict:
