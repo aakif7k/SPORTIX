@@ -411,6 +411,29 @@ def main() -> int:
     check("joining as a squad records the squad, not a solo entry",
           entry.get("entry_type") == "squad" and entry.get("squad_id") == squad_id,
           f"entry_type={entry.get('entry_type')!r} squad_id={entry.get('squad_id')!r}")
+    # The roster rows hold only a user_id, so EventDetail and ManageEvent resolved
+    # names and avatars out of MOCK_USERS and fell back to a random pravatar --
+    # a real event displayed fictional people.
+    r = client.get(f"/api/events/{event_id}/participants", headers=auth_header)
+    roster = data_of(r).get("items", [])
+    me_row = next((p for p in roster if p.get("user_id") == uid), {})
+    check("event participants carry a joined profile",
+          bool(me_row) and me_row.get("username") == author["payload"]["username"],
+          f"row={me_row!r}")
+    check("the joined participant carries level and pulse",
+          isinstance(me_row.get("level"), int) and me_row.get("pulse_score") is not None,
+          f"level={me_row.get('level')!r} pulse={me_row.get('pulse_score')!r}")
+
+    # AthleteProfile links to people by id as often as by handle.
+    r = client.get(f"/api/users/{uid}", headers=auth_header)
+    check("a profile can be fetched by user id, not only by username",
+          r.status_code == 200 and data_of(r).get("$id") == uid,
+          f"{r.status_code} {body(r)}")
+    r = client.get(f"/api/users/{author['payload']['username']}", headers=auth_header)
+    check("a profile can still be fetched by username",
+          r.status_code == 200 and data_of(r).get("$id") == uid,
+          f"{r.status_code} {body(r)}")
+
     check("an unknown entry_type is rejected",
           client.post(f"/api/events/{event_id}/join", headers=partner_header_early(validators),
                       json={"entry_type": "wildcard"}).status_code == 422)

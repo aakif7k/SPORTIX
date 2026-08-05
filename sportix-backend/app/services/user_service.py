@@ -16,13 +16,24 @@ async def get_full_profile(user_id: str) -> dict:
 
 
 async def get_by_username(username: str, viewer_id: str) -> dict:
+    """
+    A public profile by username, or by user id.
+
+    Both are accepted because the app links to people both ways: a mention or a
+    handle in a URL carries the username, while a participant row, a squad member
+    row and a message sender all carry the user id. The profile's document id IS
+    the auth user id, so the id lookup is a direct get.
+    """
     res = db.list_documents(
         DB_ID, settings.collection_users,
         queries=[Q.equal("username", username), Q.limit(1)],
     )
     docs = res.get("documents", [])
     if not docs:
-        raise FileNotFoundError(f"User @{username} not found")
+        try:
+            docs = [db.get_document(DB_ID, settings.collection_users, username)]
+        except Exception as exc:
+            raise FileNotFoundError(f"User @{username} not found") from exc
     profile = docs[0]
     # Attach follow status
     profile["is_following"] = _check_following(viewer_id, profile["$id"])
