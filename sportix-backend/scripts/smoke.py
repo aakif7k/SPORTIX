@@ -196,6 +196,10 @@ def main() -> int:
     client = TestClient(app, raise_server_exceptions=False)
 
     tag = uuid.uuid4().hex[:8]
+    now = "2026-01-01T00:00:00.000+00:00"
+    # Rows written directly rather than through an endpoint, removed at the end
+    # alongside the accounts.
+    created_docs: list[tuple[str, str]] = []
 
     def register(role: str) -> dict:
         payload = {
@@ -622,6 +626,101 @@ def main() -> int:
           client.get("/api/squads/not-a-real-squad/messages",
                      headers=auth_header).status_code == 403)
 
+    # ── tournaments ───────────────────────────────────────────────────────────
+    step("tournaments: registration, standings, bracket")
+    from appwrite.id import ID as _ID
+    from app.core.appwrite import db as _db, DB_ID as _DB
+
+    # A tournament and two completed fixtures, written directly: there is no
+    # endpoint that creates a tournament, and what matters here is the read path.
+    tournament = _db.create_document(_DB, "tournaments", _ID.unique(), {
+        "name": f"Smoke Cup {tag}", "sport": "football", "format": "knockout",
+        "status": "registering", "squad_ids": [], "max_squads": 2,
+        "venue": "Smoke Arena", "prize_pool": "$1,000",
+        "starts_at": "2027-02-01T10:00:00.000+00:00", "created_at": now,
+    })
+    tournament_id = tournament["$id"]
+    created_docs.append(("tournaments", tournament_id))
+
+    r = client.post(f"/api/tournaments/{tournament_id}/register", headers=auth_header,
+                    json={"squad_id": squad_id})
+    check("POST /api/tournaments/{id}/register -> 201", r.status_code == 201,
+          f"{r.status_code} {body(r)}")
+    check("the tournament reports the squad as registered",
+          data_of(r).get("is_registered") is True and data_of(r).get("squads_count") == 1,
+          f"is_registered={data_of(r).get('is_registered')!r} "
+          f"count={data_of(r).get('squads_count')!r}")
+    check("one slot is left of two", data_of(r).get("slots_left") == 1,
+          f"slots_left={data_of(r).get('slots_left')!r}")
+
+    r = client.post(f"/api/tournaments/{tournament_id}/register", headers=auth_header,
+                    json={"squad_id": squad_id})
+    check("registering the same squad twice is idempotent",
+          data_of(r).get("squads_count") == 1,
+          f"count={data_of(r).get('squads_count')!r}")
+
+    check("only the captain can enter a squad",
+          client.post(f"/api/tournaments/{tournament_id}/register",
+                      headers=partner_header_early(validators),
+                      json={"squad_id": squad_id}).status_code == 403)
+
+    r = client.post("/api/squads/", headers=partner_header_early(validators),
+                    json={"name": f"Smoke Rivals {tag}", "sport": "football"})
+    rival_id = data_of(r).get("$id", "")
+    r = client.post(f"/api/tournaments/{tournament_id}/register",
+                    headers=partner_header_early(validators),
+                    json={"squad_id": rival_id})
+    check("filling the last slot flips the tournament to full",
+          data_of(r).get("status") == "full", f"status={data_of(r).get('status')!r}")
+    check("a full tournament reports no slots left",
+          data_of(r).get("slots_left") == 0, f"slots_left={data_of(r).get('slots_left')!r}")
+
+    for round_no, (a_score, b_score) in enumerate([(3, 1), (2, 2)], start=1):
+        created_docs.append(("tournament_matches", _db.create_document(
+            _DB, "tournament_matches", _ID.unique(), {
+                "tournament_id": tournament_id, "round": round_no,
+                "round_name": f"Round {round_no}",
+                "squad_a_id": squad_id, "squad_a_name": "Smoke Squad",
+                "squad_a_score": a_score,
+                "squad_b_id": rival_id, "squad_b_name": "Smoke Rivals",
+                "squad_b_score": b_score,
+                "winner_id": squad_id if a_score > b_score else None,
+                "status": "completed", "created_at": now,
+            })["$id"]))
+
+    r = client.get(f"/api/tournaments/{tournament_id}", headers=auth_header)
+    detail = data_of(r)
+    check("GET /api/tournaments/{id} -> 200", r.status_code == 200, f"{r.status_code} {body(r)}")
+    table = detail.get("standings") or []
+    check("standings are derived for both squads", len(table) == 2, f"{len(table)} row(s)")
+    leader = table[0] if table else {}
+    # One win and one draw is 4 points; the table used to be five hardcoded rows.
+    check("points are derived from results (3 for a win, 1 for a draw)",
+          leader.get("points") == 4 and leader.get("wins") == 1 and leader.get("draws") == 1,
+          f"points={leader.get('points')!r} wins={leader.get('wins')!r} "
+          f"draws={leader.get('draws')!r}")
+    # 3-1 then 2-2: five scored, three conceded.
+    check("score difference is derived from the goals",
+          leader.get("difference") == 2, f"difference={leader.get('difference')!r}")
+    check("the leader is placed first", leader.get("position") == 1,
+          f"position={leader.get('position')!r}")
+    bracket = detail.get("bracket") or []
+    check("the bracket is grouped into rounds", len(bracket) == 2, f"{len(bracket)} round(s)")
+    check("each bracket round carries its matches",
+          all(len(rd.get("matches") or []) == 1 for rd in bracket), f"bracket={bracket!r}")
+
+    r = client.get("/api/tournaments/?status=full", headers=auth_header)
+    listed = (data_of(r).get("items") or [])
+    check("browsing by status finds it and marks it registered",
+          any(t.get("$id") == tournament_id and t.get("is_registered") for t in listed),
+          f"{len(listed)} tournament(s) with status=full")
+
+    r = client.post(f"/api/tournaments/{tournament_id}/withdraw", headers=auth_header,
+                    json={"squad_id": squad_id})
+    check("withdrawing reopens a full tournament",
+          data_of(r).get("status") == "registering" and data_of(r).get("squads_count") == 1,
+          f"status={data_of(r).get('status')!r} count={data_of(r).get('squads_count')!r}")
+
     # ── envelope and limits ───────────────────────────────────────────────────
     step("error envelope and rate limiting")
     r = client.get("/api/posts/does-not-exist-at-all", headers=auth_header)
@@ -646,6 +745,13 @@ def main() -> int:
         step("cleanup")
         removed = 0
         rows = 0
+        from app.core.appwrite import db as _cleanup_db, DB_ID as _CLEANUP_DB
+        for collection, doc_id in created_docs:
+            try:
+                _cleanup_db.delete_document(_CLEANUP_DB, collection, doc_id)
+                rows += 1
+            except Exception:
+                pass
         for user_id in created_users:
             # Content first: with the account gone the ids are still valid, but
             # sweeping while the user exists keeps this honest if it fails.

@@ -666,6 +666,9 @@ COLLECTIONS: list[Collection] = [
             E("status", ["registering", "in_progress", "full", "completed"],
               required=True, default="registering"),
             SA("squad_ids", 64), I("current_round", default=0),
+            # TournamentHub's banner names the venue; there was no column for it,
+            # so the page had "City Sports Complex" written into the markup.
+            S("venue", 200),
             D("starts_at"), D("ends_at"), S("prize_pool", 80),
             I("max_squads", default=16), D("created_at", required=True),
         ],
