@@ -128,7 +128,50 @@ class Checker(ast.NodeVisitor):
                         out.append((getattr(k, "lineno", sub.lineno), k.value))
         return out
 
+    def _literal_enum_pairs(self, node: ast.AST) -> list[tuple[int, str, str]]:
+        """
+        (line, attribute, value) for every `"attr": "literal"` in a payload.
+
+        Only string literals: a variable or an Enum member cannot be resolved
+        here, and pydantic already constrains those at the router.
+        """
+        excluded = self._serialised_dicts(node)
+        out = []
+        for sub in ast.walk(node):
+            if not isinstance(sub, ast.Dict) or id(sub) in excluded:
+                continue
+            for key, value in zip(sub.keys, sub.values):
+                if (isinstance(key, ast.Constant) and isinstance(key.value, str)
+                        and isinstance(value, ast.Constant)
+                        and isinstance(value.value, str)):
+                    out.append((getattr(key, "lineno", sub.lineno),
+                                key.value, value.value))
+        return out
+
+    def _check_enum_params(self, node: ast.Call) -> None:
+        """A literal passed to a parameter that feeds an enum column."""
+        name = (node.func.attr if isinstance(node.func, ast.Attribute)
+                else node.func.id if isinstance(node.func, ast.Name) else None)
+        if not name:
+            return
+        for keyword in node.keywords:
+            target = ENUM_PARAMS.get((name, keyword.arg or ""))
+            if not target:
+                continue
+            if not (isinstance(keyword.value, ast.Constant)
+                    and isinstance(keyword.value.value, str)):
+                continue
+            allowed = ENUM_VALUES.get(target)
+            if allowed and keyword.value.value not in allowed:
+                self.problems.append(
+                    f"{self.path}:{keyword.value.lineno}: "
+                    f"{name}({keyword.arg}={keyword.value.value!r}) writes "
+                    f"{target[0]}.{target[1]}, which only accepts "
+                    f"{sorted(allowed)}"
+                )
+
     def visit_Call(self, node: ast.Call) -> None:
+        self._check_enum_params(node)
         if isinstance(node.func, ast.Attribute) and node.func.attr in (DB_WRITE_CALLS | DB_READ_CALLS):
             args = list(node.args)
             kw = {k.arg: k.value for k in node.keywords if k.arg}
@@ -155,6 +198,24 @@ class Checker(ast.NodeVisitor):
                 )
             elif collection:
                 valid = ATTRS.get(collection, set())
+                # Enum columns reject a value Appwrite does not know, at write
+                # time, as a 400 -- MemberRole emitted "vice_captain" against a
+                # column that only accepts "vice", and a notification type of
+                # "event" broke roster management the same way. Both were found by
+                # running the code; a literal is checkable without running it.
+                payload_nodes = [a for a in args[2:] if isinstance(a, ast.Dict)]
+                if "data" in kw:
+                    payload_nodes.append(kw["data"])
+                for payload_node in payload_nodes:
+                    for lineno, attr, value in self._literal_enum_pairs(payload_node):
+                        allowed = ENUM_VALUES.get((collection, attr))
+                        if allowed is not None and value not in allowed:
+                            self.problems.append(
+                                f"{self.path}:{lineno}: "
+                                f"{collection}.{attr} = {value!r} is not one of "
+                                f"{sorted(allowed)}"
+                            )
+
                 for lineno, key in keys:
                     self.checked += 1
                     if key in ALLOWED_NON_ATTRIBUTES or key in valid:
@@ -193,6 +254,32 @@ class Checker(ast.NodeVisitor):
                 f"{self.path}:{node.lineno}: create on {collection!r} omits required "
                 f"attribute(s): {', '.join(missing)}"
             )
+
+
+def _enum_values() -> dict[tuple[str, str], set[str]]:
+    """(collection, attribute) -> the values that column will accept."""
+    out: dict[tuple[str, str], set[str]] = {}
+    for c in COLLECTIONS:
+        for a in c.all_attrs:
+            if a.kind == "enum" and a.elements:
+                out[(c.id, a.key)] = set(a.elements)
+    return out
+
+
+ENUM_VALUES = _enum_values()
+
+# Service parameters that end up in an enum column further down.
+#
+# The dict-literal check above cannot see these: the call site passes
+# notif_type="event" and the payload one level down writes {"type": notif_type},
+# a variable. That is exactly how an invalid notification type shipped and broke
+# roster management, so the mapping is declared here and the literal is checked
+# where it is written.
+#
+# (function name, parameter) -> (collection, attribute)
+ENUM_PARAMS: dict[tuple[str, str], tuple[str, str]] = {
+    ("create_notification", "notif_type"): ("notifications", "type"),
+}
 
 
 def main() -> int:

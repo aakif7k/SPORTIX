@@ -297,6 +297,11 @@ COLLECTIONS: list[Collection] = [
             S("prize_pool", 80), S("entry_fee", 80),
             SA("rules", 20, elem=300), SA("tags", 15, elem=50),
             B("ai_team_available", default=False), B("ai_generated", default=False),
+            # ManageEvent's Rules & Privacy tab has toggles for all three and no
+            # columns to write them to, so every switch was local state that
+            # reverted on navigation.
+            B("is_public", default=True), B("is_invite_only", default=False),
+            B("moderate_discussion", default=True),
             D("created_at", required=True),
         ],
         indexes=[

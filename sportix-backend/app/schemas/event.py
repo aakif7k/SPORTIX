@@ -109,3 +109,27 @@ class EventJoin(BaseModel):
     """
     squad_id: Optional[str] = None
     entry_type: EntryType = EntryType.solo
+
+
+class ParticipantStatus(str, Enum):
+    """Must match the `status` enum on event_participants."""
+    registered = "registered"
+    confirmed = "confirmed"
+    withdrawn = "withdrawn"
+
+
+class ParticipantStatusUpdate(BaseModel):
+    status: ParticipantStatus
+
+
+class EventAnnouncement(BaseModel):
+    message: str
+
+    @field_validator("message")
+    @classmethod
+    def not_blank(cls, v: str) -> str:
+        if not v.strip():
+            raise ValueError("An announcement needs a message")
+        if len(v) > 500:
+            raise ValueError("An announcement can be at most 500 characters")
+        return v.strip()

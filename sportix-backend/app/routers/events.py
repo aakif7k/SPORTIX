@@ -1,7 +1,10 @@
 from fastapi import APIRouter, Depends, Query
 from typing import Optional
 from app.core.dependencies import get_current_user
-from app.schemas.event import EventCreate, EventUpdate, EventJoin
+from app.schemas.event import (
+    EventCreate, EventUpdate, EventJoin, ParticipantStatusUpdate,
+    EventAnnouncement,
+)
 from app.services import event_service
 
 router = APIRouter()
@@ -77,4 +80,34 @@ async def leave_event(event_id: str, user=Depends(get_current_user)):
 @router.get("/{event_id}/participants")
 async def get_participants(event_id: str, user=Depends(get_current_user)):
     data = await event_service.get_participants(event_id)
+    return {"success": True, "data": data}
+
+
+# --- Organizer roster management ---------------------------------------------
+@router.patch("/{event_id}/participants/{target_user_id}")
+async def set_participant_status(
+    event_id: str, target_user_id: str, payload: ParticipantStatusUpdate,
+    user=Depends(get_current_user),
+):
+    """Confirm or withdraw an entrant. Organizer only."""
+    data = await event_service.set_participant_status(
+        event_id, target_user_id, payload.status.value, user["id"])
+    return {"success": True, "data": data}
+
+
+@router.delete("/{event_id}/participants/{target_user_id}")
+async def remove_participant(
+    event_id: str, target_user_id: str, user=Depends(get_current_user),
+):
+    """Take an athlete off the roster, freeing their slot. Organizer only."""
+    await event_service.remove_participant(event_id, target_user_id, user["id"])
+    return {"success": True, "message": "Participant removed"}
+
+
+@router.post("/{event_id}/announce")
+async def announce_to_participants(
+    event_id: str, payload: EventAnnouncement, user=Depends(get_current_user),
+):
+    """Notify every entrant, which is what the broadcast box always claimed."""
+    data = await event_service.announce(event_id, payload.message, user["id"])
     return {"success": True, "data": data}

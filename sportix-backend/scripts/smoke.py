@@ -438,6 +438,68 @@ def main() -> int:
           client.post(f"/api/events/{event_id}/join", headers=partner_header_early(validators),
                       json={"entry_type": "wildcard"}).status_code == 422)
 
+    # --- organizer roster management ------------------------------------------
+    step("organizer: confirm, remove and announce")
+    partner_id_early = validators[0]["data"].get("user_id", "")
+    r = client.post(f"/api/events/{event_id}/join",
+                    headers=partner_header_early(validators),
+                    json={"entry_type": "solo"})
+    check("a second athlete can enter the event", r.status_code < 300,
+          f"{r.status_code} {body(r)}")
+
+    # Approve moved an array in zustand; it now moves the row and tells the athlete.
+    r = client.patch(f"/api/events/{event_id}/participants/{partner_id_early}",
+                     headers=auth_header, json={"status": "confirmed"})
+    check("the organizer can confirm an entrant", r.status_code == 200,
+          f"{r.status_code} {body(r)}")
+    check("the status actually changed", data_of(r).get("status") == "confirmed",
+          f"status={data_of(r).get('status')!r}")
+
+    check("a non-organizer cannot change a roster",
+          client.patch(f"/api/events/{event_id}/participants/{uid}",
+                       headers=partner_header_early(validators),
+                       json={"status": "withdrawn"}).status_code == 403)
+    check("an unknown status is rejected",
+          client.patch(f"/api/events/{event_id}/participants/{partner_id_early}",
+                       headers=auth_header,
+                       json={"status": "maybe-later"}).status_code == 422)
+
+    # The broadcast box only flipped a flag for three seconds.
+    r = client.post(f"/api/events/{event_id}/announce", headers=auth_header,
+                    json={"message": f"Kick-off moved to 7pm {tag}"})
+    check("announcing notifies the entrants", r.status_code == 200,
+          f"{r.status_code} {body(r)}")
+    check("the organizer is not notified of their own announcement",
+          data_of(r).get("notified") == 1,
+          f"notified={data_of(r).get('notified')!r} of "
+          f"{data_of(r).get('recipients')!r} recipient(s)")
+    r = client.get("/api/notifications/", headers=partner_header_early(validators))
+    notes = (data_of(r).get("items") or data_of(r).get("documents") or [])
+    check("the entrant received the announcement",
+          any(tag in str(n.get("body", "")) for n in notes),
+          f"{len(notes)} notification(s), none carrying the announcement")
+    check("an empty announcement is refused",
+          client.post(f"/api/events/{event_id}/announce", headers=auth_header,
+                      json={"message": "   "}).status_code == 422)
+
+    before = data_of(client.get(f"/api/events/{event_id}", headers=auth_header))
+    r = client.delete(f"/api/events/{event_id}/participants/{partner_id_early}",
+                      headers=auth_header)
+    check("the organizer can remove an entrant", r.status_code == 200,
+          f"{r.status_code} {body(r)}")
+    after = data_of(client.get(f"/api/events/{event_id}", headers=auth_header))
+    # Removing somebody has to free their slot, or an event fills up with ghosts.
+    check("removing an entrant frees their slot",
+          int(after.get("current_participants") or 0)
+          == int(before.get("current_participants") or 0) - 1,
+          f"{before.get('current_participants')!r} -> "
+          f"{after.get('current_participants')!r}")
+    roster = data_of(client.get(f"/api/events/{event_id}/participants",
+                                headers=auth_header)).get("items", [])
+    check("the removed athlete is off the roster",
+          not any(p.get("user_id") == partner_id_early for p in roster),
+          f"roster={[p.get('user_id') for p in roster]!r}")
+
     # ── squad history and leadership ──────────────────────────────────────────
     step("squad match history and leadership")
     r = client.get(f"/api/squads/{squad_id}/matches", headers=auth_header)
