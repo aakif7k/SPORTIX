@@ -52,6 +52,18 @@ export interface ApiEventParticipant {
   entry_type: 'solo' | 'squad' | 'crew';
   status: 'registered' | 'confirmed' | 'withdrawn';
   joined_at: string;
+  // Joined from the entrant's profile by GET /api/events/{id}/participants. The
+  // rows hold only a user_id, so a roster had no name or avatar and both event
+  // pages resolved them out of mock data.
+  full_name: string;
+  username: string;
+  avatar_url: string | null;
+  sport: string;
+  position: string | null;
+  level: number;
+  pulse_score: number;
+  experience_level: string;
+  city: string;
 }
 
 /** Every list endpoint returns this shape inside `data`. */

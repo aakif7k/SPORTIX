@@ -4,20 +4,11 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { 
   Search, SlidersHorizontal, MessageCircle, Bookmark, BarChart2, Zap, MapPin
 } from 'lucide-react';
-import { MOCK_USERS, MOCK_EVENTS } from '../../services/mockData';
-import { SPORT_CATEGORIES } from '@/constants/sports';
+import { useDiscover, useSportBreakdown } from '@/hooks/useDiscover';
 import { BarChart, Bar, XAxis, Tooltip, ResponsiveContainer } from 'recharts';
+import { RefreshCw } from 'lucide-react';
 
 const TABS = ['Athletes', 'ClashHub Events', 'The Arena Stats'];
-
-// Placeholder participation counts, generated once at module load. Rolling these
-// during render is impure and made the bar chart jump on every keystroke in the
-// search box. Replaced by real aggregates when the discover API lands.
-const SPORT_ANALYTICS = SPORT_CATEGORIES.slice(0, 6).map(s => ({
-  name: s.label,
-  count: Math.floor(Math.random() * 600 + 300),
-  emoji: s.emoji,
-}));
 
 export const SearchPage: React.FC = () => {
   const navigate = useNavigate();
@@ -31,10 +22,17 @@ export const SearchPage: React.FC = () => {
     setSavedUserIds(prev => prev.includes(id) ? prev.filter(uId => uId !== id) : [...prev, id]);
   };
 
-  const athletes = (query ? MOCK_USERS.filter(u => u.name.toLowerCase().includes(query.toLowerCase()) || u.sport.toLowerCase().includes(query.toLowerCase())) : MOCK_USERS);
-  const events = (query ? MOCK_EVENTS.filter(e => e.title.toLowerCase().includes(query.toLowerCase())) : MOCK_EVENTS);
-
-  const sportAnalytics = SPORT_ANALYTICS;
+  // Searching happens on the server: this filtered eight fixtures in the browser
+  // and so could never find a real athlete. With no query the API returns
+  // suggested athletes and upcoming events rather than nothing.
+  const {
+    athletes, athletesLoading, athletesError, refreshAthletes,
+    events, eventsLoading, eventsError, refreshEvents, searching,
+  } = useDiscover(query);
+  const {
+    breakdown: sportAnalytics, loading: breakdownLoading,
+    error: breakdownError, refresh: refreshBreakdown,
+  } = useSportBreakdown();
 
   return (
     <div className="max-w-5xl mx-auto space-y-6 pb-24 text-white">
@@ -110,7 +108,18 @@ export const SearchPage: React.FC = () => {
         {/* ATHLETES TAB */}
         {activeTab === 'Athletes' && (
           <motion.div key="ath" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            {athletes.map(athlete => {
+            {athletesLoading ? (
+              <SkeletonCards label="Loading athletes" />
+            ) : athletesError ? (
+              <ResultError message={athletesError.message} onRetry={() => refreshAthletes()} />
+            ) : athletes.length === 0 ? (
+              <EmptyResult
+                title={searching ? 'No athletes found' : 'No athletes to suggest yet'}
+                detail={searching
+                  ? 'Try a different name, handle or sport.'
+                  : 'As more athletes join, suggestions appear here.'}
+              />
+            ) : athletes.map(athlete => {
               const isSaved = savedUserIds.includes(athlete.id);
               return (
                 <motion.div
@@ -123,13 +132,17 @@ export const SearchPage: React.FC = () => {
                       <div className="flex items-center gap-3">
                         <div className="relative">
                           <img
-                            src={athlete.avatar || 'https://i.pravatar.cc/150?img=33'}
+                            src={athlete.avatar_url ?? undefined}
                             alt={athlete.name}
                             className="w-14 h-14 rounded-2xl object-cover border border-[#00D4FF]/40 shadow-md"
                           />
-                          <span className="absolute -bottom-1 -right-1 w-4 h-4 rounded-full bg-[#CCFF00] ring-2 ring-black flex items-center justify-center text-[9px] font-black text-black">
-                            ✓
-                          </span>
+                          {/* The tick used to be on every card, including
+                              unverified athletes. */}
+                          {athlete.is_verified && (
+                            <span className="absolute -bottom-1 -right-1 w-4 h-4 rounded-full bg-[#CCFF00] ring-2 ring-black flex items-center justify-center text-[9px] font-black text-black">
+                              ✓
+                            </span>
+                          )}
                         </div>
                         <div>
                           <h3 className="font-sans font-bold text-base text-white">{athlete.name}</h3>
@@ -142,27 +155,34 @@ export const SearchPage: React.FC = () => {
                       </div>
 
                       <div className="text-right font-mono">
-                        <span className="text-xs text-text-muted uppercase block">SSR RATING</span>
-                        <span className="text-lg font-black text-[#CCFF00]">94.8</span>
+                        <span className="text-xs text-text-muted uppercase block">PULSE</span>
+                        <span className="text-lg font-black text-[#CCFF00]">
+                          {Math.round(athlete.pulse_score)}
+                        </span>
                       </div>
                     </div>
 
                     <p className="text-xs text-text-secondary line-clamp-2 font-sans">
-                      {athlete.bio || 'Versatile athlete specializing in tactical teamwork, fast execution, and competitive tournament play.'}
+                      {athlete.bio || 'No bio yet.'}
                     </p>
 
+                    {/* Matches and win rate are per-match aggregates that the
+                        profile row does not carry, and inventing 42 and 78% for
+                        every athlete was worse than showing what is known. */}
                     <div className="grid grid-cols-3 gap-2 p-3 rounded-2xl bg-elevated/60 border border-white/5 text-center font-mono">
                       <div>
-                        <p className="text-[9px] text-text-muted uppercase">Matches</p>
-                        <p className="text-xs font-bold text-white">{athlete.stats?.matches || 42}</p>
+                        <p className="text-[9px] text-text-muted uppercase">Sport</p>
+                        <p className="text-xs font-bold text-white capitalize">
+                          {athlete.sport || '—'}
+                        </p>
                       </div>
                       <div>
-                        <p className="text-[9px] text-text-muted uppercase">Win Rate</p>
-                        <p className="text-xs font-bold text-[#CCFF00]">78%</p>
+                        <p className="text-[9px] text-text-muted uppercase">City</p>
+                        <p className="text-xs font-bold text-[#CCFF00]">{athlete.city || '—'}</p>
                       </div>
                       <div>
                         <p className="text-[9px] text-text-muted uppercase">Level</p>
-                        <p className="text-xs font-bold text-[#00D4FF]">Lvl {athlete.level || 35}</p>
+                        <p className="text-xs font-bold text-[#00D4FF]">Lvl {athlete.level}</p>
                       </div>
                     </div>
                   </div>
@@ -198,19 +218,30 @@ export const SearchPage: React.FC = () => {
         {/* CLASHHUB EVENTS TAB */}
         {activeTab === 'ClashHub Events' && (
           <motion.div key="evt" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            {events.map(event => (
+            {eventsLoading ? (
+              <SkeletonCards label="Loading events" />
+            ) : eventsError ? (
+              <ResultError message={eventsError.message} onRetry={() => refreshEvents()} />
+            ) : events.length === 0 ? (
+              <EmptyResult
+                title={searching ? 'No events found' : 'No events scheduled'}
+                detail={searching
+                  ? 'Try a different title or sport.'
+                  : 'Nothing on the calendar right now.'}
+              />
+            ) : events.map(event => (
               <div
-                key={event.id}
-                onClick={() => navigate(`/app/events/${event.id}`)}
+                key={event.$id}
+                onClick={() => navigate(`/app/events/${event.$id}`)}
                 className="p-5 rounded-3xl bg-surface border border-border-muted hover:border-[#00D4FF]/40 cursor-pointer transition-all space-y-3 shadow-xl"
               >
                 <div className="flex items-center justify-between font-mono text-xs text-[#00D4FF]">
                   <span>{event.sport.toUpperCase()}</span>
-                  <span>{new Date(event.date).toLocaleDateString()}</span>
+                  <span>{event.starts_at ? new Date(event.starts_at).toLocaleDateString() : 'TBC'}</span>
                 </div>
                 <h3 className="font-sans font-bold text-base text-white uppercase">{event.title}</h3>
                 <p className="text-xs text-text-secondary flex items-center gap-1 font-mono">
-                  <MapPin size={12} /> {event.location}
+                  <MapPin size={12} /> {event.venue ?? event.city ?? 'Venue to be confirmed'}
                 </p>
               </div>
             ))}
@@ -225,15 +256,30 @@ export const SearchPage: React.FC = () => {
                 <BarChart2 size={18} className="text-[#00D4FF]" /> The Arena — Global Sports Breakdown
               </h3>
 
-              <div className="h-64 w-full">
-                <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={sportAnalytics}>
-                    <XAxis dataKey="name" tick={{ fill: '#888', fontSize: 12, fontFamily: 'Urbanist' }} axisLine={false} tickLine={false} />
-                    <Tooltip contentStyle={{ background: '#101010', border: '1px solid #333', borderRadius: 8, color: '#fff' }} />
-                    <Bar dataKey="count" fill="#00D4FF" radius={[6, 6, 0, 0]} />
-                  </BarChart>
-                </ResponsiveContainer>
-              </div>
+              {/* These were Math.random() counts generated once at module load
+                  and labelled as global participation. They are real counts of
+                  active athletes per sport now. */}
+              {breakdownLoading ? (
+                <div className="h-64 w-full rounded-2xl bg-elevated animate-shimmer"
+                     aria-busy="true" aria-label="Loading the sports breakdown" />
+              ) : breakdownError ? (
+                <ResultError message={breakdownError.message} onRetry={() => refreshBreakdown()} />
+              ) : sportAnalytics.length === 0 ? (
+                <EmptyResult
+                  title="No participation data yet"
+                  detail="Counts appear once athletes have chosen their sports."
+                />
+              ) : (
+                <div className="h-64 w-full">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <BarChart data={sportAnalytics}>
+                      <XAxis dataKey="label" tick={{ fill: '#888', fontSize: 12, fontFamily: 'Urbanist' }} axisLine={false} tickLine={false} />
+                      <Tooltip contentStyle={{ background: '#101010', border: '1px solid #333', borderRadius: 8, color: '#fff' }} />
+                      <Bar dataKey="count" fill="#00D4FF" radius={[6, 6, 0, 0]} />
+                    </BarChart>
+                  </ResponsiveContainer>
+                </div>
+              )}
             </div>
           </motion.div>
         )}
@@ -243,3 +289,49 @@ export const SearchPage: React.FC = () => {
     </div>
   );
 };
+
+/** Card-shaped skeletons, matching the two-column result grids. */
+const SkeletonCards: React.FC<{ label: string }> = ({ label }) => (
+  <>
+    {[0, 1, 2, 3].map(i => (
+      <div
+        key={i}
+        aria-busy="true"
+        aria-label={i === 0 ? label : undefined}
+        className="rounded-3xl bg-surface border border-border-muted p-5 space-y-4 shadow-xl"
+      >
+        <div className="flex items-center gap-3">
+          <div className="w-14 h-14 rounded-2xl bg-elevated animate-shimmer" />
+          <div className="flex-1 space-y-2">
+            <div className="h-4 w-1/2 rounded bg-elevated animate-shimmer" />
+            <div className="h-3 w-1/3 rounded bg-elevated animate-shimmer" />
+          </div>
+        </div>
+        <div className="h-3 w-full rounded bg-elevated animate-shimmer" />
+        <div className="h-16 rounded-2xl bg-elevated animate-shimmer" />
+      </div>
+    ))}
+  </>
+);
+
+const EmptyResult: React.FC<{ title: string; detail: string }> = ({ title, detail }) => (
+  <div className="md:col-span-2 p-8 rounded-3xl bg-surface border border-border-muted text-center space-y-2">
+    <p className="font-sans font-bold text-sm text-white uppercase tracking-wider">{title}</p>
+    <p className="font-mono text-xs text-text-muted">{detail}</p>
+  </div>
+);
+
+const ResultError: React.FC<{ message: string; onRetry: () => void }> = ({ message, onRetry }) => (
+  <div className="md:col-span-2 p-8 rounded-3xl bg-surface border border-border-muted text-center space-y-3">
+    <p className="font-sans font-bold text-sm text-white uppercase tracking-wider">
+      That did not load
+    </p>
+    <p className="font-mono text-xs text-text-muted">{message}</p>
+    <button
+      onClick={onRetry}
+      className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-[#00D4FF] text-black font-mono text-[10px] font-bold uppercase"
+    >
+      <RefreshCw size={12} /> Retry
+    </button>
+  </div>
+);

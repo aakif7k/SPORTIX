@@ -8,7 +8,7 @@ import {
 import { RadarChart, PolarGrid, PolarAngleAxis, Radar, ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip } from 'recharts';
 import { useAuthStore } from '../../store/authStore';
 import { useSquadStore } from '../../store/squadStore';
-import { MOCK_USERS } from '../../services/mockData';
+import { usePublicProfile } from '@/hooks/useProfile';
 import type { User } from '../../types';
 import { VerifiedBadge } from '../../components/ui/Badge';
 import { Toggle } from '../../components/ui/index';
@@ -24,14 +24,35 @@ export const AthleteProfile: React.FC = () => {
   const isMe = !uid || uid === 'me' || uid === authUser?.id;
   const targetId = isMe ? authUser?.id : uid;
 
-  // Purely derived from the route and the auth store — nothing in this page
-  // ever sets it from user interaction. It was state seeded by a useState
+  // Another athlete's profile comes from the API; this used to be resolved out
+  // of MOCK_USERS, so visiting a real person showed a fictional one — or an
+  // endless spinner if their id was not one of the eight fixtures.
+  const { profile: fetched, loading: profileLoading, error: profileError } =
+    usePublicProfile(isMe ? undefined : targetId);
+
+  // Purely derived from the route, the auth store and the query — nothing in this
+  // page ever sets it from user interaction. It was state seeded by a useState
   // initialiser and then re-synced by an effect, which meant an extra render on
   // every navigation and a stale profile for one frame
   // (react-hooks/set-state-in-effect).
   const profileUser: User | null = isMe
     ? (authUser || null)
-    : ((MOCK_USERS.find(u => u.id === targetId || u.username === targetId) as unknown as User) || null);
+    : (fetched
+      ? ({
+        id: String(fetched.$id ?? ''),
+        uid: String(fetched.$id ?? ''),
+        name: String(fetched.full_name ?? ''),
+        username: String(fetched.username ?? ''),
+        avatar: (fetched.avatar_url as string | null) ?? undefined,
+        coverImage: (fetched.cover_url as string | null) ?? undefined,
+        sport: String(fetched.sport ?? ''),
+        location: String(fetched.location ?? fetched.city ?? ''),
+        bio: String(fetched.bio ?? ''),
+        isVerified: Boolean(fetched.is_verified),
+        level: Number(fetched.level ?? 1),
+        openToRecruit: Boolean(fetched.is_open_to_recruit),
+      } as unknown as User)
+      : null);
 
   const [activeTab, setActiveTab] = useState('Overview');
   const [isConnected, setIsConnected] = useState(false);
@@ -41,11 +62,32 @@ export const AthleteProfile: React.FC = () => {
   const { squads } = useSquadStore();
   const userSquad = squads[0] || null;
 
-  if (!profileUser) {
+  if (profileLoading) {
     return (
       <div className="min-h-[60vh] flex flex-col items-center justify-center space-y-4 text-white">
         <div className="w-12 h-12 rounded-full border-2 border-[#CCFF00] border-t-transparent animate-spin" />
         <p className="font-mono text-xs text-text-muted">Loading PlayerDNA Profile...</p>
+      </div>
+    );
+  }
+
+  // A missing profile is a real outcome, not a permanent loading state: the old
+  // page spun forever for anyone who was not one of the fixtures.
+  if (!profileUser) {
+    return (
+      <div className="min-h-[60vh] flex flex-col items-center justify-center space-y-3 text-center px-6">
+        <p className="font-sans font-bold text-sm text-white uppercase tracking-wider">
+          {profileError ? 'Profile did not load' : 'Athlete not found'}
+        </p>
+        <p className="font-mono text-xs text-text-muted max-w-xs">
+          {profileError?.message ?? 'This athlete does not exist, or their profile is no longer public.'}
+        </p>
+        <button
+          onClick={() => navigate(-1)}
+          className="px-4 py-2 rounded-xl bg-[#CCFF00] text-black font-mono text-[10px] font-bold uppercase"
+        >
+          Go back
+        </button>
       </div>
     );
   }
@@ -170,19 +212,30 @@ export const AthleteProfile: React.FC = () => {
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 p-4 rounded-2xl bg-[#121212]/80 border border-white/5">
             <div>
               <p className="font-mono text-[10px] text-text-muted uppercase tracking-wider">Matches Played</p>
-              <p className="text-xl font-black text-white">{profileUser.stats?.matches || 48}</p>
+              <p className="text-xl font-black text-white">{profileUser.stats?.matches ?? '—'}</p>
             </div>
             <div>
               <p className="font-mono text-[10px] text-text-muted uppercase tracking-wider">Win Rate</p>
-              <p className="text-xl font-black text-[#CCFF00]">78%</p>
+              <p className="text-xl font-black text-[#CCFF00]">
+                {profileUser.stats?.wins !== undefined && profileUser.stats?.losses !== undefined
+                  && (profileUser.stats.wins + profileUser.stats.losses) > 0
+                  ? `${Math.round((profileUser.stats.wins /
+                      (profileUser.stats.wins + profileUser.stats.losses)) * 100)}%`
+                  : '—'}
+              </p>
             </div>
             <div>
               <p className="font-mono text-[10px] text-text-muted uppercase tracking-wider">Pulse Level</p>
-              <p className="text-xl font-black text-[#00D4FF]">Level {profileUser.level || 41}</p>
+              <p className="text-xl font-black text-[#00D4FF]">Level {profileUser.level ?? 1}</p>
             </div>
             <div>
-              <p className="font-mono text-[10px] text-text-muted uppercase tracking-wider">Global Rank</p>
-              <p className="text-xl font-black text-white">#142</p>
+              {/* Rank comes from the leaderboard, which is per-sport and not
+                  fetched here; showing "#142" for everybody was worse than
+                  showing nothing. */}
+              <p className="font-mono text-[10px] text-text-muted uppercase tracking-wider">Pulse Score</p>
+              <p className="text-xl font-black text-white">
+                {profileUser.stats?.rating ?? '—'}
+              </p>
             </div>
           </div>
         </div>
@@ -242,7 +295,7 @@ export const AthleteProfile: React.FC = () => {
                     <Activity size={16} className="text-[#CCFF00]" /> Athlete Bio & Scouting Profile
                   </h2>
                   <p className="text-xs text-text-secondary leading-relaxed font-sans">
-                    {profileUser.bio || 'Versatile striker & offensive playmaker specializing in fast break execution, tactical pressing, and set-piece creation. Looking for competitive squad opportunities.'}
+                    {profileUser.bio || 'This athlete has not written a bio yet.'}
                   </p>
 
                   {/* Physical Specs Grid */}

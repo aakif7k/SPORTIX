@@ -81,3 +81,27 @@ export function useMyProfile() {
     refresh: () => queryClient.invalidateQueries({ queryKey: qk.profile.all }),
   };
 }
+
+/**
+ * Somebody else's public profile, by handle or by user id.
+ *
+ * AthleteProfile resolved other people out of MOCK_USERS, so visiting a real
+ * athlete showed a fictional one — or nothing, if the id was not one of the eight
+ * fixtures. The endpoint accepts either form because the app links both ways.
+ */
+export function usePublicProfile(idOrHandle?: string) {
+  const query = useQuery<Record<string, unknown>, ApiError>({
+    queryKey: ['profile', 'public', idOrHandle ?? null],
+    enabled: Boolean(idOrHandle),
+    queryFn: async () =>
+      (await api.get<{ data: Record<string, unknown> }>(
+        `/api/users/${encodeURIComponent(idOrHandle!)}`)).data,
+  });
+
+  return {
+    profile: query.data ?? null,
+    loading: Boolean(idOrHandle) && query.isPending,
+    error: (query.error as ApiError | null) ?? null,
+    refresh: query.refetch,
+  };
+}

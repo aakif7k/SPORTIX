@@ -10,10 +10,10 @@ import {
 import { useEvent, useEventParticipants } from '@/hooks/useEvents';
 import { useAuthStore } from '../../store/authStore';
 import { useAISettingsStore } from '../../store/aiSettingsStore';
-import { MOCK_USERS } from '../../services/mockData';
 import { SPORT_CATEGORIES } from '@/constants/sports';
 import { generateBracket } from '../../services/aiService';
 import type { BracketRound } from '../../types';
+import type { SportCategory } from '../../types';
 import { Avatar } from '../../components/ui/Avatar';
 import { BadgeIcon } from '../../components/gamification/BadgeIcon';
 import { EventJoinModal } from './EventJoinModal';
@@ -351,11 +351,14 @@ export const EventDetail: React.FC = () => {
             {/* Participant avatars row */}
             <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.18 }}
               className="flex items-center gap-3 mt-4">
+                {/* The roster rows now carry the entrant's profile, joined by the
+                    API. This used to look each one up in MOCK_USERS and fall back
+                    to a random pravatar, so a real event showed strangers. */}
                 {participants.slice(0, 5).map((participant, i) => {
-                  const pId = participant.user_id;
-                  const u = MOCK_USERS.find(user => user.id === pId || user.uid === pId) || { avatar: `https://i.pravatar.cc/150?img=${(i % 50) + 1}`, name: 'Athlete' };
                   return (
-                    <img key={participant.$id} src={u.avatar} alt={u.name}
+                    <img key={participant.$id}
+                      src={participant.avatar_url ?? undefined}
+                      alt={participant.full_name || 'Athlete'}
                       className="w-7 h-7 rounded-full border-2 object-cover"
                       style={{ borderColor: 'var(--bg-surface)', zIndex: 5 - i }} />
                   );
@@ -826,21 +829,21 @@ export const EventDetail: React.FC = () => {
                 </span>
               </motion.div>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                {MOCK_USERS.slice(0, participants.length || 4).map((athlete, i) => (
-                  <motion.div key={athlete.id} variants={fadeUp}
+                {participants.map((athlete, i) => (
+                  <motion.div key={athlete.$id} variants={fadeUp}
                     whileHover={{ y: -3, scale: 1.01 }}
                     className="flex items-center gap-3 rounded-[18px] p-3.5 cursor-default premium-card relative overflow-hidden">
                     {/* Rank badge */}
                     <div className="absolute top-2.5 right-3 font-mono text-[9px] font-bold"
                       style={{ color: 'var(--text-muted)' }}>#{i + 1}</div>
                     <div className="relative flex-shrink-0">
-                      <Avatar src={athlete.avatar} name={athlete.name} sport={athlete.sport} size="sm" />
+                      <Avatar src={athlete.avatar_url ?? undefined} name={athlete.full_name || 'Athlete'} sport={athlete.sport as SportCategory | undefined} size="sm" />
                     </div>
                     <div className="flex-1 min-w-0">
-                      <span className="font-mono text-[12px] font-bold block truncate" style={{ color: 'var(--text-primary)' }}>{athlete.name}</span>
-                      <span className="font-mono text-[9px]" style={{ color: 'var(--text-muted)' }}>{athlete.sport} · Level {athlete.level || 25}</span>
+                      <span className="font-mono text-[12px] font-bold block truncate" style={{ color: 'var(--text-primary)' }}>{athlete.full_name || 'Athlete'}</span>
+                      <span className="font-mono text-[9px]" style={{ color: 'var(--text-muted)' }}>{athlete.sport} · Level {athlete.level}</span>
                     </div>
-                    <BadgeIcon level={athlete.level || 25} size={18} animate={false} />
+                    <BadgeIcon level={athlete.level} size={18} animate={false} />
                   </motion.div>
                 ))}
                 {/* Open slot placeholders */}

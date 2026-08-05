@@ -87,3 +87,38 @@ async def global_search(
                                     "sport", sport)
 
     return {"success": True, "data": results, "query": q}
+
+
+@router.get("/sport-breakdown")
+async def sport_breakdown(
+    sports: str = Query(..., description="Comma-separated sport ids, max 20"),
+    user=Depends(get_current_user),
+):
+    """
+    How many athletes play each of the given sports.
+
+    SearchPage's "Global Sports Breakdown" chart was Math.random() counts
+    generated once at module load, labelled as global participation. Real numbers
+    are cheap here: `sport` is indexed on profiles, so each sport is one query
+    that reads only the total and no documents.
+
+    The sport list comes from the caller because the taxonomy lives in the
+    frontend (src/constants/sports.ts) and duplicating it server-side would give
+    two lists to keep in step. It is capped so the request cannot fan out.
+    """
+    wanted = [s.strip() for s in sports.split(",") if s.strip()][:20]
+
+    items = []
+    for sport in wanted:
+        try:
+            res = db.list_documents(DB_ID, settings.collection_users, queries=[
+                Q.equal("sport", sport), Q.equal("is_active", True), Q.limit(1),
+            ])
+            items.append({"sport": sport, "count": int(res.get("total") or 0)})
+        except Exception:
+            logger.warning("could not count athletes for %s", sport, exc_info=True)
+            # Omitted rather than reported as zero: "no data" and "nobody plays
+            # this" are different claims.
+            continue
+
+    return {"success": True, "data": {"items": items}}
