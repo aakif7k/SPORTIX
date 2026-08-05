@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { useAuth } from '@/context/AuthContext';
+import { useReels } from '@/hooks/useReels';
 import { useFeed } from '@/hooks/useFeed';
 import { PostComposer } from '@/components/social/PostComposer';
 import { PostCard } from '@/components/social/PostCard';
@@ -38,13 +39,18 @@ const UpcomingDropsRow: React.FC = () => (
   </div>
 );
 
-const MOCK_REELS_PREVIEW = [
-  { id: '1', title: 'Speed Drill', author: 'Marcus', bg: 'bg-[#1a2e05]' },
-  { id: '2', title: 'Top Corner Shot', author: 'Elena', bg: 'bg-[#0f242a]' },
-  { id: '3', title: 'Slam Dunk Highlight', author: 'Devon', bg: 'bg-[#2b1000]' },
-];
+/**
+ * The reels strip.
+ *
+ * Three hardcoded tiles — "Speed Drill" by Marcus, "Top Corner Shot" by Elena —
+ * used to sit here, on a page whose feed was already real. Reels have had a
+ * backend since phase 5.
+ */
+const ReelsPreviewRow: React.FC<{ onOpenReels: () => void }> = ({ onOpenReels }) => {
+  const { reels, loading } = useReels();
+  const preview = reels.slice(0, 3);
 
-const ReelsPreviewRow: React.FC<{ onOpenReels: () => void }> = ({ onOpenReels }) => (
+  return (
   <div className="mb-5">
     <div className="flex justify-between items-center mb-2">
       <div className="flex items-center gap-2">
@@ -56,16 +62,31 @@ const ReelsPreviewRow: React.FC<{ onOpenReels: () => void }> = ({ onOpenReels })
       </button>
     </div>
     <div className="flex gap-3 overflow-x-auto pb-2 scrollbar-none">
-      {MOCK_REELS_PREVIEW.map((r) => (
-        <button
-          key={r.id}
-          onClick={onOpenReels}
-          className={`flex-shrink-0 w-24 h-36 rounded-xl ${r.bg} border border-border-muted relative overflow-hidden flex flex-col justify-between p-2 text-left hover:border-[#00D4FF]/60 transition-all`}
-        >
-          <span className="font-mono text-[9px] text-[#00D4FF] font-bold uppercase">{r.title}</span>
-          <span className="text-white text-[10px] font-bold">{r.author}</span>
-        </button>
-      ))}
+      {loading
+        ? [0, 1, 2].map(i => (
+          <div key={i} className="flex-shrink-0 w-24 h-36 rounded-xl bg-elevated animate-shimmer" />
+        ))
+        : preview.map((r) => (
+          <button
+            key={r.id}
+            onClick={onOpenReels}
+            className="flex-shrink-0 w-24 h-36 rounded-xl bg-elevated border border-border-muted relative overflow-hidden flex flex-col justify-between p-2 text-left hover:border-[#00D4FF]/60 transition-all"
+            style={r.thumbnail_url ? {
+              backgroundImage: `url(${r.thumbnail_url})`,
+              backgroundSize: 'cover',
+              backgroundPosition: 'center',
+            } : undefined}
+          >
+            {/* A gradient so a caption stays readable over a thumbnail. */}
+            <span className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-black/40" />
+            <span className="relative font-mono text-[9px] text-[#00D4FF] font-bold uppercase line-clamp-2">
+              {r.caption || r.sport_tag || 'Reel'}
+            </span>
+            <span className="relative text-white text-[10px] font-bold truncate">
+              {r.author?.full_name ?? ''}
+            </span>
+          </button>
+        ))}
       <motion.button
         whileHover={{ scale: 1.03 }}
         whileTap={{ scale: 0.97 }}
@@ -76,7 +97,8 @@ const ReelsPreviewRow: React.FC<{ onOpenReels: () => void }> = ({ onOpenReels })
       </motion.button>
     </div>
   </div>
-);
+  );
+};
 
 export const HomeFeed: React.FC = () => {
   const navigate = useNavigate();

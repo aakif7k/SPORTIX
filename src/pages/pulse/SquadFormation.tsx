@@ -10,9 +10,9 @@ import { useAISettingsStore } from '../../store/aiSettingsStore';
 import { BadgeIcon } from '../../components/gamification/BadgeIcon';
 import { Sparkles, Zap, Trash2, Check,
   Lock, Users, MessageSquare,
-  Activity, Plus, Shield,
-  Trophy, Star, Brain, ArrowRight,
-  Clock, CheckCircle2
+  Activity, Shield,
+  Star, Brain, ArrowRight,
+  CheckCircle2
 } from 'lucide-react';
 import { PendingReportBanner } from '../../components/performance/PendingReportBanner';
 
@@ -33,20 +33,16 @@ const DASH_TABS = [
   { id: 'chemistry',   label: 'Chemistry',     icon: <Zap size={13} /> },
 ];
 
-// Mock invitations
-const MOCK_INVITES = [
-  { id: 'inv1', from: 'Marcus Reid', squad: 'Alpha Strikers FC', sport: 'Football', chemistry: 88, level: 84, avatar: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=150', expires: '2h 30m' },
-  { id: 'inv2', from: 'Priya Nair',  squad: 'Neon Falcons',      sport: 'Basketball', chemistry: 76, level: 72, avatar: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=150', expires: '5h 10m' },
-];
-
-// Mock activity feed items
-const MOCK_ACTIVITY = [
-  { id: 'a1', type: 'match',    text: 'Iron Pulse FC won 3–1 vs Rapid XI', time: '2h ago',  icon: <Trophy size={12} /> },
-  { id: 'a2', type: 'message',  text: 'Zaid posted a new tactical update in chat', time: '4h ago',  icon: <MessageSquare size={12} /> },
-  { id: 'a3', type: 'member',   text: 'Devon confirmed attendance for Saturday practice', time: '6h ago',  icon: <Check size={12} /> },
-  { id: 'a4', type: 'badge',    text: 'Squad earned "5 Match Win Streak" badge', time: '1d ago',  icon: <Star size={12} /> },
-  { id: 'a5', type: 'chemistry',text: 'Team chemistry rose to 87% after the last match', time: '1d ago',  icon: <Zap size={12} /> },
-];
+// Squad invitations and a cross-squad activity feed are the two surfaces on this
+// page with no backend behind them. Two fabricated invitations ("Alpha Strikers FC"
+// from Marcus Reid, expiring in 2h 30m) and five fabricated activity lines ("Iron
+// Pulse FC won 3-1 vs Rapid XI") used to live here, identical for every athlete.
+//
+// Invitations need a collection with a pending state — squad_members has only
+// confirmed membership — plus accept and decline endpoints. An activity feed needs
+// an endpoint aggregating squad posts, scheduled events, chat and achievements
+// across the squads an athlete belongs to; each of those exists on its own, but
+// nothing joins them. Both are honest empty states until then.
 
 // ─── Radar Chart ─────────────────────────────────────────────────────────────
 const RadarChart: React.FC<{ squad: any }> = ({ squad }) => {
@@ -594,36 +590,19 @@ export const SquadFormation: React.FC = () => {
 
   // ─── Tab: Invitations ────────────────────────────────────────────────────
   const renderInvitations = () => (
-    <div className="space-y-4">
-      <div className="flex items-center justify-between">
-        <span className="font-mono text-[10px] text-text-secondary uppercase tracking-wider">Pending Invitations ({MOCK_INVITES.length})</span>
+    <div className="p-10 text-center rounded-[24px] border border-dashed border-border-muted bg-surface flex flex-col items-center gap-3">
+      <div className="w-14 h-14 rounded-full bg-base border border-border-muted flex items-center justify-center text-text-secondary">
+        <Users size={22} />
       </div>
-      {MOCK_INVITES.map((inv, i) => (
-        <motion.div key={inv.id} initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: i * 0.05 }}
-          className="p-5 rounded-[18px] border border-border-muted bg-surface shadow-card flex items-center gap-4">
-          <img src={inv.avatar} alt={inv.from} className="w-12 h-12 rounded-full object-cover border-2 border-border-muted flex-shrink-0" />
-          <div className="flex-1 min-w-0">
-            <div className="font-display text-[14px] text-text-primary truncate">{inv.squad}</div>
-            <div className="font-mono text-[10px] text-text-secondary mt-0.5">
-              Invited by <span className="text-text-primary">{inv.from}</span> · {inv.sport}
-            </div>
-            <div className="flex items-center gap-3 mt-2 flex-wrap">
-              <span className="font-mono text-[9px] text-volt">{inv.chemistry}% Chem</span>
-              <span className="font-mono text-[9px] text-text-muted">Lvl {inv.level}</span>
-              <span className="font-mono text-[9px] text-text-muted flex items-center gap-0.5"><Clock size={8} /> Expires in {inv.expires}</span>
-            </div>
-          </div>
-          <div className="flex flex-col gap-2 flex-shrink-0">
-            <button onClick={() => navigate('/pulse/squad-formation?tab=accepted')}
-              className="px-4 py-1.5 rounded-lg bg-volt text-volt-text font-mono text-[10px] font-bold hover:scale-105 transition-all">
-              Accept
-            </button>
-            <button className="px-4 py-1.5 rounded-lg border border-border-muted bg-elevated text-text-muted hover:text-danger font-mono text-[10px] transition-all">
-              Decline
-            </button>
-          </div>
-        </motion.div>
-      ))}
+      <div>
+        <h3 className="font-display text-[16px] uppercase tracking-wider text-text-primary">
+          No invitations
+        </h3>
+        <p className="font-mono text-[11px] text-text-secondary mt-1 max-w-xs">
+          Squad invitations are not available yet. Captains add athletes directly
+          from a squad&apos;s roster in the meantime.
+        </p>
+      </div>
     </div>
   );
 
@@ -708,40 +687,19 @@ export const SquadFormation: React.FC = () => {
 
   // ─── Tab: Activity Feed ──────────────────────────────────────────────────
   const renderActivity = () => (
-    <div className="space-y-3">
-      <div className="font-mono text-[10px] text-text-muted uppercase tracking-wider mb-4">Squad Activity Feed</div>
-      {MOCK_ACTIVITY.map((item, i) => (
-        <motion.div key={item.id} initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: i * 0.04 }}
-          className="flex items-start gap-3 p-4 rounded-[14px] border border-border-muted bg-surface shadow-card">
-          <div
-            style={{
-              backgroundColor:
-                item.type === 'match' ? 'var(--volt-dim)' :
-                item.type === 'badge' ? 'var(--gold-surface)' :
-                item.type === 'chemistry' ? 'var(--cyan-dim)' : 'var(--bg-elevated)',
-              color:
-                item.type === 'match' ? 'var(--volt)' :
-                item.type === 'badge' ? 'var(--gold)' :
-                item.type === 'chemistry' ? 'var(--cyan)' : 'var(--text-muted)'
-            }}
-            className="w-8 h-8 rounded-xl flex items-center justify-center flex-shrink-0"
-          >
-            {item.icon}
-          </div>
-          <div className="flex-1 min-w-0">
-            <p className="font-mono text-[11px] text-text-primary leading-snug">{item.text}</p>
-            <span className="font-mono text-[9px] text-text-muted mt-0.5 flex items-center gap-1">
-              <Clock size={8} /> {item.time}
-            </span>
-          </div>
-        </motion.div>
-      ))}
-      {squads.length > 0 && (
-        <button onClick={() => navigate(`/pulse/squad/${squads[0].squadId}`)}
-          className="w-full py-3 rounded-[12px] border border-volt/20 font-mono text-[11px] text-volt hover:bg-volt-dim transition-all flex items-center justify-center gap-2">
-          <Plus size={12} /> View Full Activity in Squad Workspace
-        </button>
-      )}
+    <div className="p-10 text-center rounded-[24px] border border-dashed border-border-muted bg-surface flex flex-col items-center gap-3">
+      <div className="w-14 h-14 rounded-full bg-base border border-border-muted flex items-center justify-center text-text-secondary">
+        <Activity size={22} />
+      </div>
+      <div>
+        <h3 className="font-display text-[16px] uppercase tracking-wider text-text-primary">
+          No activity feed yet
+        </h3>
+        <p className="font-mono text-[11px] text-text-secondary mt-1 max-w-xs">
+          Each squad&apos;s own feed, schedule, chat and achievements are live on its
+          page — they are not yet combined into one stream here.
+        </p>
+      </div>
     </div>
   );
 
@@ -844,11 +802,7 @@ export const SquadFormation: React.FC = () => {
                   {generatedSquads.length}
                 </span>
               )}
-              {tab.id === 'invitations' && MOCK_INVITES.length > 0 && (
-                <span className="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-[#f97316] text-white text-[8px] font-bold flex items-center justify-center">
-                  {MOCK_INVITES.length}
-                </span>
-              )}
+              {/* The invitations badge always read "2", from the fixture. */}
             </button>
           ))}
         </div>
