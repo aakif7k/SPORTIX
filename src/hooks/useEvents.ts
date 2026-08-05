@@ -140,6 +140,12 @@ export interface CreateEventInput {
   prize_pool?: string | null;
   rules?: string[];
   is_ai_managed?: boolean;
+  status?: string;
+  // ManageEvent's Rules & Privacy toggles. These had no columns until now, so the
+  // switches moved local state that reverted on navigation.
+  is_public?: boolean;
+  is_invite_only?: boolean;
+  moderate_discussion?: boolean;
 }
 
 export function useEventMutations() {
@@ -166,6 +172,36 @@ export function useEventMutations() {
     onError: (err: ApiError) => toast.error(err.message || 'Could not cancel the event'),
   });
 
+  // Organizer roster tools. ManageEvent had all three as local state: approve and
+  // remove edited a zustand array, and the announcement box only set a flag.
+  const setParticipantStatus = useMutation({
+    mutationFn: (args: {
+      eventId: string; userId: string;
+      status: 'registered' | 'confirmed' | 'withdrawn';
+    }) => api.patch(`/api/events/${args.eventId}/participants/${args.userId}`,
+      { status: args.status }),
+    onSuccess: () => { toast.success('Roster updated'); invalidate(); },
+    onError: (err: ApiError) => toast.error(err.message || 'Could not update the roster'),
+  });
+
+  const removeParticipant = useMutation({
+    mutationFn: (args: { eventId: string; userId: string }) =>
+      api.delete(`/api/events/${args.eventId}/participants/${args.userId}`),
+    onSuccess: () => { toast.success('Athlete removed'); invalidate(); },
+    onError: (err: ApiError) => toast.error(err.message || 'Could not remove the athlete'),
+  });
+
+  const announce = useMutation({
+    mutationFn: async (args: { eventId: string; message: string }) =>
+      (await api.post<{ data: { notified: number; audience: number } }>(
+        `/api/events/${args.eventId}/announce`, { message: args.message })).data,
+    onSuccess: res => toast.success(
+      res.notified > 0
+        ? `Announcement sent to ${res.notified} athlete${res.notified === 1 ? '' : 's'}`
+        : 'Nobody to announce to yet'),
+    onError: (err: ApiError) => toast.error(err.message || 'Could not send the announcement'),
+  });
+
   const join = useMutation({
     mutationFn: (args: { eventId: string; squadId?: string; entryType?: string }) =>
       api.post(`/api/events/${args.eventId}/join`, {
@@ -189,6 +225,10 @@ export function useEventMutations() {
     updateEvent: update.mutateAsync,
     cancelEvent: cancel.mutateAsync,
     joinEvent: join.mutateAsync,
+    setParticipantStatus: setParticipantStatus.mutateAsync,
+    removeParticipant: removeParticipant.mutateAsync,
+    announce: announce.mutateAsync,
+    announcing: announce.isPending,
     leaveEvent: leave.mutateAsync,
     creating: create.isPending,
     joining: join.isPending,

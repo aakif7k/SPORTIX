@@ -90,6 +90,12 @@ class EventUpdate(BaseModel):
     prize_pool: Optional[str] = None
     rules: Optional[List[str]] = None
     status: Optional[EventStatus] = None
+    format: Optional[EventFormat] = None
+    # ManageEvent's Rules & Privacy tab edits all three; without them here the
+    # toggles were accepted by the page and dropped by the endpoint.
+    is_public: Optional[bool] = None
+    is_invite_only: Optional[bool] = None
+    moderate_discussion: Optional[bool] = None
 
 
 class EntryType(str, Enum):

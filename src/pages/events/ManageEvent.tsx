@@ -6,9 +6,7 @@ import {
   Trash2, Check, X, Plus, Edit, Eye, MessageSquare,
   Lock, Settings, BarChart3, Shield, Info, Activity, AlertTriangle, Send, ShieldCheck
 } from 'lucide-react';
-import { useEventStore } from '../../store/eventStore';
-import { MOCK_USERS } from '../../services/mockData';
-import type { SportCategory, EventFormat, ExperienceLevel } from '../../types';
+import { useEvent, useEventParticipants, useEventMutations } from '@/hooks/useEvents';
 import { Button } from '../../components/ui/Button';
 import { Input, Textarea, Select } from '../../components/ui/Input';
 import { Avatar } from '../../components/ui/Avatar';
@@ -21,20 +19,41 @@ const TABS = [
   { id: 'settings', label: 'Rules & Privacy', icon: Settings },
 ];
 
-const MOCK_ANALYTICS_DATA = [
-  { name: 'Day 1', signups: 3 },
-  { name: 'Day 3', signups: 8 },
-  { name: 'Day 5', signups: 12 },
-  { name: 'Day 7', signups: 19 },
-  { name: 'Day 9', signups: 26 },
-  { name: 'Day 11', signups: 31 },
-];
+/**
+ * Cumulative sign-ups per day, from when each athlete actually joined.
+ *
+ * This was a six-point fixture climbing to 31 sign-ups, shown identically for
+ * every event including ones nobody had entered. The roster carries joined_at, so
+ * the real curve needs no new endpoint.
+ */
+const signupCurve = (participants: Array<{ joined_at: string }>) => {
+  const byDay = new Map<string, number>();
+  for (const p of participants) {
+    if (!p.joined_at) continue;
+    const day = p.joined_at.slice(0, 10);
+    byDay.set(day, (byDay.get(day) ?? 0) + 1);
+  }
+
+  let running = 0;
+  return [...byDay.entries()]
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([day, count]) => {
+      running += count;
+      return {
+        name: new Date(day).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
+        signups: running,
+      };
+    });
+};
 
 export const ManageEvent: React.FC = () => {
   const { id } = useParams();
   const navigate = useNavigate();
-  const { events, updateEvent } = useEventStore();
-  const event = events.find(e => e.id === id);
+  const { event, loading: eventLoading, error: eventError } = useEvent(id);
+  const { participants, loading: rosterLoading } = useEventParticipants(id);
+  const {
+    updateEvent, setParticipantStatus, removeParticipant, announce, announcing,
+  } = useEventMutations();
 
   const [activeTab, setActiveTab] = useState('dashboard');
   const [announcementText, setAnnouncementText] = useState('');
@@ -42,92 +61,128 @@ export const ManageEvent: React.FC = () => {
   const [isSaving, setIsSaving] = useState(false);
   const [saveSuccess, setSaveSuccess] = useState(false);
 
-  // local pending participants state
-  const [pendingRequests, setPendingRequests] = useState([
-    { id: 'u_req_1', name: 'Sophia Martinez', avatar: 'https://i.pravatar.cc/150?img=25', level: 27, position: 'LW', distance: 4.2 },
-    { id: 'u_req_2', name: 'Liam Davies', avatar: 'https://i.pravatar.cc/150?img=12', level: 32, position: 'CB', distance: 8.5 },
-  ]);
 
-  // Form states initialized from event
-  const [title, setTitle] = useState(event?.title || '');
-  const [description, setDescription] = useState(event?.description || '');
-  const [venue, setVenue] = useState(event?.venue || '');
-  const [location, setLocation] = useState(event?.location || '');
-  const [date, setDate] = useState(event?.date || '');
-  const [format, setFormat] = useState(event?.format || 'tournament');
-  const [sport] = useState(event?.sport || 'football');
-  const [skillLevel] = useState(event?.skillLevel || 'semi-pro');
-  const [maxParticipants, setMaxParticipants] = useState(event?.maxParticipants?.toString() || '32');
-  const [prizePool, setPrizePool] = useState(event?.prizePool || '');
-  const [entryFee, setEntryFee] = useState(event?.entryFee || '');
-  const [rules, setRules] = useState<string[]>(event?.rules || ['']);
-
-  // Admin and settings states
+  // Form state is seeded the first time the event arrives. A useState initialiser
+  // cannot do it (the event is not loaded on first render) and an effect would
+  // cost an extra render, so it is set during render — the case React documents
+  // for deriving state from freshly arrived props.
+  const [seeded, setSeeded] = useState(false);
+  const [title, setTitle] = useState('');
+  const [description, setDescription] = useState('');
+  const [venue, setVenue] = useState('');
+  const [location, setLocation] = useState('');
+  const [date, setDate] = useState('');
+  const [format, setFormat] = useState('tournament');
+  const [maxParticipants, setMaxParticipants] = useState('32');
+  const [prizePool, setPrizePool] = useState('');
+  const [entryFee, setEntryFee] = useState('');
+  const [rules, setRules] = useState<string[]>(['']);
   const [isPublic, setIsPublic] = useState(true);
   const [isInviteOnly, setIsInviteOnly] = useState(false);
   const [discussionModeration, setDiscussionModeration] = useState(true);
-  const [teamLimit, setTeamLimit] = useState('16');
-  const [registrationDeadline, setRegistrationDeadline] = useState('2025-06-10');
-  const [selectedAdminId, setSelectedAdminId] = useState('u1');
+  const [registrationDeadline, setRegistrationDeadline] = useState('');
+
+  if (event && !seeded) {
+    setSeeded(true);
+    setTitle(event.title ?? '');
+    setDescription(event.description ?? '');
+    setVenue(event.venue ?? '');
+    setLocation(event.city ?? event.location ?? '');
+    setDate((event.starts_at ?? '').slice(0, 16));
+    setFormat(event.format ?? 'tournament');
+    setMaxParticipants(String(event.max_participants ?? 32));
+    setPrizePool(event.prize_pool ?? '');
+    setEntryFee(event.entry_fee ?? '');
+    setRules(event.rules?.length ? event.rules : ['']);
+    setIsPublic(event.is_public ?? true);
+    setIsInviteOnly(event.is_invite_only ?? false);
+    setDiscussionModeration(event.moderate_discussion ?? true);
+    setRegistrationDeadline((event.registration_deadline ?? '').slice(0, 10));
+  }
+
+  if (eventLoading) {
+    return (
+      <div className="max-w-4xl mx-auto px-3 sm:px-4 pt-6 space-y-6"
+           aria-busy="true" aria-label="Loading the event">
+        <div className="h-10 w-2/3 rounded-xl bg-elevated animate-shimmer" />
+        <div className="h-32 rounded-[22px] bg-elevated animate-shimmer" />
+        <div className="h-64 rounded-[22px] bg-elevated animate-shimmer" />
+      </div>
+    );
+  }
 
   if (!event) {
     return (
       <div className="text-center py-16 font-mono text-[12px] text-text-muted">
         <AlertTriangle size={32} className="mx-auto mb-3 text-red-500 animate-pulse" />
-        Event not found.
+        {eventError ? eventError.message : 'Event not found.'}
         <Button className="mt-4" onClick={() => navigate('/app/events')}>Go to Events</Button>
       </div>
     );
   }
 
-  const handleUpdateDetails = () => {
+  // Entrants awaiting a decision are those still marked `registered`; the two
+  // "pending requests" were hardcoded people with an invented distance.
+  const pendingRequests = participants.filter(p => p.status === 'registered');
+  const roster = participants.filter(p => p.status !== 'withdrawn');
+  const signupData = signupCurve(participants);
+
+  const handleUpdateDetails = async () => {
     setIsSaving(true);
     setSaveSuccess(false);
-    setTimeout(() => {
-      updateEvent(event.id, {
-        title,
-        description,
-        venue,
-        location,
-        date,
-        format: format as EventFormat,
-        sport: sport as SportCategory,
-        skillLevel: skillLevel as ExperienceLevel,
-        maxParticipants: parseInt(maxParticipants, 10),
-        prizePool,
-        entryFee,
-        rules: rules.filter(Boolean),
+    try {
+      // The artificial one-second setTimeout is gone: the request is the wait, and
+      // pretending to save for a second while saving nothing was the problem.
+      await updateEvent({
+        eventId: event.$id,
+        updates: {
+          title,
+          description,
+          venue,
+          city: location,
+          event_date: date,
+          format,
+          max_participants: parseInt(maxParticipants, 10) || event.max_participants,
+          prize_pool: prizePool,
+          entry_fee: entryFee,
+          rules: rules.filter(Boolean),
+          is_public: isPublic,
+          is_invite_only: isInviteOnly,
+          moderate_discussion: discussionModeration,
+          registration_deadline: registrationDeadline || null,
+        },
       });
-      setIsSaving(false);
       setSaveSuccess(true);
       setTimeout(() => setSaveSuccess(false), 3000);
-    }, 1000);
+    } catch {
+      // useEventMutations reported it; the form keeps what was typed.
+    } finally {
+      setIsSaving(false);
+    }
   };
 
-  const handleSendAnnouncement = (e: React.FormEvent) => {
+  const handleSendAnnouncement = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!announcementText.trim()) return;
-    setAnnouncementSent(true);
-    setAnnouncementText('');
-    setTimeout(() => setAnnouncementSent(false), 3000);
+    const message = announcementText.trim();
+    if (!message || announcing) return;
+    try {
+      await announce({ eventId: event.$id, message });
+      setAnnouncementText('');
+      setAnnouncementSent(true);
+      setTimeout(() => setAnnouncementSent(false), 3000);
+    } catch {
+      // Surfaced by the mutation; the text stays so it is not lost.
+    }
   };
 
-  const handleApprove = (userId: string) => {
-    updateEvent(event.id, {
-      participants: [...event.participants, userId],
-    });
-    setPendingRequests(prev => prev.filter(p => p.id !== userId));
-  };
+  const handleApprove = (userId: string) =>
+    setParticipantStatus({ eventId: event.$id, userId, status: 'confirmed' });
 
-  const handleReject = (userId: string) => {
-    setPendingRequests(prev => prev.filter(p => p.id !== userId));
-  };
+  const handleReject = (userId: string) =>
+    setParticipantStatus({ eventId: event.$id, userId, status: 'withdrawn' });
 
-  const handleRemoveParticipant = (userId: string) => {
-    updateEvent(event.id, {
-      participants: event.participants.filter(p => p !== userId),
-    });
-  };
+  const handleRemoveParticipant = (userId: string) =>
+    removeParticipant({ eventId: event.$id, userId });
 
   const handleRuleChange = (idx: number, val: string) => {
     setRules(rules.map((r, ri) => ri === idx ? val : r));
@@ -136,8 +191,6 @@ export const ManageEvent: React.FC = () => {
   const handleAddRule = () => setRules([...rules, '']);
   const handleRemoveRule = (idx: number) => setRules(rules.filter((_, ri) => ri !== idx));
 
-  // Resolved participants from store
-  const resolvedParticipants = MOCK_USERS.filter(u => event.participants.includes(u.id));
 
   return (
     <div className="max-w-4xl mx-auto px-3 sm:px-4 pb-28 md:pb-12 pt-4 sm:pt-6 text-text-primary">
@@ -146,7 +199,7 @@ export const ManageEvent: React.FC = () => {
       <div className="flex items-center gap-3 mb-6">
         <motion.button
           whileTap={{ scale: 0.9 }}
-          onClick={() => navigate(`/app/events/${event.id}`)}
+          onClick={() => navigate(`/app/events/${event.$id}`)}
           className="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 transition-all"
           style={{ background: 'var(--bg-elevated)', border: '1px solid var(--border-muted)' }}
         >
@@ -207,7 +260,7 @@ export const ManageEvent: React.FC = () => {
                 {/* Analytics Grid */}
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                   {[
-                    { label: 'ATTENDEES', value: `${event.participants.length}/${event.maxParticipants}`, icon: <Users size={16} />, color: 'var(--accent)' },
+                    { label: 'ATTENDEES', value: `${roster.length}/${event.max_participants}`, icon: <Users size={16} />, color: 'var(--accent)' },
                     { label: 'TEAM READINESS', value: '88%', icon: <Activity size={16} />, color: '#06b6d4' },
                     { label: 'STATUS', value: event.status.toUpperCase(), icon: <Shield size={16} />, color: '#f97316' }
                   ].map(s => (
@@ -231,7 +284,7 @@ export const ManageEvent: React.FC = () => {
                     </h3>
                     <div className="h-40 w-full">
                       <ResponsiveContainer width="100%" height={160}>
-                        <AreaChart data={MOCK_ANALYTICS_DATA}>
+                        <AreaChart data={signupData}>
                           <defs>
                             <linearGradient id="colorSignups" x1="0" y1="0" x2="0" y2="1">
                               <stop offset="5%" stopColor="var(--accent)" stopOpacity={0.3}/>
@@ -313,7 +366,7 @@ export const ManageEvent: React.FC = () => {
 
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <Input label="Date" type="date" value={date} onChange={e => setDate(e.target.value)} />
-                    <Select label="Format" value={format} onChange={e => setFormat(e.target.value as EventFormat)}
+                    <Select label="Format" value={format} onChange={e => setFormat(e.target.value)}
                       options={[{ value: 'tournament', label: 'Tournament' }, { value: 'league', label: 'League' }, { value: 'solo', label: 'Solo' }, { value: 'team', label: 'Team' }]} />
                   </div>
 
@@ -357,19 +410,25 @@ export const ManageEvent: React.FC = () => {
                       <p className="font-mono text-[10px] text-text-muted">No pending request queues.</p>
                     ) : (
                       pendingRequests.map(req => (
-                        <div key={req.id} className="flex flex-col sm:flex-row sm:items-center sm:justify-between p-3 gap-3 sm:gap-2 rounded-xl bg-elevated border border-border-muted font-mono text-xs">
+                        <div key={req.$id} className="flex flex-col sm:flex-row sm:items-center sm:justify-between p-3 gap-3 sm:gap-2 rounded-xl bg-elevated border border-border-muted font-mono text-xs">
                           <div className="flex items-center gap-2">
-                            <img src={req.avatar} alt={req.name} className="w-8 h-8 rounded-full object-cover" />
+                            <Avatar src={req.avatar_url ?? undefined} name={req.full_name || 'Athlete'} size="sm" />
                             <div>
-                              <span className="font-bold block text-text-primary">{req.name}</span>
-                              <span className="text-[9px] text-text-secondary mt-0.5 block">{req.position} · Level {req.level} · {req.distance} KM</span>
+                              <span className="font-bold block text-text-primary">{req.full_name || 'Athlete'}</span>
+                              {/* "4.2 KM away" was invented; distance needs the
+                                  athlete's coordinates, which the roster does not
+                                  carry. Their sport and level are real. */}
+                              <span className="text-[9px] text-text-secondary mt-0.5 block">
+                                {req.position ?? req.sport} · Level {req.level}
+                                {req.city ? ` · ${req.city}` : ''}
+                              </span>
                             </div>
                           </div>
                           <div className="flex gap-1.5 justify-end self-end sm:self-auto">
-                            <button onClick={() => handleApprove(req.id)} className="w-7 h-7 rounded-lg flex items-center justify-center bg-volt/20 text-volt hover:bg-volt/30 border border-volt/25">
+                            <button onClick={() => handleApprove(req.user_id)} className="w-7 h-7 rounded-lg flex items-center justify-center bg-volt/20 text-volt hover:bg-volt/30 border border-volt/25">
                               <Check size={14} />
                             </button>
-                            <button onClick={() => handleReject(req.id)} className="w-7 h-7 rounded-lg flex items-center justify-center bg-red-500/10 text-red-500 hover:bg-red-500/20 border border-red-500/25">
+                            <button onClick={() => handleReject(req.user_id)} className="w-7 h-7 rounded-lg flex items-center justify-center bg-red-500/10 text-red-500 hover:bg-red-500/20 border border-red-500/25">
                               <X size={14} />
                             </button>
                           </div>
@@ -382,32 +441,40 @@ export const ManageEvent: React.FC = () => {
                 {/* Registered Athletes list */}
                 <div className="glass rounded-[22px] p-5 border border-border-muted space-y-3">
                   <h3 className="font-display text-base tracking-wider uppercase text-text-primary">
-                    Registered Athletes ({resolvedParticipants.length})
+                    Registered Athletes ({roster.length})
                   </h3>
                   <div className="space-y-2 max-h-[350px] overflow-y-auto pr-1">
-                    {resolvedParticipants.length === 0 ? (
+                    {rosterLoading ? (
+                      <div className="space-y-2" aria-busy="true" aria-label="Loading the roster">
+                        {[0, 1, 2].map(i => (
+                          <div key={i} className="h-14 rounded-xl bg-elevated animate-shimmer" />
+                        ))}
+                      </div>
+                    ) : roster.length === 0 ? (
                       <p className="font-mono text-[10px] text-text-muted">No athletes registered yet.</p>
                     ) : (
-                      resolvedParticipants.map(participant => (
-                        <div key={participant.id} className="flex flex-col sm:flex-row sm:items-center sm:justify-between p-3 gap-3 sm:gap-2 rounded-xl bg-elevated border border-border-muted font-mono text-xs">
+                      roster.map(participant => (
+                        <div key={participant.$id} className="flex flex-col sm:flex-row sm:items-center sm:justify-between p-3 gap-3 sm:gap-2 rounded-xl bg-elevated border border-border-muted font-mono text-xs">
                           <div className="flex items-center gap-2">
-                            <Avatar src={participant.avatar} name={participant.name} size="sm" />
+                            <Avatar src={participant.avatar_url ?? undefined} name={participant.full_name || 'Athlete'} size="sm" />
                             <div>
-                              <span className="font-bold block text-text-primary">{participant.name}</span>
-                              <span className="text-[9px] text-text-secondary uppercase mt-0.5 block">{participant.sport} · {participant.experienceLevel}</span>
+                              <span className="font-bold block text-text-primary">{participant.full_name || 'Athlete'}</span>
+                              <span className="text-[9px] text-text-secondary uppercase mt-0.5 block">{participant.sport} · {participant.experience_level}</span>
                             </div>
                           </div>
                           <div className="flex items-center justify-end gap-3 self-end sm:self-auto">
-                            {participant.id === selectedAdminId ? (
-                              <span className="text-[9px] font-bold text-volt px-2 py-0.5 bg-volt/15 border border-volt/20 rounded-md">
-                                ADMIN
-                              </span>
-                            ) : (
-                              <button onClick={() => setSelectedAdminId(participant.id)} className="text-[9px] font-bold text-text-muted hover:text-volt font-mono transition-colors">
-                                MAKE ADMIN
-                              </button>
-                            )}
-                            <button onClick={() => handleRemoveParticipant(participant.id)} className="w-7 h-7 rounded-lg flex items-center justify-center text-text-muted hover:text-red-500 hover:bg-red-500/10 border border-transparent hover:border-red-500/25 transition-all">
+                            {/* This was a MAKE ADMIN toggle. An event has one
+                                organizer_id and there is no co-organizer model, so
+                                it only ever moved local state. The entrant's real
+                                status is worth the space instead. */}
+                            <span className={`text-[9px] font-bold px-2 py-0.5 rounded-md border ${
+                              participant.status === 'confirmed'
+                                ? 'text-volt bg-volt/15 border-volt/20'
+                                : 'text-text-muted bg-surface border-border-muted'
+                            }`}>
+                              {participant.status === 'confirmed' ? 'CONFIRMED' : 'PENDING'}
+                            </span>
+                            <button onClick={() => handleRemoveParticipant(participant.user_id)} className="w-7 h-7 rounded-lg flex items-center justify-center text-text-muted hover:text-red-500 hover:bg-red-500/10 border border-transparent hover:border-red-500/25 transition-all">
                               <Trash2 size={13} />
                             </button>
                           </div>
@@ -496,7 +563,7 @@ export const ManageEvent: React.FC = () => {
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div className="space-y-1.5">
                       <label className="font-mono text-[9px] uppercase tracking-widest text-text-muted">Team Count Limit</label>
-                      <input type="number" value={teamLimit} onChange={e => setTeamLimit(e.target.value)} className="w-full rounded-xl px-4 py-2.5 font-mono text-xs bg-base border border-border-muted text-text-primary focus:outline-none" />
+                      <input type="number" value={maxParticipants} onChange={e => setMaxParticipants(e.target.value)} className="w-full rounded-xl px-4 py-2.5 font-mono text-xs bg-base border border-border-muted text-text-primary focus:outline-none" />
                     </div>
                     <div className="space-y-1.5">
                       <label className="font-mono text-[9px] uppercase tracking-widest text-text-muted">Registration Deadline</label>

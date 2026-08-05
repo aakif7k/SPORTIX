@@ -38,6 +38,9 @@ export interface ApiEvent {
   tags: string[];
   ai_team_available: boolean;
   ai_generated: boolean;
+  is_public: boolean;
+  is_invite_only: boolean;
+  moderate_discussion: boolean;
   created_at: string;
   $createdAt: string;
 }
