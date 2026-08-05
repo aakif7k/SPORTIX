@@ -2,15 +2,14 @@ import React, { useState } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { AILoader } from '../../components/pulse/AILoader';
-import { PlayerCard } from '../../components/pulse/PlayerCard';
-import { generateAIPulseSquad } from '../../services/squadAI';
+import { useSquadSuggestion } from '@/hooks/useAI';
+import { useAutoSquad } from '@/hooks/useAutoSquad';
+import { useSquadMutations } from '@/hooks/useSquads';
 import { useSquadStore } from '../../store/squadStore';
-import { useAuthStore } from '../../store/authStore';
 import { useAISettingsStore } from '../../store/aiSettingsStore';
 import { BadgeIcon } from '../../components/gamification/BadgeIcon';
-import type { Athlete } from '../../types/pulse.types';
-import { Sparkles, Zap, Compass, Trash2, Check,
-  Lock, MapPin, Users, MessageSquare,
+import { Sparkles, Zap, Trash2, Check,
+  Lock, Users, MessageSquare,
   Activity, Plus, Shield,
   Trophy, Star, Brain, ArrowRight,
   Clock, CheckCircle2
@@ -113,14 +112,19 @@ const ChemBar: React.FC<{ label: string; value: number; color: string }> = ({ la
 );
 
 // ─── Main Component ───────────────────────────────────────────────────────────
+/** The picker's labels against the skill levels the AutoSquad schema accepts. */
+const SKILL_LEVEL_BY_CATEGORY: Record<string, string> = {
+  Amateur: 'amateur',
+  'Semi-Pro': 'semi_pro',
+  Professional: 'professional',
+};
+
 export const SquadFormation: React.FC = () => {
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
-  const { user } = useAuthStore();
   const { nearbyRadius } = useAISettingsStore();
   const {
-    squads, generatedSquads, dailyGenerationsCount,
-    addGeneratedSquad, declineGeneratedSquad, acceptGeneratedSquad, incrementGenerationsCount
+    squads, generatedSquads, declineGeneratedSquad,
   } = useSquadStore();
 
   const initialType = searchParams.get('type') || 'solo';
@@ -130,33 +134,35 @@ export const SquadFormation: React.FC = () => {
   const [status, setStatus] = useState<'selection' | 'matching'>('selection');
   const [selectedDraftId, setSelectedDraftId] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState('generate');
+  const [squadName, setSquadName] = useState('');
+  const [forming, setForming] = useState(false);
 
-  const remainingGenerations = Math.max(0, 3 - dailyGenerationsCount);
+  // The quota is the server's. It used to be a zustand counter compared against a
+  // literal 3, so the limit reset on every refresh.
+  const { remaining: remainingGenerations } = useAutoSquad();
+  const { suggestSquad, suggestion, suggesting } = useSquadSuggestion();
+  const { createSquad, addMember } = useSquadMutations();
 
   const handleGenerateSquad = async () => {
-    if (remainingGenerations <= 0) return;
+    if (remainingGenerations <= 0 || suggesting) return;
     setActiveTab('generate');
     setStatus('matching');
-    setTimeout(async () => {
-      try {
-        const userProfile = {
-          name: user?.name || 'Zack Miller',
-          username: user?.username || 'zack_pulse',
-          avatar: user?.avatar || 'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=150',
-          level: user?.stats?.rating ? Math.round(user.stats.rating / 10) : 24,
-          gameplayCategory
-        };
-        const newSquad = await generateAIPulseSquad(selectedSport, entryType, userProfile);
-        addGeneratedSquad(newSquad);
-        incrementGenerationsCount();
-        setSelectedDraftId(newSquad.squadId);
-        setActiveTab('results');
-      } catch (err) {
-        console.error(err);
-      } finally {
-        setStatus('selection');
-      }
-    }, 4500);
+    try {
+      // Real athletes, chosen by the server; the model only assigns roles over
+      // people who exist. This used to call Gemini from the browser with the key
+      // in the bundle, behind a 4.5-second setTimeout that made it feel like work
+      // was happening.
+      await suggestSquad({
+        sport: selectedSport.toLowerCase(),
+        skill_level: SKILL_LEVEL_BY_CATEGORY[gameplayCategory],
+        size: entryType === 'duo' ? 2 : 5,
+      });
+      setActiveTab('results');
+    } catch {
+      // useSquadSuggestion reported it, including "not enabled on this server".
+    } finally {
+      setStatus('selection');
+    }
   };
 
   const handleDecline = (id: string) => {
@@ -167,12 +173,58 @@ export const SquadFormation: React.FC = () => {
     }
   };
 
-  const handleAccept = (id: string) => {
-    acceptGeneratedSquad(id);
-    navigate(`/pulse/squad/${id}`);
+  /**
+   * Turn the suggestion into a real squad.
+   *
+   * The AI suggestion is advisory and persists nothing, so "accept" used to mean
+   * marking a fabricated squad accepted in zustand and navigating to a squad id
+   * that did not exist. This creates the squad and adds each suggested athlete
+   * through the endpoints that own those writes.
+   */
+  const handleFormSquad = async () => {
+    if (!suggestion || suggestedAthletes.length === 0 || forming) return;
+    setForming(true);
+    try {
+      const squad = await createSquad({
+        name: squadName.trim() || `${selectedSport} Squad`,
+        sport: selectedSport.toLowerCase(),
+      });
+      for (const athlete of suggestedAthletes) {
+        await addMember({
+          squadId: squad.$id,
+          user_id: athlete.id,
+          position: athlete.assignedRole,
+        }).catch(() => {
+          // One athlete who cannot be added should not lose the squad.
+        });
+      }
+      navigate(`/pulse/squad/${squad.$id}`);
+    } finally {
+      setForming(false);
+    }
   };
 
   const activeSquad = generatedSquads.find(s => s.squadId === selectedDraftId) || generatedSquads[0] || null;
+
+  /**
+   * The athletes the server selected, joined to their full rows.
+   *
+   * The old flow stored a fabricated squad in zustand — invented names, distances
+   * and compatibility scores — and rendered that. These are real profiles.
+   */
+  const suggestedAthletes = (suggestion?.selected ?? []).map(sel => {
+    const candidate = suggestion?.candidates.find(c => c.$id === sel.id);
+    return {
+      id: sel.id,
+      name: candidate?.full_name || 'Athlete',
+      avatar: candidate?.avatar_url ?? '',
+      level: candidate?.level ?? 1,
+      pulse: Math.round(candidate?.pulse_score ?? 0),
+      position: candidate?.position ?? sel.assigned_role,
+      assignedRole: sel.assigned_role,
+      why: sel.why,
+    };
+  });
 
   // ─── Tab: Generate ───────────────────────────────────────────────────────
   const renderGenerate = () => (
@@ -351,93 +403,102 @@ export const SquadFormation: React.FC = () => {
 
       {/* Right: Squad detail */}
       <div className="lg:col-span-8">
-        {activeSquad ? (
+        {suggestion ? (
           <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="space-y-5">
-            {/* Header */}
+            {/* The panel this replaces described a squad the browser invented: a
+                generated name, a formation, a chemistry breakdown, per-member
+                distances and compatibility percentages. The proxy returns the
+                athletes it selected from the database and the role it gave each. */}
             <div className="p-6 rounded-[24px] bg-surface border border-border-muted/50 space-y-4 shadow-card">
               <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
                 <div>
                   <span className="font-mono text-[9px] text-volt font-bold tracking-widest">PROPOSED AI MATCH</span>
-                  <h2 className="font-display text-[28px] uppercase leading-none mt-1 text-text-primary">{activeSquad.name}</h2>
+                  <h2 className="font-display text-[28px] uppercase leading-none mt-1 text-text-primary">
+                    {suggestedAthletes.length} athlete{suggestedAthletes.length === 1 ? '' : 's'}
+                  </h2>
                   <div className="flex flex-wrap items-center gap-2 mt-2">
-                    <span className="px-2 py-0.5 rounded bg-base border border-border-muted/50 font-mono text-[9px] text-text-secondary uppercase">{activeSquad.sport}</span>
-                    <span style={{ backgroundColor: 'var(--volt-dim)' }} className="px-2 py-0.5 rounded border border-volt/20 font-mono text-[9px] text-volt font-bold uppercase">{gameplayCategory}</span>
-                    <span className="px-2 py-0.5 rounded bg-base border border-border-muted/50 font-mono text-[9px] text-text-primary">{activeSquad.formation}</span>
+                    <span className="px-2 py-0.5 rounded bg-base border border-border-muted/50 font-mono text-[9px] text-text-secondary uppercase">
+                      {selectedSport}
+                    </span>
+                    <span style={{ backgroundColor: 'var(--volt-dim)' }} className="px-2 py-0.5 rounded border border-volt/20 font-mono text-[9px] text-volt font-bold uppercase">
+                      {gameplayCategory}
+                    </span>
+                    {!suggestion.ai_used && (
+                      <span className="px-2 py-0.5 rounded bg-base border border-border-muted/50 font-mono text-[9px] text-text-secondary">
+                        Pulse order · no AI commentary
+                      </span>
+                    )}
                   </div>
                 </div>
-                <div className="flex gap-2 w-full sm:w-auto">
-                  <button onClick={() => handleAccept(activeSquad.squadId)}
-                    className="flex-1 sm:flex-initial px-5 py-2.5 rounded-[10px] bg-volt text-volt-text font-condensed font-bold text-[12px] tracking-wide uppercase hover:opacity-90 flex items-center justify-center gap-1.5 shadow-glow-volt-sm cursor-pointer">
-                    <Check size={13} /> Accept Squad
-                  </button>
-                  <button onClick={() => handleDecline(activeSquad.squadId)}
-                    className="px-4 py-2.5 rounded-[10px] bg-elevated border border-border-muted text-text-primary font-mono text-[10px] hover:bg-danger-dim hover:text-danger hover:border-danger/30 transition-all">
-                    Decline
-                  </button>
-                </div>
               </div>
-              {/* Stats */}
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 pt-4 border-t border-border-muted/50">
-                {[
-                  { label: 'AI Compatibility', value: `${activeSquad.chemistry.overall}%`, color: 'var(--volt)' },
-                  { label: 'Win Probability',  value: `${activeSquad.winRate}%`,            color: 'var(--success)' },
-                  { label: 'Avg Pulse Score',  value: activeSquad.pulseAvg,                 color: 'var(--text-primary)'    },
-                  { label: 'Formation',         value: activeSquad.formation,               color: 'var(--text-primary)'    },
-                ].map((s, i) => (
-                  <div key={i} className="p-3 bg-base rounded-xl">
-                    <span className="font-mono text-[8px] text-text-secondary block uppercase">{s.label}</span>
-                    <strong className="font-display text-[18px] block mt-1" style={{ color: s.color }}>{s.value}</strong>
-                  </div>
-                ))}
-              </div>
-            </div>
 
-            {/* Radar + AI reasoning */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-              <RadarChart squad={activeSquad} />
-              <div className="p-5 rounded-[20px] bg-surface border border-border-muted/50 shadow-card space-y-4">
-                <div className="flex items-center gap-2 text-volt">
-                  <Sparkles size={13} />
-                  <span className="font-display text-[12px] uppercase tracking-wider">AI Match Reasoning</span>
-                </div>
-                <p className="font-mono text-[11px] text-text-secondary leading-relaxed bg-base border border-border-muted/50 rounded-xl p-4">
-                  {activeSquad.tacticalNotes || `Perfect roster identified. Athletes selected based on positioning, ${nearbyRadius} KM proximity, and level synchronization.`}
+              {suggestion.reasoning && (
+                <p className="font-mono text-[11px] text-text-secondary leading-relaxed border-t border-border-muted/40 pt-3">
+                  {suggestion.reasoning}
                 </p>
-                <div className="space-y-2">
-                  <span className="font-mono text-[8px] text-text-secondary uppercase">Chemistry Breakdown</span>
-                  <ChemBar label="Trust"          value={activeSquad.chemistry.trust}         color="var(--success)" />
-                  <ChemBar label="Coordination"   value={activeSquad.chemistry.coordination}  color="var(--volt)" />
-                  <ChemBar label="Communication"  value={activeSquad.chemistry.communication} color="var(--info)" />
-                </div>
-              </div>
+              )}
             </div>
 
-            {/* Roster */}
-            <div className="space-y-3">
-              <div className="flex items-center gap-2">
-                <Compass size={13} className="text-volt" />
-                <h3 className="font-display text-[14px] uppercase tracking-wider">AI Matched Roster ({activeSquad.members.length})</h3>
+            {suggestedAthletes.length === 0 ? (
+              <div className="p-10 text-center rounded-[24px] border border-dashed border-border-muted bg-surface">
+                <h3 className="font-display text-[16px] uppercase tracking-wider text-text-primary">
+                  Nobody to pick from
+                </h3>
+                <p className="font-mono text-[11px] text-text-secondary mt-1">
+                  No athletes at this level play {selectedSport} yet.
+                </p>
               </div>
-              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-5">
-                {activeSquad.members.map((athlete: Athlete) => (
-                  <div key={athlete.uid} className="relative group">
-                    <PlayerCard athlete={athlete} interactive={false} />
-                    <div className="absolute top-3 right-3 flex flex-col items-end gap-1.5">
-                      {athlete.distance !== undefined && (
-                        <span className="px-2 py-0.5 bg-base border border-border-muted/50 rounded font-mono text-[8px] text-volt font-bold flex items-center gap-1">
-                          <MapPin size={7} /> {athlete.distance === 0 ? 'YOU' : `${athlete.distance} KM`}
+            ) : (
+              <div className="space-y-3">
+                {suggestedAthletes.map((athlete, i) => (
+                  <motion.div key={athlete.id} initial={{ opacity: 0, x: -8 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: i * 0.05 }}
+                    className="flex items-center gap-4 p-4 rounded-[16px] bg-surface border border-border-muted/50 shadow-card">
+                    <img src={athlete.avatar || undefined} alt={athlete.name}
+                      className="w-11 h-11 rounded-full object-cover border border-border-muted" />
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2">
+                        <p className="font-condensed text-[15px] font-bold text-text-primary truncate">{athlete.name}</p>
+                        <span className="px-1.5 py-0.5 rounded bg-volt-dim border border-volt/20 font-mono text-[8px] text-volt font-bold uppercase flex-shrink-0">
+                          {athlete.assignedRole}
                         </span>
-                      )}
-                      {athlete.level !== undefined && (
-                        <div className="w-6 h-6 rounded bg-surface flex items-center justify-center border border-volt/20">
-                          <BadgeIcon level={athlete.level} size={15} animate={false} glow={false} />
-                        </div>
+                      </div>
+                      {athlete.why && (
+                        <p className="font-mono text-[10px] text-text-secondary truncate mt-0.5">{athlete.why}</p>
                       )}
                     </div>
-                  </div>
+                    <div className="flex items-center gap-3 flex-shrink-0">
+                      <div className="text-right">
+                        <div className="font-mono text-[15px] font-bold text-volt">{athlete.pulse}</div>
+                        <div className="font-mono text-[8px] text-text-muted">PULSE</div>
+                      </div>
+                      <BadgeIcon level={athlete.level} size={18} animate={false} glow={false} />
+                    </div>
+                  </motion.div>
                 ))}
               </div>
-            </div>
+            )}
+
+            {suggestedAthletes.length > 0 && (
+              <div className="p-5 rounded-[20px] bg-surface border border-border-muted/50 space-y-3 shadow-card">
+                <input
+                  value={squadName}
+                  onChange={e => setSquadName(e.target.value)}
+                  placeholder={`${selectedSport} Squad`}
+                  className="w-full h-10 rounded-[10px] bg-base border border-border-muted px-3 font-mono text-[12px] text-text-primary focus:outline-none focus:border-volt"
+                />
+                <button
+                  onClick={() => void handleFormSquad()}
+                  disabled={forming}
+                  className="w-full py-3 rounded-[12px] bg-volt text-volt-text font-condensed font-bold text-[15px] uppercase tracking-wider disabled:opacity-40"
+                >
+                  {forming ? 'Forming…' : `Form squad with ${suggestedAthletes.length} athlete${suggestedAthletes.length === 1 ? '' : 's'}`}
+                </button>
+                <p className="font-mono text-[9px] text-text-muted text-center">
+                  Creates the squad and adds each athlete. They appear in your squads
+                  immediately.
+                </p>
+              </div>
+            )}
           </motion.div>
         ) : (
           <div className="p-12 text-center rounded-[24px] border border-dashed border-border-muted bg-surface shadow-card flex flex-col items-center gap-4 min-h-[350px] justify-center">

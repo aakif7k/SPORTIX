@@ -5,6 +5,7 @@ import { ArrowLeft, TrendingUp, Brain } from 'lucide-react';
 import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts';
 import { RefreshCw } from 'lucide-react';
 import { useCareer, useMatchHistory } from '@/hooks/useCareer';
+import { usePerformanceInsight } from '@/hooks/useAI';
 import { CareerStatCard } from '../../components/performance/CareerStatCard';
 import { PerformanceRadar } from '../../components/performance/PerformanceRadar';
 import type { PerformanceSport } from '../../types/performance.types';
@@ -31,6 +32,12 @@ export const PerformanceTracker: React.FC = () => {
   // The radar was pinned to football for everybody. Use whichever sport the
   // athlete has actually filed reports in.
   const primarySport = (matches.find(m => m.sport)?.sport ?? 'football') as PerformanceSport;
+
+  // Only asked for when the tab is open: the AI tier allows three calls an hour.
+  const {
+    insights, loading: insightsLoading, unavailable: insightsUnavailable,
+    message: insightsMessage, error: insightsError,
+  } = usePerformanceInsight(activeTab === 'AI Insights' && (career?.total_matches ?? 0) > 0);
 
   if (loading) {
     return (
@@ -173,22 +180,62 @@ export const PerformanceTracker: React.FC = () => {
         {/* AI INSIGHTS TAB */}
         {activeTab === 'AI Insights' && (
           <motion.div key="insights" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} className="space-y-4">
-            {/* These were three hardcoded "insights" asserting things about the
-                athlete's own play — a 35% weekend Pulse advantage, a 78% win rate
-                over their last four — identical for every user and true for none.
-                Generating them needs the server-side AI service, so the tab says
-                so instead of making claims. */}
-            <div className="p-8 rounded-2xl bg-surface border border-border-muted text-center space-y-2 shadow-lg">
-              <span className="text-2xl">🧠</span>
-              <p className="font-sans font-bold text-sm text-white uppercase tracking-wider">
-                Insights are not available yet
-              </p>
-              <p className="font-mono text-xs text-text-muted max-w-sm mx-auto">
-                {career && career.total_matches > 0
-                  ? `Your ${career.total_matches} validated match${career.total_matches === 1 ? '' : 'es'} will be analysed once the Pulse Engine's analysis service is switched on.`
-                  : 'File and validate a few match reports first — there is nothing to analyse yet.'}
-              </p>
-            </div>
+            {/* These were three hardcoded claims about the athlete's own play — a
+                35% weekend Pulse advantage, a 78% win rate over their last four —
+                identical for every user and true for none. They are generated from
+                this athlete's own figures now, by the server-side AI proxy, with a
+                prompt that forbids inventing statistics or trends. */}
+            {(career?.total_matches ?? 0) === 0 ? (
+              <div className="p-8 rounded-2xl bg-surface border border-border-muted text-center space-y-2 shadow-lg">
+                <span className="text-2xl">🧠</span>
+                <p className="font-sans font-bold text-sm text-white uppercase tracking-wider">
+                  Nothing to analyse yet
+                </p>
+                <p className="font-mono text-xs text-text-muted max-w-sm mx-auto">
+                  File and validate a few match reports first.
+                </p>
+              </div>
+            ) : insightsLoading ? (
+              <div aria-busy="true" aria-label="Generating insights" className="space-y-4">
+                {[0, 1].map(i => (
+                  <div key={i} className="h-24 rounded-2xl bg-surface border border-border-muted animate-shimmer" />
+                ))}
+              </div>
+            ) : insightsUnavailable ? (
+              <div className="p-8 rounded-2xl bg-surface border border-border-muted text-center space-y-2 shadow-lg">
+                <span className="text-2xl">🧠</span>
+                <p className="font-sans font-bold text-sm text-white uppercase tracking-wider">
+                  Analysis is not enabled
+                </p>
+                <p className="font-mono text-xs text-text-muted max-w-sm mx-auto">
+                  This server has no AI key configured, so your{' '}
+                  {career?.total_matches} validated match
+                  {career?.total_matches === 1 ? '' : 'es'} cannot be analysed here.
+                </p>
+              </div>
+            ) : insights.length === 0 ? (
+              <div className="p-8 rounded-2xl bg-surface border border-border-muted text-center space-y-2 shadow-lg">
+                <p className="font-sans font-bold text-sm text-white uppercase tracking-wider">
+                  No observations
+                </p>
+                <p className="font-mono text-xs text-text-muted max-w-sm mx-auto">
+                  {insightsMessage ?? insightsError?.message
+                    ?? 'There was not enough in your record to draw a conclusion from.'}
+                </p>
+              </div>
+            ) : insights.map((insight, idx) => (
+              <div
+                key={idx}
+                className="p-5 rounded-2xl bg-surface border border-border-muted space-y-2 shadow-lg"
+                style={{ borderLeftColor: '#CCFF00', borderLeftWidth: 4 }}
+              >
+                <div className="flex items-center gap-2">
+                  <span className="text-xl">🧠</span>
+                  <h4 className="font-sans font-bold text-base text-white">{insight.title}</h4>
+                </div>
+                <p className="text-xs text-text-secondary font-sans leading-relaxed">{insight.detail}</p>
+              </div>
+            ))}
           </motion.div>
         )}
 

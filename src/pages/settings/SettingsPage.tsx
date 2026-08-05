@@ -8,7 +8,7 @@ import {
 import { useAuthStore } from '../../store/authStore';
 import { useThemeStore } from '../../store/themeStore';
 import { useSettings } from '@/hooks/useSettings';
-import { testAIConnection } from '../../services/aiService';
+import { useAIHealth } from '@/hooks/useAI';
 
 // ─── NEON TOGGLE ─────────────────────────────────────────────────────────────
 const NeonToggle: React.FC<{
@@ -122,11 +122,16 @@ export const SettingsPage: React.FC = () => {
   const [aiTestStatus, setAiTestStatus] = useState<'idle' | 'testing' | 'ok' | 'error'>('idle');
   const [aiTestMsg, setAiTestMsg] = useState('');
 
+  // The diagnostic used to make its own Gemini call from the browser with the
+  // exposed key. It asks the server now, which is the only side that has one.
+  const { refresh: refreshAiHealth } = useAIHealth();
+
   const runAiTest = async () => {
     setAiTestStatus('testing');
-    const res = await testAIConnection();
-    setAiTestStatus(res.ok ? 'ok' : 'error');
-    setAiTestMsg(res.message);
+    const res = await refreshAiHealth();
+    const health = res.data;
+    setAiTestStatus(health?.ok ? 'ok' : 'error');
+    setAiTestMsg(health?.message ?? 'The AI service could not be reached.');
   };
 
   const handleSave = async () => {

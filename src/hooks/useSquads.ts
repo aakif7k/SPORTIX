@@ -171,8 +171,13 @@ export function useSquadMutations(squadId?: string) {
   });
 
   const addMember = useMutation({
-    mutationFn: (args: { user_id: string; role?: SquadRole; position?: string }) =>
-      api.post(`/api/squads/${squadId}/members`, {
+    // squadId can be overridden per call: a squad created in the same action does
+    // not exist when this hook is instantiated, which is the case when a suggested
+    // lineup is turned into a real squad.
+    mutationFn: (args: {
+      user_id: string; role?: SquadRole; position?: string; squadId?: string;
+    }) =>
+      api.post(`/api/squads/${args.squadId ?? squadId}/members`, {
         user_id: args.user_id,
         role: args.role ?? 'member',
         position: args.position ?? null,

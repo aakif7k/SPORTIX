@@ -4,9 +4,18 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { Zap, RefreshCw, CheckCircle, Users, Terminal } from 'lucide-react';
 import { useEventStore } from '../../store/eventStore';
 import { useEvent } from '@/hooks/useEvents';
-import { generateTeam } from '../../services/aiService';
+import { useSquadSuggestion } from '@/hooks/useAI';
 import { SPORT_CATEGORIES } from '@/constants/sports';
-import type { AITeamResult, SportCategory, ExperienceLevel } from '../../types';
+import type { AISquadSuggestion } from '@/hooks/useAI';
+
+/** Event skill levels against the values the AutoSquad schema accepts. */
+const SKILL_LEVEL_BY_EVENT: Record<string, string> = {
+  beginner: 'casual',
+  amateur: 'amateur',
+  semi_pro: 'semi_pro',
+  pro: 'professional',
+  elite: 'professional',
+};
 import { Avatar } from '../../components/ui/Avatar';
 import { Button } from '../../components/ui/Button';
 import { Spinner } from '../../components/ui/index';
@@ -15,10 +24,11 @@ import { ProgressBar } from '../../components/ui/index';
 export const AITeamBuilder: React.FC = () => {
   const { id } = useParams();
   const navigate = useNavigate();
-  const { setAITeamResult, setIsGenerating } = useEventStore();
+  const { setIsGenerating } = useEventStore();
+  const { suggestSquad } = useSquadSuggestion();
   const [logs, setLogs] = useState<string[]>([]);
   const [phase, setPhase] = useState<'idle' | 'analyzing' | 'done'>('idle');
-  const [activeTeam, setActiveTeam] = useState<AITeamResult | null>(null);
+  const [activeTeam, setActiveTeam] = useState<AISquadSuggestion | null>(null);
   const logRef = useRef<HTMLDivElement>(null);
 
   // The store held a copy of every event seeded from mockData; the event this
@@ -37,17 +47,23 @@ export const AITeamBuilder: React.FC = () => {
     setLogs([]);
     try {
       if (!event) return;
-      // The API's skill levels and this page's legacy union are different
-      // vocabularies (semi_pro/pro against semi-pro/professional), so they are
-      // mapped here at the one call site rather than either side being loosened.
-      const legacyLevel: ExperienceLevel = ({
-        beginner: 'amateur', amateur: 'amateur', semi_pro: 'semi-pro',
-        pro: 'professional', elite: 'elite',
-      } as const)[event.skill_level] ?? 'amateur';
-      const result = await generateTeam(
-        event.sport as SportCategory, legacyLevel, event.$id, addLog);
+      // The log lines describe what is actually happening now. They used to be a
+      // scripted sequence played out on timers while the browser called Gemini
+      // with the key from the bundle.
+      addLog(`> Selecting ${event.sport} athletes at ${event.skill_level.replace('_', '-')} level...`);
+      addLog('> Asking the Pulse Engine to assign roles...');
+      const result = await suggestSquad({
+        sport: event.sport,
+        skill_level: SKILL_LEVEL_BY_EVENT[event.skill_level] ?? 'amateur',
+        size: 5,
+        event_id: event.$id,
+      });
+      addLog(
+        result.ai_used
+          ? `> ${result.selected.length} selected. Roles assigned.`
+          : `> ${result.selected.length} selected by Pulse; AI commentary unavailable.`,
+      );
       setActiveTeam(result);
-      setAITeamResult(result);
       setPhase('done');
     } finally {
       setIsGenerating(false);
@@ -138,61 +154,86 @@ export const AITeamBuilder: React.FC = () => {
         {/* DONE STATE */}
         {phase === 'done' && activeTeam && (
           <motion.div key="done" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} className="space-y-4">
-            {/* Success Header */}
+            {/* The header claimed a compatibility percentage and a rating out of
+                100, the card invented a team name and an OVR, the breakdown was four
+                fabricated sub-scores, and the footer offered "alternative lineups"
+                that did not exist. The proxy returns the athletes it chose, the
+                role it assigned each, and its reasoning — so that is what appears. */}
             <div className="premium-card rounded-xl p-4 flex items-center gap-3 bg-accent-surface border-accent-border">
               <CheckCircle size={20} className="text-accent flex-shrink-0" />
               <div>
-                <p className="font-label text-sm font-semibold text-accent">AutoSquad Generated Successfully</p>
-                <p className="text-xs text-text-secondary font-mono">Compatibility Score: {activeTeam.team.compatibilityRating}% · Rating: {activeTeam.team.overallRating}/100</p>
+                <p className="font-label text-sm font-semibold text-accent">
+                  {activeTeam.selected.length} athlete{activeTeam.selected.length === 1 ? '' : 's'} selected
+                </p>
+                <p className="text-xs text-text-secondary font-mono">
+                  {activeTeam.ai_used
+                    ? 'Roles assigned by the Pulse Engine'
+                    : 'Ordered by Pulse — AI commentary was unavailable'}
+                  {activeTeam.discarded
+                    ? ` · ${activeTeam.discarded} suggestion${activeTeam.discarded === 1 ? '' : 's'} discarded as unknown athletes`
+                    : ''}
+                </p>
               </div>
             </div>
 
-            {/* AI Reasoning */}
-            <div className="premium-card rounded-xl p-4">
-              <p className="stat-label mb-2 flex items-center gap-2" style={{ color: 'var(--text-muted)' }}><Terminal size={11} /> AI REASONING</p>
-              <p className="font-mono text-xs text-text-secondary leading-relaxed">{activeTeam.reasoning}</p>
-            </div>
+            {activeTeam.reasoning && (
+              <div className="premium-card rounded-xl p-4">
+                <p className="stat-label mb-2 flex items-center gap-2" style={{ color: 'var(--text-muted)' }}>
+                  <Terminal size={11} /> AI REASONING
+                </p>
+                <p className="font-mono text-xs text-text-secondary leading-relaxed">{activeTeam.reasoning}</p>
+              </div>
+            )}
 
-            {/* Team Card */}
             <div className="premium-card rounded-2xl p-6">
               <div className="flex items-center justify-between mb-5">
                 <div>
-                  <h2 className="font-display text-2xl text-text-primary tracking-wide uppercase">{activeTeam.team.name}</h2>
-                  <p className="text-xs font-mono text-text-secondary">{sportData?.emoji} {event?.sport} · AI Generated</p>
-                </div>
-                <div className="text-right">
-                  <div className="font-mono text-3xl text-accent">{activeTeam.team.overallRating}</div>
-                  <div className="stat-label" style={{ color: 'var(--text-muted)' }}>OVR</div>
+                  <h2 className="font-display text-2xl text-text-primary tracking-wide uppercase">
+                    Suggested lineup
+                  </h2>
+                  <p className="text-xs font-mono text-text-secondary">
+                    {sportData?.emoji} {event?.sport} · {event?.skill_level.replace('_', '-')}
+                  </p>
                 </div>
               </div>
 
-              {/* Compatibility Breakdown */}
-              <div className="grid grid-cols-2 gap-2 mb-5">
-                {Object.entries(activeTeam.compatibilityBreakdown).map(([key, val]) => (
-                  <ProgressBar key={key} label={key.toUpperCase()} value={val} max={100} showValue />
-                ))}
-              </div>
-
-              {/* Team Members */}
-              <div className="space-y-3">
-                {activeTeam.team.members.map((member, i) => (
-                  <motion.div key={member.userId} initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: i * 0.07 }}
-                    className="flex items-center gap-3 p-3 bg-elevated rounded-xl border border-border">
-                    <Avatar src={member.avatar} name={member.name} size="sm" />
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2">
-                        <p className="font-label text-sm font-semibold text-text-primary truncate">{member.name}</p>
-                        <span className="text-[10px] px-1.5 py-0.5 rounded bg-accent-surface border border-accent-border text-accent font-mono flex-shrink-0">{member.position}</span>
-                      </div>
-                      <p className="text-[10px] font-mono text-text-secondary">Chemistry: {member.compatibilityScore}%</p>
-                    </div>
-                    <div className="text-right">
-                      <div className="font-mono text-lg font-bold text-accent">{member.skillScore}</div>
-                      <div className="stat-label text-[9px]" style={{ color: 'var(--text-muted)' }}>SKILL</div>
-                    </div>
-                  </motion.div>
-                ))}
-              </div>
+              {activeTeam.selected.length === 0 ? (
+                <p className="font-mono text-xs text-text-secondary text-center py-6">
+                  No athletes at this level play {event?.sport} yet, so there was nobody
+                  to pick from. Invite people to the event directly.
+                </p>
+              ) : (
+                <div className="space-y-3">
+                  {activeTeam.selected.map((sel, i) => {
+                    const athlete = activeTeam.candidates.find(c => c.$id === sel.id);
+                    return (
+                      <motion.div key={sel.id} initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: i * 0.07 }}
+                        className="flex items-center gap-3 p-3 bg-elevated rounded-xl border border-border">
+                        <Avatar src={athlete?.avatar_url ?? undefined} name={athlete?.full_name || 'Athlete'} size="sm" />
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2">
+                            <p className="font-label text-sm font-semibold text-text-primary truncate">
+                              {athlete?.full_name || 'Athlete'}
+                            </p>
+                            <span className="text-[10px] px-1.5 py-0.5 rounded bg-accent-surface border border-accent-border text-accent font-mono flex-shrink-0">
+                              {sel.assigned_role}
+                            </span>
+                          </div>
+                          {sel.why && (
+                            <p className="text-[10px] font-mono text-text-secondary truncate">{sel.why}</p>
+                          )}
+                        </div>
+                        <div className="text-right">
+                          <div className="font-mono text-lg font-bold text-accent">
+                            {Math.round(athlete?.pulse_score ?? 0)}
+                          </div>
+                          <div className="stat-label text-[9px]" style={{ color: 'var(--text-muted)' }}>PULSE</div>
+                        </div>
+                      </motion.div>
+                    );
+                  })}
+                </div>
+              )}
             </div>
 
             {/* Actions */}
@@ -203,8 +244,6 @@ export const AITeamBuilder: React.FC = () => {
               </Button>
             </div>
 
-            {/* Alt teams hint */}
-            <p className="text-center text-xs text-text-muted font-mono">{activeTeam.alternateOptions.length} alternative lineups available · click Regenerate to explore</p>
           </motion.div>
         )}
       </AnimatePresence>

@@ -11,7 +11,7 @@ import { useEvent, useEventParticipants } from '@/hooks/useEvents';
 import { useAuthStore } from '../../store/authStore';
 import { useAISettingsStore } from '../../store/aiSettingsStore';
 import { SPORT_CATEGORIES } from '@/constants/sports';
-import { generateBracket } from '../../services/aiService';
+import { generateBracket } from '@/lib/bracket';
 import type { BracketRound } from '../../types';
 import type { SportCategory } from '../../types';
 import { Avatar } from '../../components/ui/Avatar';
