@@ -3,12 +3,11 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { AlertTriangle, X, ArrowRight } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { usePendingReport } from '../../hooks/usePendingReport';
-import { useMatchReportStore } from '../../store/matchReportStore';
+import { dismissPendingReport } from '../../store/matchReportStore';
 
 export const PendingReportBanner: React.FC = () => {
   const navigate = useNavigate();
   const { hasPending, pendingMatch } = usePendingReport();
-  const { dismissPendingReport } = useMatchReportStore();
 
   const sportEmoji: Record<string, string> = {
     football: '⚽',

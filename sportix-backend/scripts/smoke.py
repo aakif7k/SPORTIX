@@ -438,6 +438,18 @@ def main() -> int:
           client.post(f"/api/events/{event_id}/join", headers=partner_header_early(validators),
                       json={"entry_type": "wildcard"}).status_code == 422)
 
+    # The banner this feeds says "you have a match to report", but the endpoint
+    # used to return stats *awaiting validation* -- the opposite, so it fired only
+    # once a report had already been filed.
+    r = client.get("/api/matches/pending-report/check", headers=auth_header)
+    pending = data_of(r)
+    check("a reported match is not owed a report",
+          pending.get("has_pending") is False,
+          f"has_pending={pending.get('has_pending')!r} pending={pending.get('pending')!r}")
+    check("reports awaiting teammate validation are counted separately",
+          "awaiting_validation" in pending,
+          f"keys={sorted(pending.keys())!r}")
+
     # --- career and history ---------------------------------------------------
     step("career history and aggregates")
     r = client.get("/api/matches/me/history", headers=auth_header)

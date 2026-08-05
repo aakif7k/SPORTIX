@@ -10,7 +10,7 @@ import { useQuery } from '@tanstack/react-query';
 import { useAuth } from '@/context/AuthContext';
 import { ApiError } from '@/lib/api';
 import { qk } from '@/lib/queryKeys';
-import { hasPendingMatchReport } from '@/services/socialService';
+import { api } from '@/lib/api';
 
 export interface PendingMatchData {
   matchId: string;
@@ -28,17 +28,6 @@ function readDismissed(): boolean {
   return dismissedAt ? Date.now() - Number(dismissedAt) < DISMISS_WINDOW_MS : false;
 }
 
-// TODO: replace with the real match payload from the pending-report endpoint,
-// which currently reports only whether one exists. Built at module load so the
-// date is stable across renders.
-const MOCK_PENDING: PendingMatchData = {
-  matchId: 'm-pending-01',
-  eventName: 'Pro Football 5v5 Championship',
-  sport: 'football',
-  date: new Date(Date.now() - 86400000).toISOString(),
-  daysAgo: 1,
-};
-
 export function usePendingReport(): {
   hasPending: boolean;
   isLoading: boolean;
@@ -50,19 +39,33 @@ export function usePendingReport(): {
 
   const enabled = Boolean(user?.id) && !isDismissed;
 
-  const query = useQuery<boolean, ApiError>({
+  // The endpoint returns the actual matches owed a report now. It used to report
+  // stats *awaiting validation*, which is the opposite thing, and this hook then
+  // substituted a hardcoded "Pro Football 5v5 Championship" for the payload.
+  const query = useQuery<PendingMatchData[], ApiError>({
     queryKey: qk.matches.pendingReport(user?.id),
     enabled,
-    queryFn: () => hasPendingMatchReport(user!.id),
+    queryFn: async () => {
+      const res = await api.get<{ data: { pending?: Array<Record<string, unknown>> } }>(
+        '/api/matches/pending-report/check',
+      );
+      return (res.data?.pending ?? []).map(row => ({
+        matchId: String(row.match_id ?? ''),
+        eventName: String(row.event_name ?? 'Match'),
+        sport: String(row.sport ?? 'generic'),
+        date: String(row.date ?? ''),
+        daysAgo: Number(row.days_ago ?? 0),
+      }));
+    },
     // A banner that nags on every navigation is worse than a slightly stale one.
     staleTime: 5 * 60 * 1000,
   });
 
-  const hasPending = enabled && query.data === true;
+  const pending = query.data ?? [];
 
   return {
-    hasPending,
+    hasPending: enabled && pending.length > 0,
     isLoading: enabled && query.isPending,
-    pendingMatch: hasPending ? MOCK_PENDING : undefined,
+    pendingMatch: pending[0],
   };
 }

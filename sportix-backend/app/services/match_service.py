@@ -198,13 +198,80 @@ async def retention_vote(match_id: str, voter_id: str, target_id: str, vote: str
 
 
 async def check_pending_report(user_id: str) -> dict:
-    """Check if user has any pending (unvalidated) stat submissions."""
-    res = db.list_documents(
-        DB_ID, settings.collection_player_stats,
-        queries=[Q.equal("user_id", user_id), Q.equal("validation_status", "pending"), Q.limit(5)],
-    )
-    return {
-        "has_pending": len(res.get("documents", [])) > 0,
-        "pending_count": len(res.get("documents", [])),
-        "pending": res.get("documents", []),
+    """
+    Matches this athlete played but has not filed a report for.
+
+    This used to return stat submissions **awaiting validation**, which is the
+    opposite thing: the banner it feeds says "you have a match to report", so it
+    appeared precisely when the athlete had already reported and was waiting on
+    teammates, and never when they actually owed a report.
+
+    A match is owed a report when it is completed, one of the athlete's squads
+    played it, and they have no player_stats row against it. Only home_squad_id is
+    indexed, which is what the current match-creation flow fills, so an away
+    fixture cannot be found by index — noted rather than silently missed.
+
+    `awaiting_validation` is still reported, because it is genuinely useful, just
+    under a name that says what it is.
+    """
+    squad_ids = [
+        m["squad_id"] for m in db.list_documents(
+            DB_ID, settings.collection_squad_members,
+            queries=[Q.equal("user_id", user_id), Q.limit(50)],
+        ).get("documents", []) if m.get("squad_id")
+    ]
+
+    reported = {
+        s["match_id"] for s in db.list_documents(
+            DB_ID, settings.collection_player_stats,
+            queries=[Q.equal("user_id", user_id), Q.limit(200)],
+        ).get("documents", []) if s.get("match_id")
     }
+
+    awaiting = db.list_documents(
+        DB_ID, settings.collection_player_stats,
+        queries=[Q.equal("user_id", user_id),
+                 Q.equal("validation_status", "pending"), Q.limit(25)],
+    ).get("total", 0)
+
+    owed = []
+    for squad_id in squad_ids:
+        matches = db.list_documents(
+            DB_ID, settings.collection_matches,
+            queries=[Q.equal("home_squad_id", squad_id), Q.equal("status", "completed"),
+                     Q.limit(25), Q.order_desc("$createdAt")],
+        ).get("documents", [])
+        for match in matches:
+            if match["$id"] in reported:
+                continue
+            played = match.get("played_at") or match.get("created_at")
+            owed.append({
+                "match_id": match["$id"],
+                "event_name": (f"vs {match['opponent_name']}"
+                               if match.get("opponent_name") else "Friendly match"),
+                "sport": match.get("sport", "generic"),
+                "date": played,
+                "days_ago": _days_since(played),
+            })
+
+    owed.sort(key=lambda m: m.get("date") or "", reverse=True)
+    return {
+        "has_pending": bool(owed),
+        "pending_count": len(owed),
+        "pending": owed,
+        # Distinct from the above: reports already filed, waiting on teammates.
+        "awaiting_validation": awaiting,
+    }
+
+
+def _days_since(when: Optional[str]) -> int:
+    if not when:
+        return 0
+    from datetime import datetime, timezone
+    try:
+        parsed = datetime.fromisoformat(str(when).replace("Z", "+00:00"))
+    except ValueError:
+        return 0
+    if parsed.tzinfo is None:
+        parsed = parsed.replace(tzinfo=timezone.utc)
+    return max(0, (datetime.now(timezone.utc) - parsed).days)

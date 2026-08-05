@@ -3,8 +3,8 @@ import { motion } from 'framer-motion';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { Zap, Gift, Target, Check, Lock, Trophy, ArrowRight, Star, History, Activity } from 'lucide-react';
 import { useGamificationStore } from '../../store/gamificationStore';
-import { useCareerStats } from '../../hooks/useCareerStats';
-import { useMatchReportStore } from '../../store/matchReportStore';
+import { useCareer, useMatchHistory } from '@/hooks/useCareer';
+import { usePendingReport } from '@/hooks/usePendingReport';
 
 // ─── Daily Rewards Panel ─────────────────────────────────────────────────────
 const DailyRewardsPanel: React.FC = () => {
@@ -109,8 +109,11 @@ const DailyRewardsPanel: React.FC = () => {
 
 export const EventsPanel: React.FC = () => {
   const navigate = useNavigate();
-  const careerStats = useCareerStats();
-  const { matchHistory } = useMatchReportStore();
+  const { career } = useCareer();
+  const { matches } = useMatchHistory();
+  // The pending card was hardcoded to "Iron Pulse FC vs Rapid XI" and linked to a
+  // fixture match id, so it showed for everyone forever and led nowhere real.
+  const { pendingMatch } = usePendingReport();
 
   return (
     <div className="space-y-4">
@@ -125,10 +128,10 @@ export const EventsPanel: React.FC = () => {
         
         <div className="grid grid-cols-2 gap-2">
           {[
-            { icon: <Trophy size={12} />,    label: 'MATCHES',      value: matchHistory.length,         color: 'var(--accent)', onClick: () => navigate('/app/clashhub/history') },
-            { icon: <Zap size={12} />,       label: 'PULSE',        value: careerStats.totalPulseEarned, color: '#60A5FA',      onClick: () => navigate('/app/clashhub/performance') },
-            { icon: <Target size={12} />,    label: 'WIN RATE',     value: `${careerStats.winRate}%`,   color: '#4ADE80',      onClick: () => navigate('/app/clashhub/performance') },
-            { icon: <Activity size={12} />,  label: 'SSR RATING',   value: careerStats.currentSSR,      color: '#FBBF24',      onClick: () => navigate('/app/clashhub/performance') },
+            { icon: <Trophy size={12} />,    label: 'MATCHES',      value: career?.total_matches ?? 0,        color: 'var(--accent)', onClick: () => navigate('/app/clashhub/history') },
+            { icon: <Zap size={12} />,       label: 'PULSE',        value: career?.total_pulse_earned ?? 0,   color: '#60A5FA',      onClick: () => navigate('/app/clashhub/performance') },
+            { icon: <Target size={12} />,    label: 'WIN RATE',     value: `${career?.win_rate ?? 0}%`,       color: '#4ADE80',      onClick: () => navigate('/app/clashhub/performance') },
+            { icon: <Activity size={12} />,  label: 'SSR RATING',   value: career?.current_ssr ?? '—',        color: '#FBBF24',      onClick: () => navigate('/app/clashhub/performance') },
           ].map((stat, i) => (
             <motion.button
               key={i}
@@ -161,9 +164,18 @@ export const EventsPanel: React.FC = () => {
         </div>
 
         <div className="space-y-2">
-          {matchHistory.slice(0, 4).map((match) => {
-            const resultColor = match.matchResult === 'win' ? '#4ADE80' : match.matchResult === 'loss' ? '#F87171' : '#FBBF24';
-            const resultLabel = match.matchResult.toUpperCase();
+          {matches.length === 0 && !pendingMatch && (
+            <p className="font-mono text-[9px] text-[var(--text-muted)] py-2">
+              No matches logged yet.
+            </p>
+          )}
+
+          {matches.slice(0, 4).map((match) => {
+            const resultColor = match.match_result === 'win' ? '#4ADE80'
+              : match.match_result === 'loss' ? '#F87171'
+              : match.match_result === 'draw' ? '#FBBF24' : '#94A3B8';
+            const resultLabel = match.match_result === 'pending'
+              ? 'NO RESULT' : match.match_result.toUpperCase();
             return (
               <motion.div
                 key={match.id}
@@ -175,9 +187,9 @@ export const EventsPanel: React.FC = () => {
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-1.5 mb-0.5">
                     <span className="font-mono text-[9px] text-[var(--text-muted)] capitalize">{match.sport}</span>
-                    <span className="font-mono text-[9px]" style={{ color: 'var(--accent)' }}>+{match.pulseEarned} ⚡</span>
+                    <span className="font-mono text-[9px]" style={{ color: 'var(--accent)' }}>+{match.pulse_earned} ⚡</span>
                   </div>
-                  <p className="font-condensed font-semibold text-[12px] text-[var(--text-primary)] truncate leading-snug">{match.eventName}</p>
+                  <p className="font-condensed font-semibold text-[12px] text-[var(--text-primary)] truncate leading-snug">{match.event_name}</p>
                 </div>
                 <span className="px-2 py-0.5 rounded-full font-mono text-[8px] font-bold"
                   style={{ background: `${resultColor}18`, color: resultColor, border: `1px solid ${resultColor}55` }}>
@@ -187,19 +199,23 @@ export const EventsPanel: React.FC = () => {
             );
           })}
 
-          {/* Report pending card */}
-          <motion.div
-            whileHover={{ x: 3 }}
-            onClick={() => navigate(`/app/clashhub/report/match-pending-001`)}
-            className="flex flex-col gap-1 p-2.5 rounded-[12px] cursor-pointer transition-all"
-            style={{ background: 'rgba(251,191,36,0.03)', border: '1.5px dashed rgba(251,191,36,0.3)' }}
-          >
-            <div className="flex justify-between items-center">
-              <span className="font-mono text-[9px] font-bold" style={{ color: '#FBBF24' }}>⚠ PENDING REPORT</span>
-              <span className="font-mono text-[9px]" style={{ color: '#FBBF24' }}>Report now →</span>
-            </div>
-            <p className="font-condensed font-semibold text-[12px] text-[var(--text-primary)] leading-snug truncate">Iron Pulse FC vs Rapid XI</p>
-          </motion.div>
+          {/* Report pending card — only when a match is genuinely owed one. */}
+          {pendingMatch && (
+            <motion.div
+              whileHover={{ x: 3 }}
+              onClick={() => navigate(`/app/clashhub/report/${pendingMatch.matchId}`)}
+              className="flex flex-col gap-1 p-2.5 rounded-[12px] cursor-pointer transition-all"
+              style={{ background: 'rgba(251,191,36,0.03)', border: '1.5px dashed rgba(251,191,36,0.3)' }}
+            >
+              <div className="flex justify-between items-center">
+                <span className="font-mono text-[9px] font-bold" style={{ color: '#FBBF24' }}>⚠ PENDING REPORT</span>
+                <span className="font-mono text-[9px]" style={{ color: '#FBBF24' }}>Report now →</span>
+              </div>
+              <p className="font-condensed font-semibold text-[12px] text-[var(--text-primary)] leading-snug truncate">
+                {pendingMatch.eventName}
+              </p>
+            </motion.div>
+          )}
         </div>
       </div>
     </div>

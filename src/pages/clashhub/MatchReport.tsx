@@ -1,8 +1,11 @@
 import React from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useParams } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { ArrowLeft, ChevronRight } from 'lucide-react';
-import { useMatchReportStore, MOCK_PENDING_MATCH } from '../../store/matchReportStore';
+import toast from 'react-hot-toast';
+import { useMatchReportStore } from '../../store/matchReportStore';
+import { useSubmitReport, type ApiReportResult } from '@/hooks/useCareer';
+import { usePendingReport } from '@/hooks/usePendingReport';
 import { useAuthStore } from '../../store/authStore';
 import { SportStatForm } from '../../components/performance/SportStatForm';
 import { RatingSlider } from '../../components/performance/RatingSlider';
@@ -48,9 +51,12 @@ const RESULT_OPTIONS: Array<{
 ];
 
 // ─── MATCH CONTEXT CARD ───────────────────────────────────────────────────────
-const MatchContextCard: React.FC<{ matchResult: MatchResult | null; sport: string }> = ({
-  matchResult, sport,
-}) => {
+const MatchContextCard: React.FC<{
+  matchResult: MatchResult | null;
+  sport: string;
+  eventName: string;
+  matchDate: string | null;
+}> = ({ matchResult, sport, eventName, matchDate }) => {
   const resultStyle = matchResult ? {
     win:  { text: '#4ADE80', bg: 'rgba(74,222,128,0.10)',  label: 'WIN' },
     loss: { text: '#F87171', bg: 'rgba(248,113,113,0.10)', label: 'LOSS' },
@@ -70,14 +76,16 @@ const MatchContextCard: React.FC<{ matchResult: MatchResult | null; sport: strin
         <span className="text-[28px]">{sportEmoji[sport] ?? '🏅'}</span>
         <div>
           <p className="font-condensed font-semibold text-[15px] text-[var(--text-primary)]">
-            {MOCK_PENDING_MATCH.eventName}
+            {eventName}
           </p>
           <p className="font-mono text-[11px] text-[var(--text-muted)] capitalize">{sport}</p>
         </div>
       </div>
       <div className="flex items-center gap-3">
         <span className="font-mono text-[12px] text-[var(--text-muted)]">
-          {new Date(MOCK_PENDING_MATCH.date).toLocaleDateString('en', { month: 'short', day: 'numeric' })}
+          {matchDate
+            ? new Date(matchDate).toLocaleDateString('en', { month: 'short', day: 'numeric' })
+            : 'Date unknown'}
         </span>
         {resultStyle && (
           <span
@@ -173,9 +181,21 @@ export const MatchReport: React.FC = () => {
 
   const {
     currentStep, matchResult, matchRating, isMvp, sportStats,
-    setStep, setMatchResult, setRating, setMvp, submit,
-    showRewardScreen, submissionResult, setShowRewardScreen, reset,
+    setStep, setMatchResult, setRating, setMvp, reset,
   } = useMatchReportStore();
+
+  // The route is /app/clashhub/report/:matchId. When it is reached from the
+  // banner there is no param, so fall back to whichever match is actually owed a
+  // report — previously this was a hardcoded fixture id, meaning every submission
+  // attached itself to the same non-existent match.
+  const { matchId: routeMatchId } = useParams<{ matchId: string }>();
+  const { pendingMatch } = usePendingReport();
+  const matchId = routeMatchId ?? pendingMatch?.matchId ?? null;
+  const eventName = pendingMatch?.eventName ?? 'Match report';
+  const matchDate = pendingMatch?.date ?? null;
+
+  const { submitReport, submitting } = useSubmitReport();
+  const [reward, setReward] = React.useState<ApiReportResult | null>(null);
 
   // Determine sport from user profile or default to football
   const userSport: PerformanceSport =
@@ -192,13 +212,30 @@ export const MatchReport: React.FC = () => {
   };
 
   const handleSubmit = async () => {
-    await submit(userSport);
+    if (!matchId || submitting) {
+      if (!matchId) toast.error('No match to report against.');
+      return;
+    }
+    try {
+      // Pulse, SSR, chemistry and the level move all come back from the server;
+      // this used to compute them in the browser from a duplicate of the formulas.
+      const result = await submitReport({
+        matchId,
+        sport: userSport,
+        stats: sportStats,
+        matchRating,
+        isMvp,
+      });
+      setReward(result);
+    } catch {
+      // useSubmitReport surfaced the reason and the form keeps everything typed.
+    }
   };
 
   const handleCloseReward = () => {
-    setShowRewardScreen(false);
+    setReward(null);
     reset();
-    navigate('/app/events');
+    navigate('/app/clashhub/history');
   };
 
   // Slide direction for AnimatePresence
@@ -213,8 +250,21 @@ export const MatchReport: React.FC = () => {
     <>
       {/* Reward Screen Overlay */}
       <AnimatePresence>
-        {showRewardScreen && submissionResult && (
-          <PulseEarnedSummary result={submissionResult} onClose={handleCloseReward} />
+        {reward && (
+          <PulseEarnedSummary
+            result={{
+              pulseEarned: reward.pulse_earned,
+              ssrDelta: reward.ssr_delta,
+              chemistryDelta: reward.chemistry_delta,
+              leveledUp: reward.leveled_up,
+              oldLevel: reward.previous_level,
+              newLevel: reward.level,
+              // The tier the server put the athlete in, rather than the old
+              // "CONTENDER X" that appeared whenever more than 80 Pulse was earned.
+              rankUnlocked: reward.leveled_up ? reward.tier : undefined,
+            }}
+            onClose={handleCloseReward}
+          />
         )}
       </AnimatePresence>
 
@@ -240,7 +290,12 @@ export const MatchReport: React.FC = () => {
         </div>
 
         {/* Match context card — always visible */}
-        <MatchContextCard matchResult={matchResult} sport={userSport} />
+        <MatchContextCard
+          matchResult={matchResult}
+          sport={userSport}
+          eventName={eventName}
+          matchDate={matchDate}
+        />
 
         {/* Step content */}
         <AnimatePresence mode="wait" custom={dir}>
@@ -497,11 +552,11 @@ export const MatchReport: React.FC = () => {
               whileHover={{ scale: 1.03, boxShadow: '0 0 40px rgba(204,255,0,0.35)' }}
               whileTap={{ scale: 0.97 }}
               onClick={handleSubmit}
-              disabled={useMatchReportStore.getState().isSubmitting}
+              disabled={submitting || !matchId}
               className="flex-1 flex items-center justify-center gap-2 py-4 rounded-[14px] font-condensed font-semibold text-[20px] transition-all"
               style={{ background: 'var(--accent)', color: '#080808', height: '60px' }}
             >
-              {useMatchReportStore.getState().isSubmitting
+              {submitting
                 ? '⏳ Calculating your performance...'
                 : 'Submit Performance Report →'
               }
