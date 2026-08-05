@@ -109,10 +109,48 @@ async def submit_stats(match_id: str, user_id: str, payload: StatsSubmission) ->
 
 
 async def get_stats(match_id: str) -> dict:
-    return db.list_documents(
+    """
+    Every athlete's stat line for a match, with their profile joined in and the
+    blob summarised.
+
+    The rows hold a user_id and a JSON string, so the validation step had no name,
+    avatar or readable stat line to show — PostMatchReview listed three hardcoded
+    teammates with invented Pulse scores and tiers, and a hand-written summary
+    string for each. Both are real now, and the summary reuses the career service's
+    formatter so a stat line reads the same wherever it appears.
+    """
+    from app.services import career_service
+
+    res = db.list_documents(
         DB_ID, settings.collection_player_stats,
         queries=[Q.equal("match_id", match_id), Q.limit(50)],
     )
+    rows = res.get("documents", [])
+
+    enriched = []
+    for row in rows:
+        user_id = row.get("user_id", "")
+        profile = {}
+        if user_id:
+            try:
+                profile = db.get_document(DB_ID, settings.collection_users, user_id)
+            except Exception:
+                logger.warning("stats row %s has no profile for %s",
+                               row.get("$id"), user_id)
+        stats = career_service._parse_stats(row.get("stats_data"))
+        enriched.append({
+            **row,
+            "full_name": profile.get("full_name", ""),
+            "username": profile.get("username", ""),
+            "avatar_url": profile.get("avatar_url"),
+            "position": profile.get("position"),
+            "level": int(profile.get("level") or 1),
+            "pulse_score": float(profile.get("pulse_score") or 0),
+            "tier": pulse_math.tier_for(float(profile.get("pulse_score") or 0)),
+            "stat_summary": career_service._summary(row.get("sport", "generic"), stats),
+        })
+
+    return {"items": enriched, "documents": enriched, "total": res.get("total", len(enriched))}
 
 
 async def validate_stat(stat_id: str, validator_id: str, payload: StatValidate) -> dict:
