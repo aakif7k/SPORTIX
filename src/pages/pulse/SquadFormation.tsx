@@ -4,7 +4,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { AILoader } from '../../components/pulse/AILoader';
 import { useSquadSuggestion } from '@/hooks/useAI';
 import { useAutoSquad } from '@/hooks/useAutoSquad';
-import { useSquadMutations } from '@/hooks/useSquads';
+import { useSquadMutations, useMyInvites, useSquadActivity } from '@/hooks/useSquads';
 import { useSquadStore } from '../../store/squadStore';
 import { useAISettingsStore } from '../../store/aiSettingsStore';
 import { BadgeIcon } from '../../components/gamification/BadgeIcon';
@@ -138,6 +138,14 @@ export const SquadFormation: React.FC = () => {
   const { remaining: remainingGenerations } = useAutoSquad();
   const { suggestSquad, suggestion, suggesting } = useSquadSuggestion();
   const { createSquad, addMember } = useSquadMutations();
+  const {
+    invites, loading: invitesLoading, error: invitesError, refresh: refreshInvites,
+    respondToInvite, responding,
+  } = useMyInvites();
+  const {
+    activity, squadCount, loading: activityLoading, error: activityError,
+    refresh: refreshActivity,
+  } = useSquadActivity();
 
   const handleGenerateSquad = async () => {
     if (remainingGenerations <= 0 || suggesting) return;
@@ -589,22 +597,104 @@ export const SquadFormation: React.FC = () => {
   );
 
   // ─── Tab: Invitations ────────────────────────────────────────────────────
-  const renderInvitations = () => (
-    <div className="p-10 text-center rounded-[24px] border border-dashed border-border-muted bg-surface flex flex-col items-center gap-3">
-      <div className="w-14 h-14 rounded-full bg-base border border-border-muted flex items-center justify-center text-text-secondary">
-        <Users size={22} />
+  const renderInvitations = () => {
+    if (invitesLoading) {
+      return (
+        <div className="space-y-4" aria-busy="true" aria-label="Loading invitations">
+          {[0, 1].map(i => (
+            <div key={i} className="h-24 rounded-[18px] bg-elevated animate-shimmer" />
+          ))}
+        </div>
+      );
+    }
+
+    if (invitesError) {
+      return (
+        <div className="p-8 text-center rounded-[24px] border border-border-muted bg-surface space-y-3">
+          <h3 className="font-display text-[16px] uppercase tracking-wider text-text-primary">
+            Invitations did not load
+          </h3>
+          <p className="font-mono text-[11px] text-text-secondary">{invitesError.message}</p>
+          <button onClick={() => refreshInvites()}
+            className="px-4 py-2 rounded-[10px] bg-volt text-volt-text font-mono text-[10px] font-bold uppercase">
+            Retry
+          </button>
+        </div>
+      );
+    }
+
+    if (invites.length === 0) {
+      return (
+        <div className="p-10 text-center rounded-[24px] border border-dashed border-border-muted bg-surface flex flex-col items-center gap-3">
+          <div className="w-14 h-14 rounded-full bg-base border border-border-muted flex items-center justify-center text-text-secondary">
+            <Users size={22} />
+          </div>
+          <div>
+            <h3 className="font-display text-[16px] uppercase tracking-wider text-text-primary">
+              No invitations
+            </h3>
+            <p className="font-mono text-[11px] text-text-secondary mt-1 max-w-xs">
+              When a captain invites you to their squad, it appears here.
+            </p>
+          </div>
+        </div>
+      );
+    }
+
+    return (
+      <div className="space-y-4">
+        <div className="flex items-center justify-between">
+          <span className="font-mono text-[10px] text-text-secondary uppercase tracking-wider">
+            Pending Invitations ({invites.length})
+          </span>
+        </div>
+        {invites.map((inv, i) => (
+          <motion.div key={inv.$id} initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: i * 0.05 }}
+            className="p-5 rounded-[18px] border border-border-muted bg-surface shadow-card flex flex-col sm:flex-row items-start sm:items-center gap-4">
+            <img src={inv.inviter.avatar_url ?? undefined} alt={inv.inviter.full_name}
+              className="w-12 h-12 rounded-full object-cover border-2 border-border-muted flex-shrink-0" />
+            <div className="flex-1 min-w-0">
+              <div className="font-display text-[14px] text-text-primary truncate">{inv.squad.name}</div>
+              <div className="font-mono text-[10px] text-text-secondary mt-0.5">
+                {inv.inviter.full_name || 'A captain'} · {inv.squad.sport}
+                {inv.position ? ` · ${inv.position}` : ''}
+              </div>
+              {inv.message && (
+                <p className="font-mono text-[10px] text-text-secondary mt-1.5 italic truncate">
+                  &ldquo;{inv.message}&rdquo;
+                </p>
+              )}
+              <div className="flex items-center gap-2 mt-2">
+                <span className="font-mono text-[9px] text-volt">
+                  {inv.squad.members_count} member{inv.squad.members_count === 1 ? '' : 's'}
+                </span>
+                {/* A real deadline from the server, not "2h 30m" written into the page. */}
+                <span className="font-mono text-[9px] text-text-muted">
+                  expires in {Math.max(1, Math.round(inv.expires_in_seconds / 3600))}h
+                </span>
+              </div>
+            </div>
+            <div className="flex gap-2 flex-shrink-0 self-stretch sm:self-auto">
+              <button
+                onClick={() => void respondToInvite({ inviteId: inv.$id, accept: true })}
+                disabled={responding}
+                className="flex-1 sm:flex-none px-4 py-2 rounded-[10px] bg-volt text-volt-text font-condensed font-bold text-[13px] uppercase tracking-wider disabled:opacity-40"
+              >
+                Accept
+              </button>
+              <button
+                onClick={() => void respondToInvite({ inviteId: inv.$id, accept: false })}
+                disabled={responding}
+                className="flex-1 sm:flex-none px-4 py-2 rounded-[10px] bg-elevated border border-border-muted text-text-secondary font-condensed font-bold text-[13px] uppercase tracking-wider hover:text-text-primary disabled:opacity-40"
+              >
+                Decline
+              </button>
+            </div>
+          </motion.div>
+        ))}
       </div>
-      <div>
-        <h3 className="font-display text-[16px] uppercase tracking-wider text-text-primary">
-          No invitations
-        </h3>
-        <p className="font-mono text-[11px] text-text-secondary mt-1 max-w-xs">
-          Squad invitations are not available yet. Captains add athletes directly
-          from a squad&apos;s roster in the meantime.
-        </p>
-      </div>
-    </div>
-  );
+    );
+  };
 
   // ─── Tab: AI Insights ────────────────────────────────────────────────────
   const renderInsights = () => {
@@ -686,22 +776,90 @@ export const SquadFormation: React.FC = () => {
   };
 
   // ─── Tab: Activity Feed ──────────────────────────────────────────────────
-  const renderActivity = () => (
-    <div className="p-10 text-center rounded-[24px] border border-dashed border-border-muted bg-surface flex flex-col items-center gap-3">
-      <div className="w-14 h-14 rounded-full bg-base border border-border-muted flex items-center justify-center text-text-secondary">
-        <Activity size={22} />
+  const renderActivity = () => {
+    if (activityLoading) {
+      return (
+        <div className="space-y-3" aria-busy="true" aria-label="Loading squad activity">
+          {[0, 1, 2].map(i => (
+            <div key={i} className="h-16 rounded-[14px] bg-elevated animate-shimmer" />
+          ))}
+        </div>
+      );
+    }
+
+    if (activityError) {
+      return (
+        <div className="p-8 text-center rounded-[24px] border border-border-muted bg-surface space-y-3">
+          <h3 className="font-display text-[16px] uppercase tracking-wider text-text-primary">
+            Activity did not load
+          </h3>
+          <p className="font-mono text-[11px] text-text-secondary">{activityError.message}</p>
+          <button onClick={() => refreshActivity()}
+            className="px-4 py-2 rounded-[10px] bg-volt text-volt-text font-mono text-[10px] font-bold uppercase">
+            Retry
+          </button>
+        </div>
+      );
+    }
+
+    if (activity.length === 0) {
+      return (
+        <div className="p-10 text-center rounded-[24px] border border-dashed border-border-muted bg-surface flex flex-col items-center gap-3">
+          <div className="w-14 h-14 rounded-full bg-base border border-border-muted flex items-center justify-center text-text-secondary">
+            <Activity size={22} />
+          </div>
+          <div>
+            <h3 className="font-display text-[16px] uppercase tracking-wider text-text-primary">
+              Nothing has happened yet
+            </h3>
+            <p className="font-mono text-[11px] text-text-secondary mt-1 max-w-xs">
+              {squadCount === 0
+                ? 'Join or form a squad and its posts, sessions and achievements appear here.'
+                : 'Posts, scheduled sessions, announcements and achievements from your squads will show up here.'}
+            </p>
+          </div>
+        </div>
+      );
+    }
+
+    return (
+      <div className="space-y-3">
+        <div className="font-mono text-[10px] text-text-muted uppercase tracking-wider mb-4">
+          Squad Activity Feed · {squadCount} squad{squadCount === 1 ? '' : 's'}
+        </div>
+        {activity.map((item, i) => (
+          <motion.div key={item.id} initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: i * 0.04 }}
+            className="flex items-start gap-3 p-4 rounded-[14px] border border-border-muted bg-surface shadow-card">
+            <div
+              style={{
+                backgroundColor:
+                  item.type === 'achievement' ? 'var(--gold-surface)'
+                    : item.type === 'event' ? 'var(--volt-dim)'
+                      : 'var(--bg-elevated)',
+              }}
+              className="w-7 h-7 rounded-full flex items-center justify-center flex-shrink-0 text-text-secondary"
+            >
+              {item.type === 'achievement' ? <Star size={12} />
+                : item.type === 'event' ? <CheckCircle2 size={12} />
+                  : item.type === 'message' ? <MessageSquare size={12} />
+                    : <Activity size={12} />}
+            </div>
+            <div className="flex-1 min-w-0">
+              <p className="font-mono text-[11px] text-text-primary leading-snug">{item.text}</p>
+              {item.detail && (
+                <p className="font-mono text-[10px] text-text-secondary mt-0.5 truncate">{item.detail}</p>
+              )}
+              <span className="font-mono text-[9px] text-text-muted mt-1 block">
+                {new Date(item.at).toLocaleString([], {
+                  month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit',
+                })}
+              </span>
+            </div>
+          </motion.div>
+        ))}
       </div>
-      <div>
-        <h3 className="font-display text-[16px] uppercase tracking-wider text-text-primary">
-          No activity feed yet
-        </h3>
-        <p className="font-mono text-[11px] text-text-secondary mt-1 max-w-xs">
-          Each squad&apos;s own feed, schedule, chat and achievements are live on its
-          page — they are not yet combined into one stream here.
-        </p>
-      </div>
-    </div>
-  );
+    );
+  };
 
   // ─── Tab: Chemistry Overview ─────────────────────────────────────────────
   const renderChemistry = () => {
@@ -802,7 +960,11 @@ export const SquadFormation: React.FC = () => {
                   {generatedSquads.length}
                 </span>
               )}
-              {/* The invitations badge always read "2", from the fixture. */}
+              {tab.id === 'invitations' && invites.length > 0 && (
+                <span className="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-[#f97316] text-white text-[8px] font-bold flex items-center justify-center">
+                  {invites.length}
+                </span>
+              )}
             </button>
           ))}
         </div>

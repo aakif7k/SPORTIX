@@ -1,4 +1,5 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
+import toast from 'react-hot-toast';
 import { useParams, useNavigate } from 'react-router-dom';
 import { SquadBanner } from '../../components/pulse/SquadBanner';
 import { ChemistryBar } from '../../components/pulse/ChemistryBar';
@@ -8,6 +9,7 @@ import {
   useSquadEvents, useSquadPosts, useSquadAchievements,
 } from '@/hooks/useSquads';
 import { useAuthStore } from '../../store/authStore';
+import { api, ApiError } from '@/lib/api';
 import { 
   Lock, Trophy, Calendar, Clipboard, ArrowUpRight, 
   Plus, UserCheck, MessageSquare, ThumbsUp, Send, Image, 
@@ -21,6 +23,7 @@ export const SquadOverview: React.FC = () => {
   const { squad, members, loading, error } = useSquadDetail(id);
   const { chemistry } = useSquadChemistry(id);
   const { updateTactics, voteLeadership } = useSquadMutations(id);
+  const [inviteOpen, setInviteOpen] = useState(false);
   const { events, createEvent, voteEvent } = useSquadEvents(id);
   const { posts, createPost, likePost } = useSquadPosts(id);
   const { achievements } = useSquadAchievements(id);
@@ -194,9 +197,25 @@ export const SquadOverview: React.FC = () => {
 
       {/* Player Cards Grid */}
       <div className="space-y-4">
-        <h3 className="font-display text-[18px] tracking-[3px] text-text-secondary uppercase">
-          SQUAD ROSTER ({members.length})
-        </h3>
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <h3 className="font-display text-[18px] tracking-[3px] text-text-secondary uppercase">
+            SQUAD ROSTER ({members.length})
+          </h3>
+          {/* Until now a captain could only add an athlete who was already willing;
+              there was no way to ask. */}
+          {isCaptain && (
+            <button
+              onClick={() => setInviteOpen(o => !o)}
+              className="px-3 py-1.5 rounded-[10px] bg-elevated border border-border-muted font-mono text-[10px] text-text-secondary hover:text-text-primary hover:border-volt/40 uppercase tracking-wider transition-colors"
+            >
+              {inviteOpen ? 'Close' : 'Invite athlete'}
+            </button>
+          )}
+        </div>
+
+        {isCaptain && inviteOpen && (
+          <InvitePanel squadId={squad.$id} sport={squad.sport} onDone={() => setInviteOpen(false)} />
+        )}
         <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-6">
           {members.map((member) => (
             <div key={member.user_id} className="relative group">
@@ -754,6 +773,111 @@ export const SquadOverview: React.FC = () => {
           </div>
         )}
       </div>
+    </div>
+  );
+};
+
+/**
+ * Search for an athlete and invite them.
+ *
+ * Reuses the people search the messages composer uses; the invitation itself is a
+ * squad_invites row with a pending state, so the athlete decides rather than being
+ * added without being asked.
+ */
+const InvitePanel: React.FC<{
+  squadId: string;
+  sport: string;
+  onDone: () => void;
+}> = ({ squadId, sport, onDone }) => {
+  const [query, setQuery] = useState('');
+  const [results, setResults] = useState<Array<{
+    id: string; name: string; username: string; avatar: string | null; sport: string;
+  }>>([]);
+  const [searching, setSearching] = useState(false);
+  const [sending, setSending] = useState<string | null>(null);
+
+  const needle = query.trim();
+  const tooShort = needle.length < 2;
+
+  useEffect(() => {
+    if (tooShort) return;
+    const controller = new AbortController();
+    const timer = setTimeout(() => {
+      setSearching(true);
+      api.get<{ data: { users?: Array<Record<string, unknown>> } }>(
+        `/api/search/?type=users&q=${encodeURIComponent(needle)}`,
+        { signal: controller.signal },
+      ).then(res => {
+        setResults((res.data?.users ?? []).map(u => ({
+          id: String(u.$id ?? ''),
+          name: String(u.full_name ?? ''),
+          username: String(u.username ?? ''),
+          avatar: (u.avatar_url as string | null) ?? null,
+          sport: String(u.sport ?? ''),
+        })).filter(u => u.id));
+        setSearching(false);
+      }).catch(() => {
+        if (!controller.signal.aborted) { setResults([]); setSearching(false); }
+      });
+    }, 300);
+    return () => { clearTimeout(timer); controller.abort(); };
+  }, [needle, tooShort]);
+
+  const send = async (userId: string) => {
+    setSending(userId);
+    try {
+      await api.post(`/api/squads/${squadId}/invites`, { user_id: userId });
+      toast.success('Invitation sent');
+      onDone();
+    } catch (e) {
+      toast.error((e as ApiError).message || 'Could not send that invitation');
+    } finally {
+      setSending(null);
+    }
+  };
+
+  return (
+    <div className="p-4 rounded-[16px] bg-surface border border-border-muted space-y-3">
+      <input
+        value={query}
+        onChange={e => setQuery(e.target.value)}
+        placeholder={`Search ${sport} athletes by name or handle...`}
+        className="w-full h-10 rounded-[10px] bg-base border border-border-muted px-3 font-mono text-[12px] text-text-primary focus:outline-none focus:border-volt"
+      />
+      {tooShort ? (
+        <p className="font-mono text-[10px] text-text-muted">
+          Type at least two characters.
+        </p>
+      ) : searching ? (
+        <div className="space-y-2" aria-busy="true" aria-label="Searching athletes">
+          {[0, 1].map(i => <div key={i} className="h-12 rounded-[10px] bg-elevated animate-shimmer" />)}
+        </div>
+      ) : results.length === 0 ? (
+        <p className="font-mono text-[10px] text-text-muted">No athletes found.</p>
+      ) : (
+        <div className="space-y-2 max-h-64 overflow-y-auto">
+          {results.map(athlete => (
+            <div key={athlete.id}
+              className="flex items-center gap-3 p-2 rounded-[10px] bg-elevated border border-border-muted">
+              <img src={athlete.avatar ?? undefined} alt={athlete.name}
+                className="w-8 h-8 rounded-full object-cover flex-shrink-0" />
+              <div className="flex-1 min-w-0">
+                <p className="font-mono text-[11px] text-text-primary truncate">{athlete.name}</p>
+                <p className="font-mono text-[9px] text-text-muted truncate">
+                  @{athlete.username}{athlete.sport ? ` · ${athlete.sport}` : ''}
+                </p>
+              </div>
+              <button
+                onClick={() => void send(athlete.id)}
+                disabled={sending !== null}
+                className="px-3 py-1.5 rounded-[8px] bg-volt text-volt-text font-mono text-[9px] font-bold uppercase disabled:opacity-40"
+              >
+                {sending === athlete.id ? 'Sending…' : 'Invite'}
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 };

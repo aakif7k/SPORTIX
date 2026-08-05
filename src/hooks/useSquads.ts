@@ -407,3 +407,99 @@ export function useSquadAchievements(squadId?: string) {
     error: (query.error as ApiError | null) ?? null,
   };
 }
+
+// ─── Invitations and the activity feed ────────────────────────────────────────
+// SquadFormation's invitations tab held two fabricated invites and its activity tab
+// five fabricated lines. Both have backends now.
+
+export interface ApiSquadInvite {
+  $id: string;
+  squad_id: string;
+  invited_user_id: string;
+  invited_by: string;
+  status: 'pending' | 'accepted' | 'declined' | 'expired';
+  position: string | null;
+  message: string | null;
+  expires_at: string | null;
+  created_at: string;
+  squad: {
+    squad_id: string;
+    name: string;
+    sport: string;
+    logo_url: string | null;
+    chemistry_score: number;
+    members_count: number;
+  };
+  inviter: {
+    user_id: string;
+    full_name: string;
+    username: string;
+    avatar_url: string | null;
+    level: number;
+    pulse_score: number;
+  };
+  /** Status alone cannot say this: a row can be `pending` and long past its deadline. */
+  is_expired: boolean;
+  expires_in_seconds: number;
+}
+
+export interface ApiSquadActivity {
+  id: string;
+  type: 'post' | 'event' | 'message' | 'achievement';
+  squad_id: string;
+  squad_name: string;
+  text: string;
+  detail: string;
+  at: string;
+}
+
+export function useMyInvites() {
+  const queryClient = useQueryClient();
+
+  const query = useQuery<ApiSquadInvite[], ApiError>({
+    queryKey: ['squads', 'invites', 'mine'],
+    queryFn: async () => unwrapList<ApiSquadInvite>(
+      (await api.get<{ data: unknown }>('/api/squads/invites/mine')).data,
+    ),
+  });
+
+  const respond = useMutation({
+    mutationFn: (args: { inviteId: string; accept: boolean }) =>
+      api.post(`/api/squads/invites/${args.inviteId}/respond`, { accept: args.accept }),
+    onSuccess: (_res, args) => {
+      toast.success(args.accept ? 'You joined the squad' : 'Invitation declined');
+      // Accepting creates a membership, so the squad lists move too.
+      queryClient.invalidateQueries({ queryKey: squadKeys.all });
+    },
+    onError: (e: ApiError) => toast.error(e.message || 'Could not respond to that invitation'),
+  });
+
+  return {
+    invites: query.data ?? [],
+    loading: query.isPending,
+    error: (query.error as ApiError | null) ?? null,
+    refresh: query.refetch,
+    respondToInvite: respond.mutateAsync,
+    responding: respond.isPending,
+  };
+}
+
+export function useSquadActivity() {
+  const query = useQuery<{ items: ApiSquadActivity[]; squads: number }, ApiError>({
+    queryKey: ['squads', 'me', 'activity'],
+    queryFn: async () => {
+      const res = await api.get<{ data: { items?: ApiSquadActivity[]; squads?: number } }>(
+        '/api/squads/me/activity',
+      );
+      return { items: res.data?.items ?? [], squads: Number(res.data?.squads ?? 0) };
+    },
+  });
+
+  return {
+    activity: query.data?.items ?? [],
+    squadCount: query.data?.squads ?? 0,
+    loading: query.isPending,
+    error: (query.error as ApiError | null) ?? null,
+    refresh: query.refetch,
+  };
+}
