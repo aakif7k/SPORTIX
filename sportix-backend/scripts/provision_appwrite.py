@@ -27,7 +27,12 @@ from appwrite.role import Role
 from appwrite.enums.index_type import IndexType
 from appwrite.enums.compression import Compression
 
-from app.core.appwrite import db, storage_svc, DB_ID
+from app.core.appwrite import get_schema_service, storage_svc, DB_ID
+
+# Collection and attribute management still goes through the deprecated
+# Databases service: TablesDB's equivalents are a different surface, and this
+# script runs manually rather than per request. The runtime is on TablesDB.
+db = get_schema_service()
 from app.core.config import settings
 from scripts.schema import ADJUSTMENTS, BUCKETS, COLLECTIONS, Attr, Bucket, Collection, Index, summary
 

@@ -46,7 +46,7 @@ async def test_chemistry_delta_matches_the_ported_formula(is_mvp, result, rating
 
 
 async def test_apply_match_delta_clamps_and_recomputes_overall(appwrite):
-    appwrite.when(r"/collections/squads/documents/", {
+    appwrite.when(r"/(?:collections|tables)/squads/(?:documents|rows)/", {
         "$id": "squad1", "trust": 99.0, "coordination": 50.0,
         "communication": 50.0, "chemistry_score": 50.0,
     })
@@ -58,7 +58,7 @@ async def test_apply_match_delta_clamps_and_recomputes_overall(appwrite):
 
 # ── Validation consensus ──────────────────────────────────────────────────────
 async def test_a_validator_cannot_vote_on_their_own_stats(appwrite):
-    appwrite.when(r"/collections/player_stats/documents/", {
+    appwrite.when(r"/(?:collections|tables)/player_stats/(?:documents|rows)/", {
         "$id": "stat1", "user_id": "user123",
     })
     with pytest.raises(PermissionError):
@@ -76,7 +76,7 @@ async def test_an_unknown_vote_is_rejected(appwrite):
     (["dispute", "dispute"], "disputed"),
 ])
 async def test_consensus_status_follows_the_vote_mix(appwrite, votes, status):
-    appwrite.when(r"/collections/stat_validations/documents$",
+    appwrite.when(r"/(?:collections|tables)/stat_validations/(?:documents|rows)$",
                   {"documents": [{"$id": f"v{i}", "vote": v} for i, v in enumerate(votes)],
                    "total": len(votes)})
     result = await validation_service.apply_consensus("stat1")
@@ -84,7 +84,7 @@ async def test_consensus_status_follows_the_vote_mix(appwrite, votes, status):
 
 
 async def test_consensus_counts_each_kind(appwrite):
-    appwrite.when(r"/collections/stat_validations/documents$",
+    appwrite.when(r"/(?:collections|tables)/stat_validations/(?:documents|rows)$",
                   {"documents": [{"vote": "confirm"}, {"vote": "confirm"},
                                  {"vote": "partial"}, {"vote": "dispute"}], "total": 4})
     r = await validation_service.apply_consensus("stat1")
@@ -94,21 +94,21 @@ async def test_consensus_counts_each_kind(appwrite):
 
 # ── Coins ─────────────────────────────────────────────────────────────────────
 async def test_spending_more_than_the_balance_is_refused(appwrite):
-    appwrite.when(r"/collections/user_coins/documents$",
+    appwrite.when(r"/(?:collections|tables)/user_coins/(?:documents|rows)$",
                   {"documents": [{"$id": "w1", "user_id": "u1", "balance": 10}], "total": 1})
     with pytest.raises(ValueError, match="Insufficient"):
         await coins_service.spend("u1", 50, "too expensive")
 
 
 async def test_awarding_credits_the_wallet(appwrite):
-    appwrite.when(r"/collections/user_coins/documents$",
+    appwrite.when(r"/(?:collections|tables)/user_coins/(?:documents|rows)$",
                   {"documents": [{"$id": "w1", "user_id": "u1", "balance": 10}], "total": 1})
     out = await coins_service.award("u1", 15, "mission reward")
     assert out["balance"] == 25
 
 
 async def test_spending_debits_the_wallet(appwrite):
-    appwrite.when(r"/collections/user_coins/documents$",
+    appwrite.when(r"/(?:collections|tables)/user_coins/(?:documents|rows)$",
                   {"documents": [{"$id": "w1", "user_id": "u1", "balance": 40}], "total": 1})
     out = await coins_service.spend("u1", 15, "a purchase")
     assert out["balance"] == 25
@@ -121,20 +121,20 @@ def _members(*ids):
 
 
 async def test_only_members_may_vote_on_leadership(appwrite):
-    appwrite.when(r"/collections/squad_members/documents$", _members("a", "b", "c"))
+    appwrite.when(r"/(?:collections|tables)/squad_members/(?:documents|rows)$", _members("a", "b", "c"))
     with pytest.raises(PermissionError):
         await squad_service.vote_leadership("sq1", "a", "outsider", "approve")
 
 
 async def test_the_candidate_must_be_a_member(appwrite):
-    appwrite.when(r"/collections/squad_members/documents$", _members("a", "b", "c"))
+    appwrite.when(r"/(?:collections|tables)/squad_members/(?:documents|rows)$", _members("a", "b", "c"))
     with pytest.raises(ValueError):
         await squad_service.vote_leadership("sq1", "stranger", "a", "approve")
 
 
 async def test_a_minority_does_not_promote(appwrite):
-    appwrite.when(r"/collections/squad_members/documents$", _members("a", "b", "c", "d"))
-    appwrite.when(r"/collections/leadership_votes/documents$",
+    appwrite.when(r"/(?:collections|tables)/squad_members/(?:documents|rows)$", _members("a", "b", "c", "d"))
+    appwrite.when(r"/(?:collections|tables)/leadership_votes/(?:documents|rows)$",
                   {"documents": [{"$id": "v1", "candidate_id": "b", "voter_id": "a",
                                   "vote": "approve"}], "total": 1})
     out = await squad_service.vote_leadership("sq1", "b", "a", "approve")
@@ -143,13 +143,13 @@ async def test_a_minority_does_not_promote(appwrite):
 
 
 async def test_a_strict_majority_promotes_the_candidate(appwrite):
-    appwrite.when(r"/collections/squad_members/documents$", _members("a", "b", "c"))
-    appwrite.when(r"/collections/leadership_votes/documents$",
+    appwrite.when(r"/(?:collections|tables)/squad_members/(?:documents|rows)$", _members("a", "b", "c"))
+    appwrite.when(r"/(?:collections|tables)/leadership_votes/(?:documents|rows)$",
                   {"documents": [
                       {"$id": "v1", "candidate_id": "b", "voter_id": "a", "vote": "approve"},
                       {"$id": "v2", "candidate_id": "b", "voter_id": "c", "vote": "approve"},
                   ], "total": 2})
-    appwrite.when(r"/collections/squads/documents/", {"$id": "sq1", "captain_id": "a"})
+    appwrite.when(r"/(?:collections|tables)/squads/(?:documents|rows)/", {"$id": "sq1", "captain_id": "a"})
     out = await squad_service.vote_leadership("sq1", "b", "a", "approve")
     assert out["new_captain_id"] == "b"
     assert out["previous_captain_id"] == "a"
@@ -157,8 +157,8 @@ async def test_a_strict_majority_promotes_the_candidate(appwrite):
 
 async def test_leadership_votes_never_touch_squad_members(appwrite):
     """B5 regression: these rows used to be written into squad_members."""
-    appwrite.when(r"/collections/squad_members/documents$", _members("a", "b", "c"))
-    appwrite.when(r"/collections/leadership_votes/documents$", {"documents": [], "total": 0})
+    appwrite.when(r"/(?:collections|tables)/squad_members/(?:documents|rows)$", _members("a", "b", "c"))
+    appwrite.when(r"/(?:collections|tables)/leadership_votes/(?:documents|rows)$", {"documents": [], "total": 0})
     await squad_service.vote_leadership("sq1", "b", "a", "approve")
     writes = [(m, p) for m, p in appwrite.requests
               if m == "post" and p.endswith("/squad_members/documents")]
@@ -167,7 +167,7 @@ async def test_leadership_votes_never_touch_squad_members(appwrite):
 
 # ── Levels ────────────────────────────────────────────────────────────────────
 async def test_sync_level_reports_a_promotion(appwrite):
-    appwrite.when(r"/collections/user_levels/documents$",
+    appwrite.when(r"/(?:collections|tables)/user_levels/(?:documents|rows)$",
                   {"documents": [{"$id": "l1", "user_id": "u1", "current_level": 2,
                                   "total_pulse_ever": 150.0, "level_ups_count": 1}], "total": 1})
     out = await level_service.sync_level("u1", 350.0, 350.0)
@@ -175,7 +175,7 @@ async def test_sync_level_reports_a_promotion(appwrite):
 
 
 async def test_sync_level_is_silent_when_nothing_changed(appwrite):
-    appwrite.when(r"/collections/user_levels/documents$",
+    appwrite.when(r"/(?:collections|tables)/user_levels/(?:documents|rows)$",
                   {"documents": [{"$id": "l1", "user_id": "u1", "current_level": 2,
                                   "total_pulse_ever": 150.0}], "total": 1})
     out = await level_service.sync_level("u1", 150.0, 150.0)
@@ -183,13 +183,13 @@ async def test_sync_level_is_silent_when_nothing_changed(appwrite):
 
 
 async def test_lifetime_pulse_defaults_to_zero_for_a_new_account(appwrite):
-    appwrite.when(r"/collections/user_levels/documents$", {"documents": [], "total": 0})
+    appwrite.when(r"/(?:collections|tables)/user_levels/(?:documents|rows)$", {"documents": [], "total": 0})
     assert await level_service.get_lifetime_pulse("nobody") == 0.0
 
 
 # ── Missions ──────────────────────────────────────────────────────────────────
 async def test_claiming_an_incomplete_mission_is_refused(appwrite):
-    appwrite.when(r"/collections/user_missions/documents/",
+    appwrite.when(r"/(?:collections|tables)/user_missions/(?:documents|rows)/",
                   {"$id": "m1", "user_id": "user123", "progress": 0, "target": 3,
                    "is_claimed": False, "mission_key": "view_feed"})
     with pytest.raises(ValueError, match="not yet completed"):
@@ -197,14 +197,14 @@ async def test_claiming_an_incomplete_mission_is_refused(appwrite):
 
 
 async def test_claiming_someone_elses_mission_is_refused(appwrite):
-    appwrite.when(r"/collections/user_missions/documents/",
+    appwrite.when(r"/(?:collections|tables)/user_missions/(?:documents|rows)/",
                   {"$id": "m1", "user_id": "someone_else", "progress": 3, "target": 3})
     with pytest.raises(PermissionError):
         await mission_service.claim("m1", "user123")
 
 
 async def test_a_mission_cannot_be_claimed_twice(appwrite):
-    appwrite.when(r"/collections/user_missions/documents/",
+    appwrite.when(r"/(?:collections|tables)/user_missions/(?:documents|rows)/",
                   {"$id": "m1", "user_id": "user123", "progress": 1, "target": 1,
                    "is_claimed": True, "mission_key": "post_update"})
     with pytest.raises(ValueError, match="Already claimed"):
@@ -221,7 +221,7 @@ async def test_completion_is_derived_not_stored(appwrite):
 async def test_streak_resets_after_a_missed_day(appwrite):
     from datetime import date, timedelta
     long_ago = (date.today() - timedelta(days=10)).isoformat()
-    appwrite.when(r"/collections/user_streaks/documents$",
+    appwrite.when(r"/(?:collections|tables)/user_streaks/(?:documents|rows)$",
                   {"documents": [{"$id": "s1", "user_id": "u1", "current_streak": 9,
                                   "longest_streak": 9, "last_active_date": long_ago}],
                    "total": 1})
@@ -233,7 +233,7 @@ async def test_streak_resets_after_a_missed_day(appwrite):
 async def test_streak_continues_from_yesterday(appwrite):
     from datetime import date, timedelta
     yesterday = (date.today() - timedelta(days=1)).isoformat()
-    appwrite.when(r"/collections/user_streaks/documents$",
+    appwrite.when(r"/(?:collections|tables)/user_streaks/(?:documents|rows)$",
                   {"documents": [{"$id": "s1", "user_id": "u1", "current_streak": 4,
                                   "longest_streak": 7, "last_active_date": yesterday}],
                    "total": 1})
@@ -243,7 +243,7 @@ async def test_streak_continues_from_yesterday(appwrite):
 
 async def test_streak_is_not_double_counted_on_the_same_day(appwrite):
     from datetime import date
-    appwrite.when(r"/collections/user_streaks/documents$",
+    appwrite.when(r"/(?:collections|tables)/user_streaks/(?:documents|rows)$",
                   {"documents": [{"$id": "s1", "user_id": "u1", "current_streak": 4,
                                   "last_active_date": date.today().isoformat()}], "total": 1})
     await mission_service._update_streak("u1")

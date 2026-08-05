@@ -79,8 +79,17 @@ def _doc(**extra) -> dict:
 
 
 def _empty_list() -> dict:
-    return {"documents": [], "total": 0, "attributes": [], "indexes": [],
-            "files": [], "users": [], "buckets": [], "collections": []}
+    """
+    An empty listing under every key a caller might read.
+
+    `rows` sits alongside `documents` because the runtime now goes through
+    TablesDB, whose list endpoint is /tablesdb/{db}/tables/{t}/rows and whose
+    response nests under `rows`. Providing both keeps this double honest for either
+    path rather than making the shim's normalisation invisible to the tests.
+    """
+    return {"documents": [], "rows": [], "total": 0, "attributes": [],
+            "indexes": [], "files": [], "users": [], "buckets": [],
+            "collections": [], "tables": []}
 
 
 class RecordingCall:
@@ -107,7 +116,13 @@ class RecordingCall:
             return {}
         if m == "get":
             # A collection listing vs a single resource.
-            if re.search(r"/(documents|files|users|buckets|collections|sessions)/?$", path):
+            # TablesDB renamed the list segments: documents -> rows,
+            # collections -> tables. Both are matched, because schema management
+            # still uses the older paths.
+            if re.search(
+                r"/(documents|rows|files|users|buckets|collections|tables|sessions)/?$",
+                path,
+            ):
                 return _empty_list()
             if path.endswith("/jwt"):
                 return {"jwt": "mock.jwt.token"}
@@ -131,7 +146,7 @@ def appwrite(monkeypatch) -> RecordingCall:
 
     Autouse, so no test can accidentally reach the network. Yields the recorder so
     a test can assert what was requested, or register canned responses with
-    `appwrite.when(r"/documents", {...})`.
+    `appwrite.when(r"/(?:documents|rows)", {...})`.
     """
     recorder = RecordingCall()
     monkeypatch.setattr(Client, "call", recorder, raising=True)
