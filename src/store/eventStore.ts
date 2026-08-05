@@ -1,6 +1,5 @@
 import { create } from 'zustand';
 import type { Event, AITeamResult, BracketRound, EventStatus } from '../types';
-import { MOCK_EVENTS } from '../services/mockData';
 
 interface EventState {
   events: Event[];
@@ -24,7 +23,12 @@ interface EventState {
 }
 
 export const useEventStore = create<EventState>((set, get) => ({
-  events: MOCK_EVENTS,
+  // Was seeded with MOCK_EVENTS, which is how eight fixtures ended up being
+  // "the events" on any screen that read this store. Events come from the API;
+  // what is left here is the AutoSquad generation state AITeamBuilder needs,
+  // and the client-side event actions below are dead weight kept only until
+  // that page moves onto a server-side AI proxy.
+  events: [],
   activeEvent: null,
   aiTeamResult: null,
   isGenerating: false,

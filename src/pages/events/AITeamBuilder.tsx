@@ -3,9 +3,10 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Zap, RefreshCw, CheckCircle, Users, Terminal } from 'lucide-react';
 import { useEventStore } from '../../store/eventStore';
+import { useEvent } from '@/hooks/useEvents';
 import { generateTeam } from '../../services/aiService';
 import { SPORT_CATEGORIES } from '@/constants/sports';
-import type { AITeamResult } from '../../types';
+import type { AITeamResult, SportCategory, ExperienceLevel } from '../../types';
 import { Avatar } from '../../components/ui/Avatar';
 import { Button } from '../../components/ui/Button';
 import { Spinner } from '../../components/ui/index';
@@ -14,13 +15,15 @@ import { ProgressBar } from '../../components/ui/index';
 export const AITeamBuilder: React.FC = () => {
   const { id } = useParams();
   const navigate = useNavigate();
-  const { events, setAITeamResult, setIsGenerating } = useEventStore();
+  const { setAITeamResult, setIsGenerating } = useEventStore();
   const [logs, setLogs] = useState<string[]>([]);
   const [phase, setPhase] = useState<'idle' | 'analyzing' | 'done'>('idle');
   const [activeTeam, setActiveTeam] = useState<AITeamResult | null>(null);
   const logRef = useRef<HTMLDivElement>(null);
 
-  const event = events.find(e => e.id === id) || events[0];
+  // The store held a copy of every event seeded from mockData; the event this
+  // page is about comes from the API.
+  const { event } = useEvent(id);
   const sportData = SPORT_CATEGORIES.find(s => s.id === event?.sport);
 
   const addLog = (log: string) => {
@@ -33,7 +36,16 @@ export const AITeamBuilder: React.FC = () => {
     setIsGenerating(true);
     setLogs([]);
     try {
-      const result = await generateTeam(event.sport, event.skillLevel, event.id, addLog);
+      if (!event) return;
+      // The API's skill levels and this page's legacy union are different
+      // vocabularies (semi_pro/pro against semi-pro/professional), so they are
+      // mapped here at the one call site rather than either side being loosened.
+      const legacyLevel: ExperienceLevel = ({
+        beginner: 'amateur', amateur: 'amateur', semi_pro: 'semi-pro',
+        pro: 'professional', elite: 'elite',
+      } as const)[event.skill_level] ?? 'amateur';
+      const result = await generateTeam(
+        event.sport as SportCategory, legacyLevel, event.$id, addLog);
       setActiveTeam(result);
       setAITeamResult(result);
       setPhase('done');

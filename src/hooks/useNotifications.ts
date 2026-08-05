@@ -42,6 +42,30 @@ function unwrapList(data: unknown): ApiNotification[] {
   return Array.isArray(d) ? (d as ApiNotification[]) : [];
 }
 
+/**
+ * Just the unread badge count.
+ *
+ * The Navbar renders on every page (twice — desktop and mobile), so it must not
+ * pull the whole notification list to show a number. This shares the count query
+ * key with useNotifications, so the two dedupe and a mutation there moves the
+ * badge here.
+ */
+export function useUnreadCount(): number {
+  const { user } = useAuth();
+  const query = useQuery<number, ApiError>({
+    queryKey: notificationKeys.unreadCount(),
+    enabled: Boolean(user?.id),
+    queryFn: async () => {
+      const res = await api.get<{ data: { count?: number; unread_count?: number } }>(
+        '/api/notifications/unread-count',
+      );
+      return res.data?.count ?? res.data?.unread_count ?? 0;
+    },
+  });
+  return query.data ?? 0;
+}
+
+
 export function useNotifications() {
   const { user } = useAuth();
   const queryClient = useQueryClient();

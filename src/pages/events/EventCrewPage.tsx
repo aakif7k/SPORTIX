@@ -6,7 +6,7 @@ import {
   Zap, Check, X, MoreVertical, Megaphone,
   UserMinus, Edit2, LogOut, Trash2, Lock
 } from 'lucide-react';
-import { useEventStore } from '../../store/eventStore';
+import { useEvent } from '@/hooks/useEvents';
 import { useAuthStore } from '../../store/authStore';
 
 // ─── Mock Crew Data ───────────────────────────────────────────────────────────
@@ -158,11 +158,12 @@ const CrewSettingsModal: React.FC<{ onClose: () => void; crewName: string; onRen
 export const EventCrewPage: React.FC = () => {
   const { id } = useParams();
   const navigate = useNavigate();
-  const { events } = useEventStore();
   const user = useAuthStore(state => state.user);
   const currentUserId = user?.id || 'cu1';
 
-  const event = events.find(e => e.id === id) || events[0];
+  // The store held a copy of every event seeded from mockData; the event this
+  // page is about comes from the API.
+  const { event } = useEvent(id);
   const [crew, setCrew] = useState(MOCK_CREW);
   const [crewName, setCrewName] = useState('Iron Pulse FC');
   const [settingsOpen, setSettingsOpen] = useState(false);

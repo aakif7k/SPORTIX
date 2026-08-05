@@ -2,12 +2,12 @@ import React, { useEffect, useState, useRef } from 'react';
 import { useNavigate, NavLink } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Bell, Search, Home, Calendar, User } from 'lucide-react';
-import { useNotificationStore } from '../../store/notificationStore';
+import { useUnreadCount } from '@/hooks/useNotifications';
 import { useAuthStore } from '../../store/authStore';
 
 export const Navbar: React.FC = () => {
   const [scrolled, setScrolled] = useState(false);
-  const { unreadCount } = useNotificationStore();
+  const unreadCount = useUnreadCount();
   const { user, setShowLogoutConfirm } = useAuthStore();
   const navigate = useNavigate();
 
@@ -153,7 +153,7 @@ export const Navbar: React.FC = () => {
 // ─── BOTTOM NAV (mobile) ───────────────────────────────────────────────────
 export const BottomNav: React.FC = () => {
   const navigate = useNavigate();
-  const { unreadCount } = useNotificationStore();
+  const unreadCount = useUnreadCount();
 
   return (
     <nav className="md:hidden fixed bottom-0 left-0 right-0 z-40 safe-area-inset-bottom premium-nav border-t border-border/10">
