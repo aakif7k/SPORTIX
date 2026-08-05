@@ -1,6 +1,6 @@
 import { GoogleGenerativeAI } from '@google/generative-ai';
 import type { AITeamResult, Team, TeamMember, SportCategory, ExperienceLevel, BracketRound } from '../types';
-import { SPORT_POSITIONS } from './mockData';
+import { SPORT_POSITIONS } from '@/constants/sports';
 
 const apiKey = import.meta.env.VITE_GEMINI_API_KEY as string;
 
