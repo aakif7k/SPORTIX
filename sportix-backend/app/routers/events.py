@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, Query
 from typing import Optional
 from app.core.dependencies import get_current_user
-from app.schemas.event import EventCreate, EventUpdate
+from app.schemas.event import EventCreate, EventUpdate, EventJoin
 from app.services import event_service
 
 router = APIRouter()
@@ -62,13 +62,9 @@ async def cancel_event(event_id: str, user=Depends(get_current_user)):
 
 
 @router.post("/{event_id}/join")
-async def join_event(
-    event_id: str,
-    squad_id: Optional[str] = None,
-    entry_type: str = "solo",
-    user=Depends(get_current_user),
-):
-    data = await event_service.join(event_id, user["id"], squad_id, entry_type)
+async def join_event(event_id: str, payload: EventJoin, user=Depends(get_current_user)):
+    data = await event_service.join(
+        event_id, user["id"], payload.squad_id, payload.entry_type.value)
     return {"success": True, "data": data}
 
 

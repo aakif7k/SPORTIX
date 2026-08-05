@@ -1,21 +1,28 @@
 from fastapi import APIRouter, Depends
 from typing import Optional
 from app.core.dependencies import get_current_user
-from app.schemas.match import MatchResultUpdate, StatsSubmission, StatValidate, SquadRetentionVote
+from app.schemas.match import MatchResultUpdate, StatsSubmission, StatValidate, SquadRetentionVote, MatchCreate
 from app.services import match_service
 
 router = APIRouter()
 
 
 @router.post("/", status_code=201)
-async def create_match(
-    sport: str = "",
-    event_id: Optional[str] = None,
-    home_squad_id: Optional[str] = None,
-    away_squad_id: Optional[str] = None,
-    user=Depends(get_current_user),
-):
-    data = await match_service.create(event_id, home_squad_id, away_squad_id, sport)
+async def create_match(payload: MatchCreate, user=Depends(get_current_user)):
+    """
+    Record a match.
+
+    The four fields were query parameters, so every caller that posted them as
+    JSON -- all of them -- created a match with no sport and no squad, and a
+    squad's match history could never find it.
+    """
+    data = await match_service.create(
+        event_id=payload.event_id,
+        home_squad_id=payload.home_squad_id,
+        away_squad_id=payload.away_squad_id,
+        sport=payload.sport,
+        opponent_name=payload.opponent_name,
+    )
     return {"success": True, "data": data}
 
 

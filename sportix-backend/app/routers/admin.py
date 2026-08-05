@@ -1,5 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException, Query
 from typing import Optional
+from pydantic import BaseModel
 from app.core.dependencies import get_current_user
 from app.core.appwrite import db, users_svc, DB_ID
 from app.core.config import settings
@@ -42,12 +43,18 @@ async def admin_delete_user(user_id: str, user=Depends(require_admin)):
         raise HTTPException(500, str(e))
 
 
+class BanRequest(BaseModel):
+    """A ban reason belongs in the body, not the URL: it is prose, and a URL is
+    logged by every proxy in the path."""
+    reason: Optional[str] = None
+
+
 @router.post("/users/{user_id}/ban")
-async def admin_ban_user(user_id: str, reason: Optional[str] = None, user=Depends(require_admin)):
+async def admin_ban_user(user_id: str, payload: BanRequest, user=Depends(require_admin)):
     """Disable a user account (admin only)."""
     try:
         users_svc.update_status(user_id, False)
-        db.update_document(DB_ID, settings.collection_users, user_id, {"is_banned": True, "ban_reason": reason})
+        db.update_document(DB_ID, settings.collection_users, user_id, {"is_banned": True, "ban_reason": payload.reason})
         return {"success": True, "message": f"User {user_id} banned"}
     except Exception as e:
         raise HTTPException(500, str(e))

@@ -1,5 +1,5 @@
 import logging
-from fastapi import APIRouter, Depends, UploadFile, File, Request, Response
+from fastapi import APIRouter, Depends, UploadFile, File, Query, Request, Response
 from app.core.rate_limit import limiter, UPLOAD_LIMIT
 from app.core.dependencies import get_current_user
 from app.utils.formatters import now_iso
@@ -169,8 +169,10 @@ async def upload_stat_proof(request: Request, response: Response,
 
 @router.delete("/delete")
 @limiter.limit(UPLOAD_LIMIT)
-async def delete_file(request: Request, response: Response, 
-    file_id: str,
+async def delete_file(request: Request, response: Response,
+    # Declared explicitly: this one really is a query parameter, and saying so
+    # keeps it distinguishable from a payload that was meant to be a body.
+    file_id: str = Query(..., description="Appwrite Storage file id"),
     user=Depends(get_current_user)
 ):
     """Delete a file from Appwrite Storage by its file ID."""

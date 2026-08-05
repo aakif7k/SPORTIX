@@ -90,3 +90,22 @@ class EventUpdate(BaseModel):
     prize_pool: Optional[str] = None
     rules: Optional[List[str]] = None
     status: Optional[EventStatus] = None
+
+
+class EntryType(str, Enum):
+    """Must match the `entry_type` enum on event_participants."""
+    solo = "solo"
+    squad = "squad"
+    crew = "crew"
+
+
+class EventJoin(BaseModel):
+    """
+    Joining an event.
+
+    squad_id and entry_type were query parameters while every caller sent them in
+    the body, so joining an event as a squad silently registered the caller as a
+    solo entrant and the squad link was dropped.
+    """
+    squad_id: Optional[str] = None
+    entry_type: EntryType = EntryType.solo

@@ -18,6 +18,7 @@ async def create(
     home_squad_id: Optional[str],
     away_squad_id: Optional[str],
     sport: str,
+    opponent_name: Optional[str] = None,
 ) -> dict:
     return db.create_document(
         DB_ID, settings.collection_matches, ID.unique(),
@@ -27,6 +28,9 @@ async def create(
             "home_squad_id": home_squad_id,
             "away_squad_id": away_squad_id,
             "sport": sport,
+            # The match-history card renders "VS <opponent>", and with no away
+            # squad this string is the only thing that names the other side.
+            "opponent_name": opponent_name,
             "result": "pending",
             "score_home": None,
             "score_away": None,

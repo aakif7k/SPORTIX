@@ -60,3 +60,26 @@ class SquadRetentionVote(BaseModel):
     """A voter's verdict on one specific teammate."""
     target_id: str
     vote: RetentionVote
+
+
+class MatchCreate(BaseModel):
+    """
+    Creating a match.
+
+    These four were query parameters, so a client posting them as JSON -- which
+    is what every caller does -- created a match with no sport and no squad. The
+    squad link is what a squad's match history is queried on, so the history was
+    permanently empty.
+    """
+    sport: str
+    event_id: Optional[str] = None
+    home_squad_id: Optional[str] = None
+    away_squad_id: Optional[str] = None
+    opponent_name: Optional[str] = None
+
+    @field_validator("sport")
+    @classmethod
+    def sport_required(cls, v: str) -> str:
+        if not v.strip():
+            raise ValueError("A match needs a sport")
+        return v.strip()
