@@ -179,6 +179,9 @@ async def award_pulse(
         "total_pulse": new_total,
         "tier": pulse_math.tier_for(new_total),
         "level": level["level"],
+        # Surfaced so a caller can show "you reached level N" without asking the
+        # level service what the level was a moment ago.
+        "previous_level": level.get("previous_level", level["level"]),
         "leveled_up": level["leveled_up"],
         "lifetime_pulse": lifetime,
     }

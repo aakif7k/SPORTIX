@@ -2,11 +2,33 @@ import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 
 import { ArrowLeft, Trophy, Target, Zap, TrendingUp, Activity } from 'lucide-react';
-import { useMatchReport } from '../../hooks/useMatchReport';
-import { useCareerStats } from '../../hooks/useCareerStats';
+import { RefreshCw } from 'lucide-react';
+import { useMatchHistory, useCareer, type ApiMatchHistoryItem } from '@/hooks/useCareer';
 import { MatchHistoryCard } from '../../components/performance/MatchHistoryCard';
-import { MOCK_PENDING_MATCH } from '../../store/matchReportStore';
 import type { MatchHistoryItem, PerformanceSport } from '../../types/performance.types';
+
+/**
+ * The shared card still speaks the camelCase MatchHistoryItem shape, so the API
+ * row is adapted here rather than rewriting the card and everything else using it.
+ */
+const toItem = (row: ApiMatchHistoryItem): MatchHistoryItem => ({
+  id: row.id,
+  matchId: row.match_id,
+  eventName: row.event_name,
+  sport: row.sport,
+  matchResult: row.match_result as MatchHistoryItem['matchResult'],
+  date: row.date ?? '',
+  pulseEarned: row.pulse_earned,
+  ssrDelta: row.ssr_delta,
+  matchRating: row.match_rating,
+  isMvp: row.is_mvp,
+  validationStatus: row.validation_status,
+  // The card renders a "file this report" prompt for a pending row; that used to
+  // be one hardcoded fixture bolted to the top of the list regardless of whether
+  // the athlete actually owed a report.
+  isPending: row.is_pending,
+  statSummary: row.stat_summary,
+});
 
 const SPORTS: Array<{ id: PerformanceSport | 'all'; label: string; emoji: string }> = [
   { id: 'all',        label: 'All Sports', emoji: '🔥' },
@@ -28,37 +50,22 @@ export const MatchHistory: React.FC = () => {
   const [sportFilter, setSportFilter] = useState<PerformanceSport | 'all'>('all');
   const [resultFilter, setResultFilter] = useState<string>('all');
 
-  const { getMatchHistory, matchHistory } = useMatchReport();
-  const careerStats = useCareerStats();
-
-  const pendingItem: MatchHistoryItem = {
-    id: 'pending-001',
-    matchId: MOCK_PENDING_MATCH.matchId,
-    eventName: MOCK_PENDING_MATCH.eventName,
-    sport: MOCK_PENDING_MATCH.sport,
-    matchResult: 'win',
-    date: MOCK_PENDING_MATCH.date,
-    pulseEarned: 0,
-    ssrDelta: 0,
-    matchRating: 0,
-    isMvp: false,
-    validationStatus: 'pending',
-    isPending: true,
-    statSummary: {},
-  };
-
-  const filteredHistory = getMatchHistory({
+  // Filtering is a server query now: this used to pull an athlete's whole career
+  // into the browser and filter the array.
+  const { matches, loading, error, refresh } = useMatchHistory({
     sport: sportFilter === 'all' ? undefined : sportFilter,
-    result: resultFilter === 'all' ? undefined : resultFilter,
+    result: resultFilter,
   });
+  const { career } = useCareer();
 
-  const allItems: MatchHistoryItem[] = [pendingItem, ...filteredHistory];
+  const allItems: MatchHistoryItem[] = matches.map(toItem);
 
   const summaryStats = [
-    { icon: <Trophy size={16} />, label: 'MATCHES', value: matchHistory.length, color: '#CCFF00' },
-    { icon: <Zap size={16} />,    label: 'PULSE EARNED', value: careerStats.totalPulseEarned, color: '#00D4FF' },
-    { icon: <Target size={16} />, label: 'WIN RATE', value: `${careerStats.winRate}%`, color: '#FF6B00' },
-    { icon: <TrendingUp size={16} />, label: 'SSR RATING', value: careerStats.currentSSR, color: '#A855F7' },
+    { icon: <Trophy size={16} />, label: 'MATCHES', value: career?.total_matches ?? 0, color: '#CCFF00' },
+    { icon: <Zap size={16} />,    label: 'PULSE EARNED', value: career?.total_pulse_earned ?? 0, color: '#00D4FF' },
+    { icon: <Target size={16} />, label: 'WIN RATE', value: `${career?.win_rate ?? 0}%`, color: '#FF6B00' },
+    // Null until something has been validated, rather than a flattering default.
+    { icon: <TrendingUp size={16} />, label: 'SSR RATING', value: career?.current_ssr ?? '—', color: '#A855F7' },
   ];
 
   return (
@@ -137,13 +144,48 @@ export const MatchHistory: React.FC = () => {
               </button>
             ))}
           </div>
-          <span className="font-mono text-xs text-text-muted">{allItems.length} matches logged</span>
+          <span className="font-mono text-xs text-text-muted">
+            {allItems.length} match{allItems.length === 1 ? '' : 'es'} logged
+            {career?.pending_count ? ` · ${career.pending_count} awaiting validation` : ''}
+          </span>
         </div>
       </div>
 
       {/* ── MATCH CARDS LIST ────────────────────────────────────────────── */}
       <div className="space-y-4">
-        {allItems.map((match, idx) => (
+        {loading ? (
+          <div aria-busy="true" aria-label="Loading match history" className="space-y-4">
+            {[0, 1, 2].map(i => (
+              <div key={i} className="h-28 rounded-2xl bg-surface border border-border-muted animate-shimmer" />
+            ))}
+          </div>
+        ) : error ? (
+          <div className="p-8 rounded-2xl bg-surface border border-border-muted text-center space-y-3">
+            <p className="font-sans font-bold text-sm text-white uppercase tracking-wider">
+              Match history did not load
+            </p>
+            <p className="font-mono text-xs text-text-muted">{error.message}</p>
+            <button
+              onClick={() => refresh()}
+              className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-[#CCFF00] text-black font-mono text-[10px] font-bold uppercase"
+            >
+              <RefreshCw size={12} /> Retry
+            </button>
+          </div>
+        ) : allItems.length === 0 ? (
+          <div className="p-8 rounded-2xl bg-surface border border-border-muted text-center space-y-2">
+            <p className="font-sans font-bold text-sm text-white uppercase tracking-wider">
+              {sportFilter === 'all' && resultFilter === 'all'
+                ? 'No matches logged yet'
+                : 'Nothing matches those filters'}
+            </p>
+            <p className="font-mono text-xs text-text-muted">
+              {sportFilter === 'all' && resultFilter === 'all'
+                ? 'File a report after your next match and it shows up here.'
+                : 'Try a different sport or result.'}
+            </p>
+          </div>
+        ) : allItems.map((match, idx) => (
           <MatchHistoryCard key={match.id} match={match} index={idx} />
         ))}
       </div>

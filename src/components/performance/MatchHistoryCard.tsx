@@ -22,6 +22,9 @@ const RESULT_STYLES = {
   win:  { text: '#4ADE80', bg: 'rgba(74,222,128,0.10)',  border: 'rgba(74,222,128,0.3)',  label: 'WIN' },
   loss: { text: '#F87171', bg: 'rgba(248,113,113,0.10)', border: 'rgba(248,113,113,0.3)', label: 'LOSS' },
   draw: { text: '#FBBF24', bg: 'rgba(251,191,36,0.10)',  border: 'rgba(251,191,36,0.3)',  label: 'DRAW' },
+  // A real match whose result was never entered. With mock data every row had one
+  // of the three above, so this lookup returned undefined and took the card down.
+  pending: { text: '#94A3B8', bg: 'rgba(148,163,184,0.10)', border: 'rgba(148,163,184,0.3)', label: 'NO RESULT' },
 };
 
 const VALIDATION_ICON = {

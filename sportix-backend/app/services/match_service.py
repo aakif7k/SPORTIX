@@ -96,7 +96,16 @@ async def submit_stats(match_id: str, user_id: str, payload: StatsSubmission) ->
             "updated_at": now_iso(),
         },
     )
-    return {**stat, **{k: award[k] for k in ("pulse_earned", "ssr_delta", "chemistry_delta")}}
+    # The award already knows the level move and the new tier; picking three keys
+    # out of it threw that away, which is why the post-match reward screen showed a
+    # hardcoded "level 27 to 28" and a made-up rank.
+    return {
+        **stat,
+        **{k: award[k] for k in (
+            "pulse_earned", "ssr_delta", "chemistry_delta",
+            "level", "previous_level", "leveled_up", "tier", "total_pulse",
+        ) if k in award},
+    }
 
 
 async def get_stats(match_id: str) -> dict:
