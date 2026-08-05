@@ -438,6 +438,66 @@ def main() -> int:
           client.post(f"/api/events/{event_id}/join", headers=partner_header_early(validators),
                       json={"entry_type": "wildcard"}).status_code == 422)
 
+    # --- career and history ---------------------------------------------------
+    step("career history and aggregates")
+    r = client.get("/api/matches/me/history", headers=auth_header)
+    hist = data_of(r).get("items", [])
+    check("GET /api/matches/me/history -> 200", r.status_code == 200, f"{r.status_code} {body(r)}")
+    mine = next((h for h in hist if h.get("match_id") == match_id), {})
+    check("the submitted report is in the athlete's history", bool(mine),
+          f"{len(hist)} report(s), none for {match_id}")
+    check("the history row names the match",
+          bool(mine.get("event_name")), f"event_name={mine.get('event_name')!r}")
+    # Three teammates confirmed it earlier in this run.
+    check("a validated report is not flagged pending",
+          mine.get("is_pending") is False and mine.get("validation_status") == "validated",
+          f"is_pending={mine.get('is_pending')!r} status={mine.get('validation_status')!r}")
+    check("the stat line is summarised for display",
+          isinstance(mine.get("stat_summary"), dict) and bool(mine["stat_summary"]),
+          f"stat_summary={mine.get('stat_summary')!r}")
+    check("filtering history by result works",
+          all(h.get("match_result") == "win"
+              for h in (data_of(client.get("/api/matches/me/history?result=win",
+                                           headers=auth_header)).get("items") or [])),
+          "a non-win came back from ?result=win")
+    check("filtering history by another sport excludes it",
+          not (data_of(client.get("/api/matches/me/history?sport=cricket",
+                                  headers=auth_header)).get("items") or []),
+          "a football report came back from ?sport=cricket")
+
+    r = client.get("/api/matches/me/career", headers=auth_header)
+    career = data_of(r)
+    check("GET /api/matches/me/career -> 200", r.status_code == 200, f"{r.status_code} {body(r)}")
+    check("the career counts the validated win",
+          career.get("wins") == 1 and career.get("total_matches") == 1,
+          f"wins={career.get('wins')!r} total={career.get('total_matches')!r}")
+    check("win rate is derived, not hardcoded",
+          career.get("win_rate") == 100, f"win_rate={career.get('win_rate')!r}")
+    check("career Pulse is the sum of validated reports",
+          float(career.get("total_pulse_earned") or 0) > 0,
+          f"total_pulse_earned={career.get('total_pulse_earned')!r}")
+    # The client used a hardcoded 8.4 baseline, so every new athlete looked 8.4/10.
+    ssr = career.get("current_ssr")
+    check("SSR is on the 0-10 scale and moved off the baseline by the match",
+          isinstance(ssr, (int, float)) and 0 <= ssr <= 10 and ssr != 8.4,
+          f"current_ssr={ssr!r}")
+    check("SSR reports a trend", career.get("ssr_trend") in ("up", "down", "stable"),
+          f"ssr_trend={career.get('ssr_trend')!r}")
+    check("the football breakdown carries the goals submitted",
+          float((career.get("football") or {}).get("total_goals") or 0) == 2,
+          f"football={career.get('football')!r}")
+    check("the MVP flag is counted", career.get("mvp_count") == 1,
+          f"mvp_count={career.get('mvp_count')!r}")
+
+    # An athlete with nothing validated must have no SSR rather than a flattering one.
+    fresh = validators[2]
+    r = client.get("/api/matches/me/career",
+                   headers={"Authorization": f"Bearer {fresh['data'].get('jwt','')}"})
+    empty = data_of(r)
+    check("an athlete with no validated matches has no SSR at all",
+          empty.get("current_ssr") is None and empty.get("total_matches") == 0,
+          f"current_ssr={empty.get('current_ssr')!r} total={empty.get('total_matches')!r}")
+
     # --- organizer roster management ------------------------------------------
     step("organizer: confirm, remove and announce")
     partner_id_early = validators[0]["data"].get("user_id", "")

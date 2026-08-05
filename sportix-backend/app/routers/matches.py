@@ -1,8 +1,8 @@
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Query
 from typing import Optional
 from app.core.dependencies import get_current_user
 from app.schemas.match import MatchResultUpdate, StatsSubmission, StatValidate, SquadRetentionVote, MatchCreate
-from app.services import match_service
+from app.services import match_service, career_service
 
 router = APIRouter()
 
@@ -72,4 +72,35 @@ async def validate_stat(match_id: str, stat_id: str, payload: StatValidate, user
 @router.post("/{match_id}/retention")
 async def retention_vote(match_id: str, payload: SquadRetentionVote, user=Depends(get_current_user)):
     data = await match_service.retention_vote(match_id, user["id"], payload.target_id, payload.vote.value)
+    return {"success": True, "data": data}
+
+
+# ─── The athlete's own career ─────────────────────────────────────────────────
+# useMatchReport and useCareerStats did this arithmetic in the browser against a
+# zustand store that persisted nothing, so a refresh emptied an athlete's career.
+
+@router.get("/me/history")
+async def my_match_history(
+    sport: Optional[str] = Query(None),
+    result: Optional[str] = Query(None, description="win|loss|draw|all"),
+    period: Optional[str] = Query(None, description="month"),
+    page: int = Query(0),
+    limit: int = Query(50, le=100),
+    user=Depends(get_current_user),
+):
+    """Every report this athlete has filed, newest first, flattened for display."""
+    data = await career_service.get_history(
+        user["id"], sport, result, period, page, limit)
+    return {"success": True, "data": data}
+
+
+@router.get("/me/career")
+async def my_career(sport: Optional[str] = Query(None), user=Depends(get_current_user)):
+    """
+    Career aggregates over validated matches only, with per-sport breakdowns.
+
+    Unconfirmed submissions are excluded: three teammates have to confirm a stat
+    line before it counts, or anyone could type themselves a hat-trick.
+    """
+    data = await career_service.get_career(user["id"], sport)
     return {"success": True, "data": data}
