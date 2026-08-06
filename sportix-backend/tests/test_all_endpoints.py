@@ -22,7 +22,6 @@ from __future__ import annotations
 from typing import Any
 
 import pytest
-from fastapi.routing import APIRoute
 
 from main import app
 
@@ -93,13 +92,24 @@ BODIES: dict[tuple[str, str], dict[str, Any]] = {
 
 
 def _routes() -> list[tuple[str, str]]:
-    """(method, path_template) for every real API route, excluding docs."""
-    out = []
-    for route in app.routes:
-        if not isinstance(route, APIRoute):
-            continue
-        for method in sorted(route.methods - {"HEAD", "OPTIONS"}):
-            out.append((method, route.path))
+    """
+    (method, path_template) for every real API route, excluding docs.
+
+    Read from the app's own OpenAPI schema rather than by walking app.routes.
+    That walk assumed included routers are flattened into the top level, which was
+    true of FastAPI 0.111 and is not of 0.141: each include_router now contributes
+    a single private _IncludedRouter object holding its children out of reach, so
+    the scan found 2 routes while the app served 175. The schema is FastAPI's own
+    statement of what it serves, and it does not depend on internal route classes.
+    """
+    schema = app.openapi()
+    out: list[tuple[str, str]] = []
+    for path, operations in schema.get("paths", {}).items():
+        for method in operations:
+            upper = method.upper()
+            if upper in ("HEAD", "OPTIONS", "PARAMETERS"):
+                continue
+            out.append((upper, path))
     return sorted(set(out))
 
 

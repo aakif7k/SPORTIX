@@ -1,4 +1,15 @@
-fastapi>=0.111.0
+# Pinned, not floored. `fastapi>=0.111.0` meant every fresh install could differ
+# from what was tested: CI resolved 0.141.1 / starlette 1.4.0 while development ran
+# 0.111.0 / 0.37.2, and under the newer stack app.routes no longer flattens routes
+# from included routers — so the route-table test saw 2 routes instead of 179. The
+# Docker image installs from this file too, which means the container was running a
+# stack the test suite had never exercised.
+#
+# Pinned to what a fresh install actually resolves, and verified there: development
+# had been running 0.111.0 while CI and the Docker image both got 0.141.1, and
+# 0.37.2 is no longer on the index so pinning backwards is not even installable.
+# Raising this is fine, but re-run the suite and the live smoke first.
+fastapi==0.141.1
 uvicorn[standard]>=0.29.0
 python-multipart>=0.0.9
 pydantic>=2.9.0
