@@ -1,65 +1,120 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '@/context/AuthContext';
-import { api } from '@/lib/api';
+import {
+  getMyProfile,
+  updateProfile,
+  uploadAvatar,
+} from '@/services/profileService';
+import type { UserProfile } from '@/services/profileService';
 import toast from 'react-hot-toast';
 
+// ─── Stats shape ─────────────────────────────────────────────────────────────
+interface ProfileStats {
+  posts: number;
+  reels: number;
+  followers: number;
+  following: number;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+//  useMyProfile
+//  Fetch the currently authenticated user's full profile from Appwrite.
+//  Provides helpers for updating profile fields and uploading an avatar.
+// ─────────────────────────────────────────────────────────────────────────────
 export function useMyProfile() {
-  const { user, refreshUser } = useAuth();
-  const [profile, setProfile] = useState<any>(null);
-  const [stats, setStats] = useState({
+  const { user, profile: contextProfile, refreshUser } = useAuth();
+
+  const [profile, setProfile] = useState<UserProfile | null>(contextProfile);
+  const [stats, setStats] = useState<ProfileStats>({
     posts: 0, reels: 0,
-    followers: 0, following: 0
+    followers: 0, following: 0,
   });
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(!contextProfile);
+  const [error, setError] = useState<string | null>(null);
   const [uploadingAvatar, setUploadingAvatar] = useState(false);
 
-  useEffect(() => {
-    if (!user) { setLoading(false); return; }
-
-    Promise.all([
-      api.get<any>('/api/users/me'),
-      api.get<any>('/api/users/me/stats'),
-    ]).then(([profileRes, statsRes]) => {
-      setProfile(profileRes.data);
-      setStats(statsRes.data || stats);
-    }).catch(console.error)
-      .finally(() => setLoading(false));
+  // ── Load / refresh profile ────────────────────────────────────────────────
+  const loadProfile = useCallback(async () => {
+    if (!user?.id) {
+      setLoading(false);
+      return;
+    }
+    setLoading(true);
+    setError(null);
+    try {
+      const data = await getMyProfile(user.id);
+      if (data) {
+        setProfile(data);
+        // Derive basic stats from profile fields where available
+        setStats(prev => ({
+          ...prev,
+          // Future migration: replace with real counts from followers/posts collections
+          followers: 0,
+          following: 0,
+        }));
+      } else {
+        setError('Profile not found in database.');
+      }
+    } catch (err: any) {
+      console.error('[useMyProfile] load error:', err);
+      setError(err?.message ?? 'Failed to load profile');
+    } finally {
+      setLoading(false);
+    }
   }, [user?.id]);
 
-  const updateAvatar = async (file: File) => {
-    if (!user) return;
+  useEffect(() => {
+    // Use context profile as initial value while fetching the fresh copy
+    if (contextProfile) setProfile(contextProfile);
+    loadProfile();
+  }, [user?.id]);
+
+  // ── Avatar upload ─────────────────────────────────────────────────────────
+  const handleUpdateAvatar = async (file: File): Promise<string | undefined> => {
+    if (!user?.id) return;
     setUploadingAvatar(true);
     try {
-      const formData = new FormData();
-      formData.append('file', file);
-      const res = await api.upload<any>(
-        '/api/upload/avatar', formData
-      );
-      const url = res.data?.url;
-      setProfile((prev: any) => ({ ...prev, avatar_url: url }));
-      await refreshUser();
-      toast.success('Profile photo updated!');
-      return url;
+      const url = await uploadAvatar(user.id, file);
+      if (url) {
+        setProfile(prev => prev ? { ...prev, avatar_url: url } : prev);
+        await refreshUser();
+        toast.success('Profile photo updated!');
+        return url;
+      } else {
+        toast.error('Avatar upload failed. Please try again.');
+      }
     } catch (err: any) {
-      toast.error(err.message || 'Upload failed');
+      toast.error(err?.message ?? 'Upload failed');
     } finally {
       setUploadingAvatar(false);
     }
   };
 
-  const updateProfile = async (updates: any) => {
+  // ── Profile update ────────────────────────────────────────────────────────
+  const handleUpdateProfile = async (updates: Partial<UserProfile>): Promise<void> => {
+    if (!user?.id) return;
     try {
-      const res = await api.put<any>('/api/users/me', updates);
-      setProfile(res.data);
-      await refreshUser();
-      toast.success('Profile updated!');
+      const updated = await updateProfile(user.id, updates);
+      if (updated) {
+        setProfile(updated);
+        await refreshUser();
+        toast.success('Profile updated!');
+      } else {
+        toast.error('Update failed. Please try again.');
+      }
     } catch (err: any) {
-      toast.error(err.message || 'Update failed');
+      toast.error(err?.message ?? 'Update failed');
     }
   };
 
   return {
-    profile, stats, loading,
-    uploadingAvatar, updateAvatar, updateProfile
+    profile,
+    stats,
+    loading,
+    error,
+    uploadingAvatar,
+    updateAvatar: handleUpdateAvatar,
+    updateProfile: handleUpdateProfile,
+    reload: loadProfile,
   };
 }

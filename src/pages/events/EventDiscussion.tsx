@@ -8,61 +8,8 @@ import {
 import { useAuthStore } from '../../store/authStore';
 
 
-// ─── Mock Discussion Data ─────────────────────────────────────────────────────
-interface DiscussionMessage {
-  id: string;
-  sender: string;
-  senderId: string;
-  avatar: string;
-  content: string;
-  type: 'text' | 'poll' | 'announcement' | 'media';
-  timestamp: string;
-  reactions: { emoji: string; count: number; reacted: boolean }[];
-  pinned?: boolean;
-  pollData?: { question: string; options: { text: string; votes: number; voted: boolean }[] };
-  isAdmin?: boolean;
-}
-
-const INITIAL_MESSAGES: DiscussionMessage[] = [
-  {
-    id: 'm1', sender: 'Event Admin', senderId: 'admin', avatar: '', type: 'announcement',
-    content: 'Welcome to the official discussion group for this event! Rules: be respectful, no spam, and coordinate effectively.',
-    timestamp: '2 hours ago', reactions: [], pinned: true, isAdmin: true
-  },
-  {
-    id: 'm2', sender: 'Marcus Reid', senderId: 'u1', avatar: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=80',
-    type: 'text', content: 'Who else is joining as solo? Looking for a squad to team up with.',
-    timestamp: '1h 45m ago', reactions: [{ emoji: '⚡', count: 4, reacted: false }, { emoji: '✅', count: 2, reacted: false }]
-  },
-  {
-    id: 'm3', sender: 'Priya Nair', senderId: 'u3', avatar: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=80',
-    type: 'poll', content: '',
-    pollData: {
-      question: 'What time works best for warm-up?',
-      options: [
-        { text: '30 mins before', votes: 8, voted: false },
-        { text: '1 hour before', votes: 5, voted: false },
-        { text: 'No warm-up needed', votes: 2, voted: false },
-      ]
-    },
-    timestamp: '1h 20m ago', reactions: []
-  },
-  {
-    id: 'm4', sender: 'Zaid Al-Hassan', senderId: 'u2', avatar: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=80',
-    type: 'text', content: 'Iron Pulse FC is registered! We are ready. Good luck to all teams.',
-    timestamp: '58m ago', reactions: [{ emoji: '🔥', count: 7, reacted: false }]
-  },
-  {
-    id: 'm5', sender: 'Event Admin', senderId: 'admin', avatar: '', type: 'announcement',
-    content: 'Reminder: Gates open 2 hours before the first match. Bring your SPORTiX ID for verification.',
-    timestamp: '30m ago', reactions: [], isAdmin: true
-  },
-  {
-    id: 'm6', sender: 'Aisha Mensah', senderId: 'u5', avatar: 'https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?w=80',
-    type: 'text', content: 'Can someone share the event parking details? Joining with a full crew.',
-    timestamp: '15m ago', reactions: [{ emoji: '✅', count: 1, reacted: false }]
-  },
-];
+import { getEventComments, createEventComment, deleteEventComment } from '../../services/eventCommentService';
+import type { DiscussionMessage } from '../../services/eventCommentService';
 
 const REACTIONS = ['⚡', '🔥', '✅', '👍', '🏆', '💪'];
 
@@ -214,39 +161,56 @@ export const EventDiscussion: React.FC = () => {
   const user = useAuthStore(state => state.user);
   const currentUserId = user?.id || 'cu1';
   const currentUserName = user?.name || 'Alex Rivera';
-  const currentUserAvatar = user?.avatar || 'https://images.pexels.com/photos/1486064/pexels-photo-1486064.jpeg?cs=srgb&dl=pexels-nkhajotia-1486064.jpg&fm=jpg';
 
-  const [messages, setMessages] = useState<DiscussionMessage[]>(INITIAL_MESSAGES);
-  const [input, setInput] = useState('');
+  const [messages, setMessages] = useState<DiscussionMessage[]>([]);
   const [isAdmin] = useState(true); // current user is admin for demo
   const [showPollCreator, setShowPollCreator] = useState(false);
   const [pollQuestion, setPollQuestion] = useState('');
   const [pollOptions, setPollOptions] = useState(['', '']);
   const [liveCount] = useState(48);
-  const messagesEndRef = useRef<HTMLDivElement>(null);
+  const bottomRef = useRef<HTMLDivElement>(null);
+  const [newMessage, setNewMessage] = useState('');
 
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [messages]);
+    if (!id) return;
+    getEventComments(id).then(data => {
+      setMessages(data);
+      setTimeout(() => bottomRef.current?.scrollIntoView({ behavior: 'smooth' }), 100);
+    });
+  }, [id]);
 
   const handleSend = () => {
-    if (!input.trim()) return;
-    const msg: DiscussionMessage = {
-      id: `m${Date.now()}`,
-      sender: currentUserName,
-      senderId: currentUserId,
-      avatar: currentUserAvatar,
+    if (!newMessage.trim()) return;
+    const user = useAuthStore.getState().user;
+    if (!user) return;
+    const msg: Omit<DiscussionMessage, 'id' | 'timestamp'> = {
+      sender: user.name || 'User',
+      senderId: user.id,
+      avatar: user.avatar || '',
+      content: newMessage,
       type: 'text',
-      content: input.trim(),
-      timestamp: 'just now',
-      reactions: [],
+      reactions: []
     };
-    setMessages(prev => [...prev, msg]);
-    setInput('');
+    
+    // Optimistic Update
+    const tempMsg: DiscussionMessage = {
+      ...msg,
+      id: `temp_${Date.now()}`,
+      timestamp: 'Just now'
+    };
+    setMessages([...messages, tempMsg]);
+    setNewMessage('');
+    setTimeout(() => bottomRef.current?.scrollIntoView({ behavior: 'smooth' }), 100);
+    
+    // Persist to Appwrite
+    if (id) {
+      createEventComment(id, msg);
+    }
   };
 
   const handleDelete = (msgId: string) => {
-    setMessages(prev => prev.filter(m => m.id !== msgId));
+    setMessages(messages.filter(m => m.id !== msgId));
+    deleteEventComment(msgId);
   };
 
   const handlePin = (msgId: string) => {
@@ -270,7 +234,7 @@ export const EventDiscussion: React.FC = () => {
       id: `poll${Date.now()}`,
       sender: currentUserName,
       senderId: currentUserId,
-      avatar: currentUserAvatar,
+      avatar: useAuthStore.getState().user?.avatar || '',
       type: 'poll',
       content: '',
       pollData: {
@@ -340,7 +304,7 @@ export const EventDiscussion: React.FC = () => {
             onReact={handleReact}
           />
         ))}
-        <div ref={messagesEndRef} />
+        <div ref={bottomRef} />
       </div>
 
       {/* Poll Creator */}
@@ -397,23 +361,23 @@ export const EventDiscussion: React.FC = () => {
 
           {/* Text input */}
           <input
-            value={input}
-            onChange={e => setInput(e.target.value)}
-            onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSend(); } }}
-            placeholder="Message the group..."
-            className="flex-1 bg-transparent outline-none font-mono text-[12px] text-text-primary placeholder-text-muted"
+            type="text"
+            placeholder="Type a message..."
+            className="flex-1 bg-transparent text-text-primary text-sm font-mono focus:outline-none"
+            value={newMessage}
+            onChange={e => setNewMessage(e.target.value)}
+            onKeyDown={e => e.key === 'Enter' && handleSend()}
           />
-
-          {/* Send */}
-          <motion.button whileTap={{ scale: 0.9 }} onClick={handleSend}
-            className="w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 transition-all"
+          <button
+            onClick={handleSend}
+            className="w-10 h-10 rounded-xl flex items-center justify-center transition-all"
             style={{
-              background: input.trim() ? 'var(--volt)' : 'var(--bg-surface)',
-              color: input.trim() ? 'var(--volt-text)' : 'var(--text-muted)',
-              border: input.trim() ? 'none' : '1px solid var(--border)'
-            }}>
-            <Send size={14} />
-          </motion.button>
+              background: newMessage.trim() ? 'var(--volt)' : 'var(--bg-surface)',
+              color: newMessage.trim() ? 'var(--volt-text)' : 'var(--text-muted)',
+              border: newMessage.trim() ? 'none' : '1px solid var(--border)'
+            }}
+          >  <Send size={14} />
+          </button>
         </div>
         {isAdmin && (
           <p className="font-mono text-[8px] text-text-muted text-center mt-1.5">Moderator — you can delete messages and pin announcements</p>

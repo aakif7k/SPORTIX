@@ -301,13 +301,13 @@ export const SettingsPage: React.FC = () => {
         {activeTab === 'ai' && (
           <div className="p-6 rounded-3xl bg-surface border border-border-muted space-y-4">
             <h2 className="font-sans font-bold text-base text-white uppercase tracking-wider flex items-center gap-2">
-              <Sparkles size={16} className="text-[#CCFF00]" /> Gemini AI Telemetry & Diagnostics
+              <Sparkles size={16} className="text-[#CCFF00]" /> AI Telemetry & Diagnostics
             </h2>
 
             <div className="p-4 rounded-2xl bg-elevated border border-white/10 space-y-3">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="font-sans font-bold text-sm text-white">Gemini API Engine Status</p>
+                  <p className="font-sans font-bold text-sm text-white">SPORTiX AI Engine Status</p>
                   <p className="font-mono text-[10px] text-text-muted">Verify active LLM connection for AI team creation</p>
                 </div>
                 <button
@@ -320,7 +320,7 @@ export const SettingsPage: React.FC = () => {
               </div>
 
               {aiTestStatus === 'ok' && (
-                <p className="font-mono text-xs text-[#CCFF00]">✓ {aiTestMsg || 'Gemini 1.5 Flash API Online & Ready'}</p>
+                <p className="font-mono text-xs text-[#CCFF00]">✓ {aiTestMsg || 'SPORTiX AI Engine Online & Ready'}</p>
               )}
               {aiTestStatus === 'error' && (
                 <p className="font-mono text-xs text-red-400">✕ {aiTestMsg || 'Connection error — check API configuration'}</p>

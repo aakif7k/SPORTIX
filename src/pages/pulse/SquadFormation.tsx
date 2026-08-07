@@ -119,7 +119,7 @@ export const SquadFormation: React.FC = () => {
   const { user } = useAuthStore();
   const { nearbyRadius } = useAISettingsStore();
   const {
-    squads, generatedSquads, dailyGenerationsCount,
+    squads, generatedSquads,
     addGeneratedSquad, declineGeneratedSquad, acceptGeneratedSquad, incrementGenerationsCount
   } = useSquadStore();
 
@@ -131,10 +131,7 @@ export const SquadFormation: React.FC = () => {
   const [selectedDraftId, setSelectedDraftId] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState('generate');
 
-  const remainingGenerations = Math.max(0, 3 - dailyGenerationsCount);
-
   const handleGenerateSquad = async () => {
-    if (remainingGenerations <= 0) return;
     setActiveTab('generate');
     setStatus('matching');
     setTimeout(async () => {
@@ -222,10 +219,8 @@ export const SquadFormation: React.FC = () => {
             </div>
           </div>
 
-          <button onClick={handleGenerateSquad} disabled={remainingGenerations <= 0}
-            className={`w-full py-3.5 rounded-[12px] font-condensed font-bold text-[14px] uppercase tracking-wider flex items-center justify-center gap-2 transition-all ${
-              remainingGenerations > 0 ? 'bg-volt text-volt-text hover:scale-[1.02] shadow-glow-volt-sm cursor-pointer' : 'bg-text-primary/5 border border-border-muted text-text-secondary cursor-not-allowed'
-            }`}>
+          <button onClick={handleGenerateSquad}
+            className="w-full py-3.5 rounded-[12px] font-condensed font-bold text-[14px] uppercase tracking-wider flex items-center justify-center gap-2 transition-all bg-volt text-volt-text hover:scale-[1.02] shadow-glow-volt-sm cursor-pointer">
             <Sparkles size={16} /> Generate My Squad
           </button>
         </div>
@@ -264,11 +259,11 @@ export const SquadFormation: React.FC = () => {
           <div>
             <h3 className="font-display text-[22px] uppercase tracking-wider text-text-primary">AutoSquad AI Lab</h3>
             <p className="font-mono text-[11px] text-text-secondary mt-2 max-w-sm mx-auto leading-relaxed">
-              Configure your parameters and click Generate to let the Gemini AI engine scan nearby athletes and build your perfect squad.
+              Configure your parameters and click Generate to let the AutoSquad AI engine scan nearby athletes and build your perfect squad.
             </p>
           </div>
-          <div className="grid grid-cols-3 gap-3 w-full max-w-xs">
-            {[['3', 'Max Daily'], [remainingGenerations.toString(), 'Remaining'], [generatedSquads.length.toString(), 'Drafts']].map(([val, label]) => (
+          <div className="grid grid-cols-1 gap-3 w-full max-w-xs">
+            {[[generatedSquads.length.toString(), 'Generated Drafts']].map(([val, label]) => (
               <div key={label} className="rounded-[12px] p-3 bg-base border border-border-muted/50 text-center">
                 <div className="font-display text-[22px] text-volt">{val}</div>
                 <div className="font-mono text-[9px] text-text-muted">{label}</div>
@@ -294,7 +289,7 @@ export const SquadFormation: React.FC = () => {
           <div className="flex items-center justify-between">
             <h3 className="font-display text-[13px] text-text-secondary tracking-wider uppercase">Generated Results</h3>
             <span style={{ backgroundColor: 'var(--volt-dim)' }} className="font-mono text-[9px] px-1.5 py-0.5 rounded text-volt border border-volt/20">
-              {generatedSquads.length}/3 DAILY
+              {generatedSquads.length} DRAFTS
             </span>
           </div>
           {[0, 1, 2].map(idx => {
@@ -744,19 +739,10 @@ export const SquadFormation: React.FC = () => {
         <div>
           <h1 className="font-display text-[36px] md:text-[44px] tracking-wide leading-none uppercase text-text-primary">AUTOSQUAD AI LAB</h1>
           <p className="font-mono text-[11px] text-text-secondary mt-1.5 uppercase">
-            Gemini AI matchmaking · Proximity limit: <strong className="text-text-primary">{nearbyRadius} KM</strong> · Level-matched
+            AutoSquad AI matchmaking · Proximity limit: <strong className="text-text-primary">{nearbyRadius} KM</strong> · Level-matched
           </p>
         </div>
         <div className="flex items-center gap-3">
-          <div className="p-3 bg-surface border border-border-muted/50 rounded-xl flex items-center gap-3 shadow-card">
-            <div style={{ backgroundColor: 'var(--volt-dim)' }} className="w-8 h-8 rounded-lg flex items-center justify-center text-volt">
-              <Zap size={15} />
-            </div>
-            <div>
-              <span className="font-mono text-[9px] text-text-secondary block">DAILY GENERATIONS</span>
-              <strong className="font-mono text-[14px] text-text-primary">{remainingGenerations} / 3 <span className="text-text-secondary text-[10px]">LEFT</span></strong>
-            </div>
-          </div>
           <div className="p-3 bg-surface border border-border-muted/50 rounded-xl flex items-center gap-3 shadow-card">
             <div className="w-8 h-8 rounded-lg bg-base flex items-center justify-center text-text-muted">
               <Users size={15} />

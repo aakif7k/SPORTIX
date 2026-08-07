@@ -1,10 +1,11 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
-  Search, SlidersHorizontal, MessageCircle, Bookmark, BarChart2, Zap, MapPin
+  Search, SlidersHorizontal, MessageCircle, Bookmark, BarChart2, Zap, MapPin, UserX, AlertCircle, CheckCircle2
 } from 'lucide-react';
-import { MOCK_USERS, MOCK_EVENTS, SPORT_CATEGORIES } from '../../services/mockData';
+import { MOCK_EVENTS, SPORT_CATEGORIES } from '../../services/mockData';
+import { useProfiles } from '../../hooks/useProfiles';
 import { BarChart, Bar, XAxis, Tooltip, ResponsiveContainer } from 'recharts';
 
 const TABS = ['Athletes', 'ClashHub Events', 'The Arena Stats'];
@@ -17,12 +18,30 @@ export const SearchPage: React.FC = () => {
   const [filterOpen, setFilterOpen] = useState(false);
   const [savedUserIds, setSavedUserIds] = useState<string[]>([]);
 
+  // ── Filter states ──────────────────────────────────────────────────────────
+  const [selectedSport, setSelectedSport] = useState<string>('all');
+  const [selectedLevel, setSelectedLevel] = useState<string>('all');
+  const [openToRecruitOnly, setOpenToRecruitOnly] = useState<boolean>(false);
+  const [locationQuery, setLocationQuery] = useState<string>('');
+
   const toggleSaveUser = (id: string) => {
     setSavedUserIds(prev => prev.includes(id) ? prev.filter(uId => uId !== id) : [...prev, id]);
   };
 
-  const athletes = (query ? MOCK_USERS.filter(u => u.name.toLowerCase().includes(query.toLowerCase()) || u.sport.toLowerCase().includes(query.toLowerCase())) : MOCK_USERS);
-  const events = (query ? MOCK_EVENTS.filter(e => e.title.toLowerCase().includes(query.toLowerCase())) : MOCK_EVENTS);
+  const filters = useMemo(() => ({
+    sport: selectedSport === 'all' ? undefined : selectedSport,
+    experienceLevel: selectedLevel === 'all' ? undefined : selectedLevel,
+    openToRecruit: openToRecruitOnly ? true : undefined,
+    location: locationQuery.trim() || undefined,
+  }), [selectedSport, selectedLevel, openToRecruitOnly, locationQuery]);
+
+  // ── Appwrite profile data ───────────────────────────────────────────────
+  const { profiles: athletes, loading: athletesLoading, error: athletesError, isEmpty } = useProfiles(query, filters);
+
+  // Events search
+  const events = query
+    ? MOCK_EVENTS.filter(e => e.title.toLowerCase().includes(query.toLowerCase()) || e.sport.toLowerCase().includes(query.toLowerCase()))
+    : MOCK_EVENTS;
 
   const sportAnalytics = SPORT_CATEGORIES.slice(0, 6).map(s => ({
     name: s.label,
@@ -56,7 +75,7 @@ export const SearchPage: React.FC = () => {
           <Search size={16} className="absolute left-4 top-1/2 -translate-y-1/2 text-text-muted" />
           <input
             type="text"
-            placeholder="Search athletes by name, sport, or location..."
+            placeholder="Search athletes by name, username, sport, city, country, or skill level..."
             value={query}
             onChange={e => setQuery(e.target.value)}
             className="w-full pl-11 pr-4 py-3.5 rounded-2xl bg-surface border border-border-muted text-xs text-white placeholder:text-text-muted focus:outline-none focus:border-[#00D4FF]/50 font-mono transition-all"
@@ -65,11 +84,101 @@ export const SearchPage: React.FC = () => {
 
         <button
           onClick={() => setFilterOpen(!filterOpen)}
-          className="w-full sm:w-auto px-5 py-3.5 rounded-2xl bg-elevated border border-white/10 hover:border-[#00D4FF]/40 text-white font-mono text-xs font-bold uppercase tracking-wider flex items-center justify-center gap-2 transition-all"
+          className={`w-full sm:w-auto px-5 py-3.5 rounded-2xl border font-mono text-xs font-bold uppercase tracking-wider flex items-center justify-center gap-2 transition-all ${
+            filterOpen ? 'bg-[#00D4FF] text-black border-[#00D4FF]' : 'bg-elevated border-white/10 hover:border-[#00D4FF]/40 text-white'
+          }`}
         >
-          <SlidersHorizontal size={15} className="text-[#00D4FF]" /> Filter Criteria
+          <SlidersHorizontal size={15} className={filterOpen ? 'text-black' : 'text-[#00D4FF]'} /> Filter Criteria
         </button>
       </div>
+
+      {/* ── FILTER CRITERIA PANEL ────────────────────────────────────────── */}
+      <AnimatePresence>
+        {filterOpen && (
+          <motion.div
+            initial={{ opacity: 0, height: 0 }}
+            animate={{ opacity: 1, height: 'auto' }}
+            exit={{ opacity: 0, height: 0 }}
+            className="p-5 rounded-2xl bg-surface border border-border-muted space-y-4 font-mono text-xs overflow-hidden"
+          >
+            <div className="flex items-center justify-between border-b border-white/10 pb-3">
+              <h3 className="font-bold text-white uppercase tracking-wider flex items-center gap-2">
+                <SlidersHorizontal size={14} className="text-[#00D4FF]" /> Appwrite Filter Panel
+              </h3>
+              <button
+                onClick={() => {
+                  setSelectedSport('all');
+                  setSelectedLevel('all');
+                  setOpenToRecruitOnly(false);
+                  setLocationQuery('');
+                }}
+                className="text-[10px] text-[#00D4FF] hover:underline"
+              >
+                Reset Filters
+              </button>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+              {/* Sport filter */}
+              <div className="space-y-1.5">
+                <label className="text-[10px] text-text-muted uppercase tracking-wider block">Sport</label>
+                <select
+                  value={selectedSport}
+                  onChange={e => setSelectedSport(e.target.value)}
+                  className="w-full px-3 py-2 rounded-xl bg-elevated border border-border-muted text-white outline-none focus:border-[#00D4FF]"
+                >
+                  <option value="all">All Sports</option>
+                  {SPORT_CATEGORIES.map(s => (
+                    <option key={s.id} value={s.id}>{s.label}</option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Skill level filter */}
+              <div className="space-y-1.5">
+                <label className="text-[10px] text-text-muted uppercase tracking-wider block">Skill Level</label>
+                <select
+                  value={selectedLevel}
+                  onChange={e => setSelectedLevel(e.target.value)}
+                  className="w-full px-3 py-2 rounded-xl bg-elevated border border-border-muted text-white outline-none focus:border-[#00D4FF]"
+                >
+                  <option value="all">All Levels</option>
+                  <option value="beginner">Beginner</option>
+                  <option value="amateur">Amateur</option>
+                  <option value="semi_pro">Semi-Pro</option>
+                  <option value="pro">Professional</option>
+                  <option value="elite">Elite</option>
+                </select>
+              </div>
+
+              {/* Location filter */}
+              <div className="space-y-1.5">
+                <label className="text-[10px] text-text-muted uppercase tracking-wider block">City / Country</label>
+                <input
+                  type="text"
+                  placeholder="Filter by location..."
+                  value={locationQuery}
+                  onChange={e => setLocationQuery(e.target.value)}
+                  className="w-full px-3 py-2 rounded-xl bg-elevated border border-border-muted text-white outline-none focus:border-[#00D4FF] placeholder:text-text-muted"
+                />
+              </div>
+            </div>
+
+            {/* Toggle filter */}
+            <div className="flex items-center gap-3 pt-2">
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={openToRecruitOnly}
+                  onChange={e => setOpenToRecruitOnly(e.target.checked)}
+                  className="rounded border-border-muted text-[#00D4FF] focus:ring-0"
+                />
+                <span className="text-xs text-text-secondary font-bold">Open to Squad Recruitment Only</span>
+              </label>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* ── AI RECOMMENDATION STRIP ──────────────────────────────────────── */}
       <div className="p-4 rounded-2xl bg-gradient-to-r from-[#00D4FF]/10 via-[#0A0A0A] to-transparent border border-[#00D4FF]/20 flex items-center gap-3">
@@ -103,89 +212,123 @@ export const SearchPage: React.FC = () => {
         
         {/* ATHLETES TAB */}
         {activeTab === 'Athletes' && (
-          <motion.div key="ath" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            {athletes.map(athlete => {
-              const isSaved = savedUserIds.includes(athlete.id);
-              return (
-                <motion.div
-                  key={athlete.id}
-                  whileHover={{ y: -4 }}
-                  className="rounded-3xl overflow-hidden bg-surface border border-border-muted p-5 space-y-4 shadow-xl transition-all hover:border-[#00D4FF]/40 flex flex-col justify-between"
-                >
-                  <div className="space-y-3">
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-3">
-                        <div className="relative">
-                          <img
-                            src={athlete.avatar || 'https://i.pravatar.cc/150?img=33'}
-                            alt={athlete.name}
-                            className="w-14 h-14 rounded-2xl object-cover border border-[#00D4FF]/40 shadow-md"
-                          />
-                          <span className="absolute -bottom-1 -right-1 w-4 h-4 rounded-full bg-[#CCFF00] ring-2 ring-black flex items-center justify-center text-[9px] font-black text-black">
-                            ✓
-                          </span>
+          <motion.div key="ath" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}>
+            {/* Loading */}
+            {athletesLoading && (
+              <div className="flex flex-col items-center justify-center py-16 space-y-3">
+                <div className="w-10 h-10 rounded-full border-2 border-[#00D4FF] border-t-transparent animate-spin" />
+                <p className="font-mono text-xs text-text-muted">Scouting athletes from Appwrite...</p>
+              </div>
+            )}
+
+            {/* Error */}
+            {!athletesLoading && athletesError && (
+              <div className="flex flex-col items-center justify-center py-16 space-y-3">
+                <AlertCircle size={40} className="text-red-400 opacity-60" />
+                <p className="font-mono text-xs text-red-400">{athletesError}</p>
+              </div>
+            )}
+
+            {/* Empty */}
+            {!athletesLoading && !athletesError && isEmpty && (
+              <div className="flex flex-col items-center justify-center py-16 space-y-3">
+                <UserX size={40} className="text-text-muted opacity-60" />
+                <p className="font-mono text-xs text-text-muted">
+                  {query ? `No athletes found matching "${query}"` : 'No registered athletes found in Appwrite database.'}
+                </p>
+              </div>
+            )}
+
+            {/* Results */}
+            {!athletesLoading && !athletesError && athletes.length > 0 && (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                {athletes.map(athlete => {
+                  const isSaved = savedUserIds.includes(athlete.id);
+                  return (
+                    <motion.div
+                      key={athlete.id}
+                      whileHover={{ y: -4 }}
+                      className="rounded-3xl overflow-hidden bg-surface border border-border-muted p-5 space-y-4 shadow-xl transition-all hover:border-[#00D4FF]/40 flex flex-col justify-between"
+                    >
+                      <div className="space-y-3">
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-3">
+                            <div className="relative">
+                              <img
+                                src={athlete.avatar_url || `https://i.pravatar.cc/150?u=${athlete.id}`}
+                                alt={athlete.full_name}
+                                className="w-14 h-14 rounded-2xl object-cover border border-[#00D4FF]/40 shadow-md bg-elevated"
+                              />
+                              <span className="absolute -bottom-1 -right-1 w-4 h-4 rounded-full bg-[#CCFF00] ring-2 ring-black flex items-center justify-center text-[9px] font-black text-black">
+                                <CheckCircle2 size={10} className="text-black" />
+                              </span>
+                            </div>
+                            <div>
+                              <h3 className="font-sans font-bold text-base text-white">{athlete.full_name}</h3>
+                              <div className="flex items-center gap-2 font-mono text-[11px] text-[#00D4FF]">
+                                <span>@{athlete.username || 'athlete'}</span>
+                                <span>•</span>
+                                <span className="capitalize">{athlete.sport || 'Multi-Sport'}</span>
+                              </div>
+                            </div>
+                          </div>
+
+                          <div className="text-right font-mono">
+                            <span className="text-xs text-text-muted uppercase block">PULSE</span>
+                            <span className="text-lg font-black text-[#CCFF00]">{athlete.pulse_score ?? 100}</span>
+                          </div>
                         </div>
-                        <div>
-                          <h3 className="font-sans font-bold text-base text-white">{athlete.name}</h3>
-                          <div className="flex items-center gap-2 font-mono text-[11px] text-[#00D4FF]">
-                            <span>@{athlete.username || 'athlete'}</span>
-                            <span>•</span>
-                            <span>{athlete.sport || 'Multi-Sport'}</span>
+
+                        {athlete.location && (
+                          <div className="flex items-center gap-1 font-mono text-[10px] text-text-muted">
+                            <MapPin size={11} className="text-[#00D4FF]" />
+                            <span>{athlete.location}</span>
+                          </div>
+                        )}
+
+                        <div className="grid grid-cols-3 gap-2 p-3 rounded-2xl bg-elevated/60 border border-white/5 text-center font-mono">
+                          <div>
+                            <p className="text-[9px] text-text-muted uppercase">Sport</p>
+                            <p className="text-xs font-bold text-white capitalize truncate">{athlete.sport || '—'}</p>
+                          </div>
+                          <div>
+                            <p className="text-[9px] text-text-muted uppercase">Level</p>
+                            <p className="text-xs font-bold text-[#00D4FF] capitalize">{athlete.experience_level || `Lvl ${athlete.level}`}</p>
+                          </div>
+                          <div>
+                            <p className="text-[9px] text-text-muted uppercase">Open</p>
+                            <p className="text-xs font-bold text-[#CCFF00]">{athlete.is_open_to_recruit ? 'Yes' : 'No'}</p>
                           </div>
                         </div>
                       </div>
 
-                      <div className="text-right font-mono">
-                        <span className="text-xs text-text-muted uppercase block">SSR RATING</span>
-                        <span className="text-lg font-black text-[#CCFF00]">94.8</span>
+                      <div className="flex items-center gap-2 pt-2 border-t border-white/5">
+                        <button
+                          onClick={() => navigate(`/app/profile/${athlete.id}`)}
+                          className="flex-1 py-2.5 rounded-xl bg-[#00D4FF] hover:bg-[#1ad8ff] text-black font-mono font-bold text-xs uppercase tracking-wider transition-all"
+                        >
+                          View PlayerDNA
+                        </button>
+                        <button
+                          onClick={() => navigate(`/app/messages?user=${athlete.id}`)}
+                          className="p-2.5 rounded-xl bg-elevated border border-white/10 hover:border-white/20 text-white transition-all"
+                          title="Message"
+                        >
+                          <MessageCircle size={16} />
+                        </button>
+                        <button
+                          onClick={() => toggleSaveUser(athlete.id)}
+                          className={`p-2.5 rounded-xl border transition-all ${isSaved ? 'bg-[#CCFF00]/10 border-[#CCFF00] text-[#CCFF00]' : 'bg-elevated border-white/10 text-white'}`}
+                          title="Bookmark Athlete"
+                        >
+                          <Bookmark size={16} fill={isSaved ? 'currentColor' : 'none'} />
+                        </button>
                       </div>
-                    </div>
-
-                    <p className="text-xs text-text-secondary line-clamp-2 font-sans">
-                      {athlete.bio || 'Versatile athlete specializing in tactical teamwork, fast execution, and competitive tournament play.'}
-                    </p>
-
-                    <div className="grid grid-cols-3 gap-2 p-3 rounded-2xl bg-elevated/60 border border-white/5 text-center font-mono">
-                      <div>
-                        <p className="text-[9px] text-text-muted uppercase">Matches</p>
-                        <p className="text-xs font-bold text-white">{athlete.stats?.matches || 42}</p>
-                      </div>
-                      <div>
-                        <p className="text-[9px] text-text-muted uppercase">Win Rate</p>
-                        <p className="text-xs font-bold text-[#CCFF00]">78%</p>
-                      </div>
-                      <div>
-                        <p className="text-[9px] text-text-muted uppercase">Level</p>
-                        <p className="text-xs font-bold text-[#00D4FF]">Lvl {athlete.level || 35}</p>
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="flex items-center gap-2 pt-2 border-t border-white/5">
-                    <button
-                      onClick={() => navigate(`/app/profile/${athlete.id}`)}
-                      className="flex-1 py-2.5 rounded-xl bg-[#00D4FF] hover:bg-[#1ad8ff] text-black font-mono font-bold text-xs uppercase tracking-wider transition-all"
-                    >
-                      View PlayerDNA
-                    </button>
-                    <button
-                      onClick={() => navigate('/app/messages')}
-                      className="p-2.5 rounded-xl bg-elevated border border-white/10 hover:border-white/20 text-white transition-all"
-                      title="Message"
-                    >
-                      <MessageCircle size={16} />
-                    </button>
-                    <button
-                      onClick={() => toggleSaveUser(athlete.id)}
-                      className={`p-2.5 rounded-xl border transition-all ${isSaved ? 'bg-[#CCFF00]/10 border-[#CCFF00] text-[#CCFF00]' : 'bg-elevated border-white/10 text-white'}`}
-                      title="Bookmark Athlete"
-                    >
-                      <Bookmark size={16} fill={isSaved ? 'currentColor' : 'none'} />
-                    </button>
-                  </div>
-                </motion.div>
-              );
-            })}
+                    </motion.div>
+                  );
+                })}
+              </div>
+            )}
           </motion.div>
         )}
 

@@ -7,6 +7,8 @@ import type {
   ValidationStatus,
 } from '../types/performance.types';
 import { calculatePulse, calculateSSRDelta, calculateChemistryDelta } from '../services/performanceService';
+import { getMatchHistory, createMatch } from '../services/matchService';
+import { useAuthStore } from './authStore';
 
 // ─── MOCK MATCH HISTORY ───────────────────────────────────────────────────────
 
@@ -111,6 +113,7 @@ interface MatchReportState {
   hasPendingReport: boolean;
 
   // Actions
+  loadMatchHistory: () => Promise<void>;
   setStep: (step: 0 | 1 | 2) => void;
   setMatchResult: (result: MatchResult) => void;
   setStat: (key: string, value: number | string | boolean) => void;
@@ -142,6 +145,13 @@ export const useMatchReportStore = create<MatchReportState>((set, get) => ({
   hasPendingReport: true, // Start with a pending report for demo
 
   // ── Actions ──────────────────────────────────────────────────────────────
+
+  loadMatchHistory: async () => {
+    const user = useAuthStore.getState().user;
+    if (!user) return;
+    const history = await getMatchHistory(user.id, MOCK_HISTORY);
+    set({ matchHistory: history });
+  },
 
   setStep: (step) => set({ currentStep: step }),
 
@@ -201,6 +211,11 @@ export const useMatchReportStore = create<MatchReportState>((set, get) => ({
       newLevel: 28,
       rankUnlocked: pulseEarned > 80 ? 'CONTENDER X' : undefined,
     };
+
+    const user = useAuthStore.getState().user;
+    if (user) {
+      createMatch(user.id, newReport);
+    }
 
     set((s) => ({
       isSubmitting: false,

@@ -61,11 +61,7 @@ export const generateAIPulseSquad = async (
   userProfile: { name: string; username: string; avatar: string; level: number; gameplayCategory: string },
   onLog?: (log: string) => void
 ): Promise<Squad> => {
-  // ── Daily limit guard ────────────────────────────────────────────────────
   const settings = useAISettingsStore.getState();
-  if (!settings.canGenerateToday()) {
-    throw new Error('DAILY_LIMIT_REACHED');
-  }
 
   const emit = (msg: string) => {
     if (settings.aiGeminiLogsEnabled && onLog) onLog(msg);
@@ -189,7 +185,7 @@ export const generateAIPulseSquad = async (
 
   const genAI = getGenAI();
   if (genAI) {
-    emit('> Connecting to Gemini AI engine...');
+    emit('> Connecting to SPORTiX AI engine...');
     const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' });
     const athleteList = allMembers.map(a => `${a.name} (${a.position}, Level ${a.level}, Pulse ${a.pulseScore})`).join(', ');
     emit(`> Scanning ${allMembers.length} athlete profiles for ${sport}...`);
@@ -221,10 +217,10 @@ Format your response as a strict JSON object (ensure it's valid JSON and contain
 }`;
 
     try {
-      emit('> Sending matchmaking request to Gemini 1.5 Flash...');
+      emit('> Sending matchmaking request to AI engine...');
       const result = await model.generateContent(prompt);
       const responseText = result.response.text().trim();
-      emit('> Gemini response received. Parsing JSON payload...');
+      emit('> AI response received. Parsing payload...');
       const jsonMatch = responseText.match(/\{[\s\S]*\}/);
       if (jsonMatch) {
         const parsed: GeminiSquadResponse = JSON.parse(jsonMatch[0]);
@@ -246,11 +242,11 @@ Format your response as a strict JSON object (ensure it's valid JSON and contain
       }
       emit('> AI compilation complete. Assembling squad...');
     } catch (e) {
-      emit('> Gemini API error — switching to simulation fallback.');
-      console.warn('Gemini API call failed in squadAI, using simulation fallback:', e);
+      emit('> AI API error — switching to simulation fallback.');
+      console.warn('AI API call failed in squadAI, using simulation fallback:', e);
     }
   } else {
-    emit('> Simulation mode — add Gemini API key to enable real AI.');
+    emit('> Simulation mode — add VITE_GEMINI_API_KEY to enable real AI.');
   }
 
   const pulseAvg = Math.round(allMembers.reduce((sum, a) => sum + a.pulseScore, 0) / allMembers.length);

@@ -36,6 +36,8 @@ export interface UserProfile {
   experience_level: string;
   location: string;
   avatar_url: string | null;
+  profile_image_file_id?: string | null;
+  profile_image_url?: string | null;
   bio: string;
   is_open_to_recruit: boolean;
   is_active: boolean;

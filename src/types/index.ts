@@ -193,6 +193,8 @@ export interface Event {
   bracket?: BracketRound[];
   organizerId: string;
   bannerImage?: string;
+  banner_image_file_id?: string;
+  banner_image_url?: string;
   bannerAlignment?: 'top' | 'center' | 'bottom';
   status: EventStatus;
   aiTeamAvailable: boolean;

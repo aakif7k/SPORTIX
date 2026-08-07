@@ -1,121 +1,173 @@
 import { create } from 'zustand';
 import type { Event, AITeamResult, BracketRound, EventStatus } from '../types';
 import { MOCK_EVENTS } from '../services/mockData';
+import {
+  getEvents,
+  getEvent,
+  getEventParticipants,
+  createEvent as svcCreateEvent,
+  updateEvent as svcUpdateEvent,
+  deleteEvent as svcDeleteEvent,
+  joinEvent  as svcJoinEvent,
+  leaveEvent as svcLeaveEvent,
+  type DbEventParticipant,
+} from '../services/eventService';
 
 interface EventState {
   events: Event[];
   activeEvent: Event | null;
+  participantsMap: Record<string, DbEventParticipant[]>;
   aiTeamResult: AITeamResult | null;
   isGenerating: boolean;
-  
-  // Basic Actions
-  setActiveEvent: (event: Event | null) => void;
-  setAITeamResult: (result: AITeamResult | null) => void;
-  setIsGenerating: (val: boolean) => void;
-  addEvent: (event: Event) => void;
-  updateEvent: (id: string, updates: Partial<Event>) => void;
-  deleteEvent: (id: string) => void;
 
-  // Architectural Event Lifecycle Actions
-  joinEvent: (eventId: string, userId: string) => { success: boolean; message: string };
-  leaveEvent: (eventId: string, userId: string) => { success: boolean; message: string };
+  // Core actions
+  loadEvents:       () => Promise<void>;
+  loadEvent:        (id: string) => Promise<Event | null>;
+  refreshEventData: (id: string) => Promise<void>;
+  setActiveEvent:   (event: Event | null) => void;
+  setAITeamResult:  (result: AITeamResult | null) => void;
+  setIsGenerating:  (val: boolean) => void;
+  addEvent:         (event: Omit<Event, 'id'>) => Promise<Event | null>;
+  updateEvent:      (id: string, updates: Partial<Event>) => void;
+  deleteEvent:      (id: string) => void;
+
+  // Lifecycle actions
+  joinEvent:         (eventId: string, userId: string, entryType?: 'solo' | 'team' | 'squad' | 'crew', teamId?: string, teamMembers?: string[]) => Promise<{ success: boolean; message: string }>;
+  leaveEvent:        (eventId: string, userId: string) => Promise<{ success: boolean; message: string }>;
   updateEventStatus: (eventId: string, status: EventStatus) => void;
-  updateBracket: (eventId: string, bracket: BracketRound[]) => void;
+  updateBracket:     (eventId: string, bracket: BracketRound[]) => void;
 }
 
 export const useEventStore = create<EventState>((set, get) => ({
-  events: MOCK_EVENTS,
-  activeEvent: null,
-  aiTeamResult: null,
-  isGenerating: false,
+  events:          MOCK_EVENTS,
+  activeEvent:     null,
+  participantsMap: {},
+  aiTeamResult:    null,
+  isGenerating:    false,
 
-  setActiveEvent: (event) => set({ activeEvent: event }),
+  // ── Load all events from Appwrite ──────────────────────────────────────────
+  loadEvents: async () => {
+    const events = await getEvents();
+    set({ events });
+  },
+
+  // ── Load a single event by ID and fetch event_participants ──────────────
+  loadEvent: async (id: string) => {
+    const event = await getEvent(id);
+    const dbParticipants = await getEventParticipants(id);
+
+    if (event) {
+      const mergedEvent: Event = {
+        ...event,
+        participants: dbParticipants.length > 0
+          ? dbParticipants.map(p => p.user_id)
+          : event.participants,
+      };
+
+      set(state => ({
+        events: state.events.some(e => e.id === event.id)
+          ? state.events.map(e => e.id === event.id ? mergedEvent : e)
+          : [mergedEvent, ...state.events],
+        activeEvent: state.activeEvent?.id === id ? mergedEvent : state.activeEvent,
+        participantsMap: {
+          ...state.participantsMap,
+          [id]: dbParticipants,
+        },
+      }));
+      return mergedEvent;
+    }
+    return null;
+  },
+
+  // ── Re-fetch participant records from Appwrite event_participants ──────────
+  refreshEventData: async (id: string) => {
+    const eventDoc = await getEvent(id);
+    const dbParticipants = await getEventParticipants(id);
+
+    if (eventDoc) {
+      const mergedEvent: Event = {
+        ...eventDoc,
+        participants: dbParticipants.map(p => p.user_id),
+      };
+
+      set(state => ({
+        events: state.events.map(e => e.id === id ? mergedEvent : e),
+        activeEvent: state.activeEvent?.id === id ? mergedEvent : state.activeEvent,
+        participantsMap: {
+          ...state.participantsMap,
+          [id]: dbParticipants,
+        },
+      }));
+    }
+  },
+
+  setActiveEvent:  (event) => set({ activeEvent: event }),
   setAITeamResult: (result) => set({ aiTeamResult: result }),
   setIsGenerating: (val) => set({ isGenerating: val }),
-  
-  addEvent: (event) => set(state => ({ events: [event, ...state.events] })),
-  
-  updateEvent: (id, updates) => set(state => ({
-    events: state.events.map(e => e.id === id ? { ...e, ...updates } : e),
-    activeEvent: state.activeEvent?.id === id ? { ...state.activeEvent, ...updates } : state.activeEvent
-  })),
 
-  deleteEvent: (id) => set(state => ({
-    events: state.events.filter(e => e.id !== id),
-    activeEvent: state.activeEvent?.id === id ? null : state.activeEvent
-  })),
-
-  // Concurrency-safe event registration with slot availability checks
-  joinEvent: (eventId: string, userId: string) => {
-    const events = get().events;
-    const targetEvent = events.find(e => e.id === eventId);
-
-    if (!targetEvent) {
-      return { success: false, message: 'Tournament event not found.' };
+  // ── Create event ───────────────────────────────────────────────────────────
+  addEvent: async (event) => {
+    try {
+      const saved = await svcCreateEvent(event);
+      if (saved) {
+        set(state => ({ events: [saved, ...state.events] }));
+        await get().refreshEventData(saved.id);
+        return saved;
+      }
+      const fallback: Event = { ...event, id: `local_${Date.now()}` };
+      set(state => ({ events: [fallback, ...state.events] }));
+      return fallback;
+    } catch (err) {
+      console.error('[eventStore] addEvent failed:', err);
+      return null;
     }
-
-    if (targetEvent.participants.includes(userId)) {
-      return { success: false, message: 'You are already registered for this event.' };
-    }
-
-    if (targetEvent.participants.length >= targetEvent.maxParticipants) {
-      return { success: false, message: 'Registration closed. All tournament slots are filled.' };
-    }
-
-    const updatedParticipants = [...targetEvent.participants, userId];
-    
-    set(state => ({
-      events: state.events.map(e => 
-        e.id === eventId ? { ...e, participants: updatedParticipants } : e
-      ),
-      activeEvent: state.activeEvent?.id === eventId 
-        ? { ...state.activeEvent, participants: updatedParticipants } 
-        : state.activeEvent
-    }));
-
-    return { success: true, message: 'Successfully registered for tournament clash!' };
   },
 
-  // Atomic cancellation of event registration
-  leaveEvent: (eventId: string, userId: string) => {
-    const events = get().events;
-    const targetEvent = events.find(e => e.id === eventId);
-
-    if (!targetEvent) {
-      return { success: false, message: 'Tournament event not found.' };
-    }
-
-    if (!targetEvent.participants.includes(userId)) {
-      return { success: false, message: 'You are not registered for this event.' };
-    }
-
-    const updatedParticipants = targetEvent.participants.filter(p => p !== userId);
-
+  updateEvent: (id, updates) => {
     set(state => ({
-      events: state.events.map(e => 
-        e.id === eventId ? { ...e, participants: updatedParticipants } : e
-      ),
-      activeEvent: state.activeEvent?.id === eventId 
-        ? { ...state.activeEvent, participants: updatedParticipants } 
-        : state.activeEvent
+      events:      state.events.map(e => e.id === id ? { ...e, ...updates } : e),
+      activeEvent: state.activeEvent?.id === id ? { ...state.activeEvent, ...updates } : state.activeEvent,
     }));
-
-    return { success: true, message: 'Registration cancelled.' };
+    svcUpdateEvent(id, updates);
   },
 
-  // Lifecycle status transition
-  updateEventStatus: (eventId: string, status: EventStatus) => {
+  deleteEvent: (id) => {
     set(state => ({
-      events: state.events.map(e => e.id === eventId ? { ...e, status } : e),
-      activeEvent: state.activeEvent?.id === eventId ? { ...state.activeEvent, status } : state.activeEvent
+      events:      state.events.filter(e => e.id !== id),
+      activeEvent: state.activeEvent?.id === id ? null : state.activeEvent,
+    }));
+    svcDeleteEvent(id);
+  },
+
+  // ── Join event ─────────────────────────────────────────────────────────────
+  joinEvent: async (eventId, userId, entryType = 'solo', teamId, teamMembers) => {
+    const result = await svcJoinEvent(eventId, userId, entryType, teamId, teamMembers);
+    if (result.success) {
+      await get().refreshEventData(eventId);
+    }
+    return result;
+  },
+
+  // ── Leave event ────────────────────────────────────────────────────────────
+  leaveEvent: async (eventId, userId) => {
+    const result = await svcLeaveEvent(eventId, userId);
+    if (result.success) {
+      await get().refreshEventData(eventId);
+    }
+    return result;
+  },
+
+  updateEventStatus: (eventId, status) => {
+    set(state => ({
+      events:      state.events.map(e => e.id === eventId ? { ...e, status } : e),
+      activeEvent: state.activeEvent?.id === eventId ? { ...state.activeEvent, status } : state.activeEvent,
     }));
   },
 
-  // Update bracket results
-  updateBracket: (eventId: string, bracket: BracketRound[]) => {
+  updateBracket: (eventId, bracket) => {
     set(state => ({
-      events: state.events.map(e => e.id === eventId ? { ...e, bracket } : e),
-      activeEvent: state.activeEvent?.id === eventId ? { ...state.activeEvent, bracket } : state.activeEvent
+      events:      state.events.map(e => e.id === eventId ? { ...e, bracket } : e),
+      activeEvent: state.activeEvent?.id === eventId ? { ...state.activeEvent, bracket } : state.activeEvent,
     }));
-  }
+  },
 }));

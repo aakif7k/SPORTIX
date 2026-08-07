@@ -6,6 +6,11 @@ import { Navbar } from '../components/layout/Navbar';
 import { BottomNav } from '../components/layout/Navbar';
 import { RightPanel } from '../components/layout/RightPanel';
 import { useAuthStore } from '../store/authStore';
+import { useEventStore } from '../store/eventStore';
+import { useSquadStore } from '../store/squadStore';
+import { useNotificationStore } from '../store/notificationStore';
+import { useMatchReportStore } from '../store/matchReportStore';
+import { useGamificationStore } from '../store/gamificationStore';
 import { LogOut } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
 import toast from 'react-hot-toast';
@@ -46,6 +51,15 @@ export const AppLayout: React.FC = () => {
     }
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [showLogoutConfirm, setShowLogoutConfirm]);
+
+  // Load data from Appwrite on mount
+  useEffect(() => {
+    useEventStore.getState().loadEvents();
+    useSquadStore.getState().loadData();
+    useNotificationStore.getState().loadNotifications();
+    useMatchReportStore.getState().loadMatchHistory();
+    useGamificationStore.getState().loadGamificationData();
+  }, []);
 
   return (
     <div className="flex h-screen overflow-hidden" style={{ background: 'var(--bg-base)' }}>

@@ -5,6 +5,8 @@ import {
   Check, Upload, ArrowLeft, Trophy, Sparkles, Plus 
 } from 'lucide-react';
 import { useEventStore } from '../../store/eventStore';
+import { useAuthStore } from '../../store/authStore';
+import { uploadEventBannerImage } from '../../services/storageService';
 import { SPORT_CATEGORIES } from '../../services/mockData';
 import type { Event, SportCategory, EventFormat, ExperienceLevel } from '../../types';
 
@@ -13,6 +15,9 @@ const STEPS = ['Basics', 'Rules & Fees', 'Teams', 'Review & Host'];
 export const CreateEvent: React.FC = () => {
   const navigate = useNavigate();
   const { addEvent } = useEventStore();
+  const currentUser = useAuthStore(state => state.user);
+  const [isPublishing, setIsPublishing] = useState(false);
+  const [bannerFile, setBannerFile] = useState<File | null>(null);
 
   const [step, setStep] = useState(0);
   const [form, setForm] = useState({
@@ -37,6 +42,7 @@ export const CreateEvent: React.FC = () => {
   const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
+    setBannerFile(file);
 
     const reader = new FileReader();
     reader.onload = (event) => {
@@ -46,21 +52,36 @@ export const CreateEvent: React.FC = () => {
     reader.readAsDataURL(file);
   };
 
-  const publish = () => {
-    const newEvent: Event = {
-      id: `e_${Date.now()}`,
+  const publish = async () => {
+    if (isPublishing) return;
+    setIsPublishing(true);
+    
+    const userId = currentUser?.id || currentUser?.uid || 'cu1';
+    
+    let bannerFileId: string | undefined;
+    let bannerFileUrl: string | undefined = form.bannerImage?.startsWith('data:') ? undefined : form.bannerImage;
+
+    if (bannerFile) {
+      const uploadRes = await uploadEventBannerImage(bannerFile);
+      if (uploadRes) {
+        bannerFileId = uploadRes.fileId;
+        bannerFileUrl = uploadRes.fileUrl;
+      }
+    }
+    
+    const newEvent: Omit<Event, 'id'> = {
       title: form.title || 'Untitled Tournament',
       sport: form.sport,
       description: form.description || 'No description provided.',
-      date: form.date || new Date().toISOString(),
+      date: form.date || new Date().toISOString().split('T')[0],
       venue: form.venue || 'TBD',
       location: form.location || 'Local Grounds',
       format: form.format,
       skillLevel: form.skillLevel,
       maxParticipants: parseInt(form.maxParticipants, 10) || 32,
-      participants: ['cu1'],
+      participants: [userId],
       teams: [],
-      organizerId: 'cu1',
+      organizerId: userId,
       status: 'upcoming',
       aiTeamAvailable: form.aiTeamAvailable,
       aiGenerated: false,
@@ -68,10 +89,27 @@ export const CreateEvent: React.FC = () => {
       rules: form.rules.filter(Boolean),
       prizePool: form.prizePool,
       entryFee: form.entryFee,
+      banner_image_file_id: bannerFileId,
+      banner_image_url: bannerFileUrl,
+      bannerImage: bannerFileUrl,
       createdAt: new Date().toISOString(),
     };
-    addEvent(newEvent);
-    navigate(`/app/events/${newEvent.id}`);
+    
+    try {
+      const saved = await addEvent(newEvent);
+      if (saved?.id) {
+        navigate(`/app/events/${saved.id}`);
+      } else {
+        console.error('[CreateEvent] Failed to save event to Appwrite');
+        // Navigate to events list as fallback
+        navigate('/app/events');
+      }
+    } catch (err) {
+      console.error('[CreateEvent] publish error:', err);
+      navigate('/app/events');
+    } finally {
+      setIsPublishing(false);
+    }
   };
 
   return (
@@ -295,9 +333,18 @@ export const CreateEvent: React.FC = () => {
           ) : (
             <button
               onClick={publish}
-              className="px-6 py-2.5 rounded-xl bg-[#CCFF00] hover:bg-[#b8e600] text-black font-mono text-xs font-bold uppercase tracking-wider transition-all shadow-[0_0_20px_rgba(204,255,0,0.4)]"
+              disabled={isPublishing}
+              className="px-6 py-2.5 rounded-xl bg-[#CCFF00] hover:bg-[#b8e600] text-black font-mono text-xs font-bold uppercase tracking-wider transition-all shadow-[0_0_20px_rgba(204,255,0,0.4)] disabled:opacity-60 disabled:cursor-not-allowed flex items-center gap-2"
             >
-              🚀 Launch Tournament Live
+              {isPublishing ? (
+                <>
+                  <svg className="animate-spin w-3.5 h-3.5" viewBox="0 0 24 24" fill="none">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"/>
+                  </svg>
+                  Launching...
+                </>
+              ) : '🚀 Launch Tournament Live'}
             </button>
           )}
         </div>

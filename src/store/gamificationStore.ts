@@ -1,53 +1,9 @@
 import { create } from 'zustand';
+import { getMissions, getBadges } from '../services/gamificationService';
+import { useAuthStore } from './authStore';
 
 // ─── TYPES ──────────────────────────────────────────────────────────────────
-export interface GamificationLevel {
-  level: number;
-  title: string;
-  minPulse: number;
-  maxPulse: number;
-  color: string;
-  icon: string;
-}
-
-export interface Mission {
-  id: string;
-  title: string;
-  description: string;
-  icon: string;
-  category: 'daily' | 'weekly';
-  target: number;
-  current: number;
-  reward: number;
-  xpReward: number;
-  completed: boolean;
-  claimed: boolean;
-}
-
-export interface DailyReward {
-  day: number;
-  label: string;
-  pulseReward: number;
-  xpBooster?: number;
-  icon: string;
-  claimed: boolean;
-  isToday: boolean;
-  isLocked: boolean;
-  isBonusDay: boolean;
-}
-
-export interface Badge {
-  id: string;
-  title: string;
-  description: string;
-  icon: string;
-  rarity: 'common' | 'rare' | 'epic' | 'legendary';
-  color: string;
-  unlocked: boolean;
-  progress?: number;
-  maxProgress?: number;
-  unlockedAt?: string;
-}
+import type { GamificationLevel, Mission, DailyReward, Badge } from '../types/gamification.types';
 
 export interface GamificationState {
   // Core
@@ -63,6 +19,7 @@ export interface GamificationState {
   badges: Badge[];
 
   // Actions
+  loadGamificationData: () => Promise<void>;
   addPulse: (amount: number) => void;
   claimDailyReward: (day: number) => void;
   completeMission: (id: string) => void;
@@ -165,6 +122,16 @@ export const useGamificationStore = create<GamificationState>((set) => ({
   missions: INITIAL_MISSIONS,
   dailyRewards: INITIAL_REWARDS,
   badges: INITIAL_BADGES,
+
+  loadGamificationData: async () => {
+    const user = useAuthStore.getState().user;
+    if (!user) return;
+    const [fetchedMissions, fetchedBadges] = await Promise.all([
+      getMissions(user.id, INITIAL_MISSIONS),
+      getBadges(user.id, INITIAL_BADGES)
+    ]);
+    set({ missions: fetchedMissions, badges: fetchedBadges });
+  },
 
   addPulse: (amount) => set((state) => {
     const newPulse = state.currentPulse + amount;

@@ -1,12 +1,13 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   X, User, Zap, BarChart2, Shield, Globe,
   AtSign, Hash, Play, Briefcase,
-  Camera, Save, Check, Bell, Star, Award, ChevronDown,
+  Camera, Save, Check, Bell, Star, Award, ChevronDown, Loader2,
 } from 'lucide-react';
 import type { User as UserType, SportCategory, ExperienceLevel, PerformanceData } from '../../types';
 import { useAuthStore } from '../../store/authStore';
+import { uploadProfilePicture } from '../../services/storageService';
 import { SPORT_CATEGORIES, SPORT_POSITIONS } from '../../services/mockData';
 import { Toggle } from '../ui/index';
 
@@ -208,6 +209,24 @@ export const ProfileEditDrawer: React.FC<Props> = ({ athlete, onClose }) => {
     theme: athlete?.themePref || 'dark',
   });
 
+  const avatarInputRef = useRef<HTMLInputElement>(null);
+  const [uploadingAvatar, setUploadingAvatar] = useState(false);
+
+  const handleAvatarFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const userId = athlete.id || (athlete as any).uid;
+    if (!userId) return;
+
+    setUploadingAvatar(true);
+    const result = await uploadProfilePicture(userId, file);
+    setUploadingAvatar(false);
+
+    if (result?.fileUrl) {
+      setDraft(d => ({ ...d, avatar: result.fileUrl }));
+    }
+  };
+
   const set = useCallback(<K extends keyof DraftState>(key: K, val: DraftState[K]) => {
     setDraft(d => ({ ...d, [key]: val }));
   }, []);
@@ -299,23 +318,36 @@ export const ProfileEditDrawer: React.FC<Props> = ({ athlete, onClose }) => {
 
         {/* Avatar Quick Edit */}
         <div className="flex items-center gap-4 px-5 py-4 border-b border-border-muted bg-elevated/30 flex-shrink-0">
+          <input
+            ref={avatarInputRef}
+            type="file"
+            accept="image/*"
+            className="hidden"
+            onChange={handleAvatarFileChange}
+          />
           <div className="relative group flex-shrink-0">
             <div className="w-16 h-16 rounded-2xl overflow-hidden border-2 border-volt/30">
               <img src={draft.avatar} alt={draft.name} className="w-full h-full object-cover" />
             </div>
-            <button className="absolute inset-0 flex items-center justify-center bg-base/70 opacity-0 group-hover:opacity-100 transition-opacity rounded-2xl">
-              <Camera size={18} className="text-volt" />
+            <button
+              onClick={() => avatarInputRef.current?.click()}
+              disabled={uploadingAvatar}
+              className="absolute inset-0 flex items-center justify-center bg-base/70 opacity-0 group-hover:opacity-100 transition-opacity rounded-2xl"
+            >
+              {uploadingAvatar ? <Loader2 size={18} className="text-volt animate-spin" /> : <Camera size={18} className="text-volt" />}
             </button>
           </div>
           <div className="flex-1 min-w-0">
             <p className="font-label text-sm font-semibold text-white truncate">{draft.name}</p>
             <p className="font-mono text-xs text-text-secondary">@{draft.username}</p>
             <div className="flex gap-2 mt-2">
-              <button className="text-[10px] font-label px-2.5 py-1 rounded-lg border border-volt/30 text-volt hover:bg-volt/10 transition-all">
-                Change Photo
-              </button>
-              <button className="text-[10px] font-label px-2.5 py-1 rounded-lg border border-border-muted text-text-secondary hover:text-white transition-all">
-                Change Cover
+              <button
+                onClick={() => avatarInputRef.current?.click()}
+                disabled={uploadingAvatar}
+                className="text-[10px] font-label px-2.5 py-1 rounded-lg border border-volt/30 text-volt hover:bg-volt/10 transition-all flex items-center gap-1"
+              >
+                {uploadingAvatar ? <Loader2 size={10} className="animate-spin" /> : null}
+                {uploadingAvatar ? 'Uploading...' : 'Change Photo'}
               </button>
             </div>
           </div>

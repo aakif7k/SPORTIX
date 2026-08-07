@@ -3,6 +3,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { createPortal } from 'react-dom';
 import { X, Sparkles, MapPin, Check, ArrowRight, Shield } from 'lucide-react';
 import { useSquadStore } from '../../store/squadStore';
+import { useEventStore } from '../../store/eventStore';
 import { useAuthStore } from '../../store/authStore';
 import { useAISettingsStore } from '../../store/aiSettingsStore';
 import { generateAIPulseSquad } from '../../services/squadAI';
@@ -91,10 +92,28 @@ export const EventJoinModal: React.FC<EventJoinModalProps> = ({ isOpen, onClose,
     }
   };
 
-  const handleAcceptSquad = () => {
+  const handleAcceptSquad = async () => {
+    const currentUserId = user?.id || user?.uid || '';
     if (generatedSquad) {
       acceptGeneratedSquad(generatedSquad.squadId);
+      const memberUserIds = (generatedSquad.members || []).map((m: any) => m.uid || m.id || m.userId).filter(Boolean);
+      await useEventStore.getState().joinEvent(
+        event.id,
+        currentUserId,
+        'squad',
+        generatedSquad.squadId,
+        memberUserIds.length > 0 ? memberUserIds : [currentUserId]
+      );
+    } else {
+      await useEventStore.getState().joinEvent(event.id, currentUserId, 'solo');
     }
+    setStep('confirmed');
+    setTimeout(() => onJoined(), 1200);
+  };
+
+  const handleJoinSolo = async () => {
+    const currentUserId = user?.id || user?.uid || '';
+    await useEventStore.getState().joinEvent(event.id, currentUserId, 'solo');
     setStep('confirmed');
     setTimeout(() => onJoined(), 1200);
   };
@@ -159,8 +178,7 @@ export const EventJoinModal: React.FC<EventJoinModalProps> = ({ isOpen, onClose,
                   {/* Join with AI AutoSquad */}
                   <motion.button whileHover={{ scale: 1.01 }} whileTap={{ scale: 0.99 }}
                     onClick={handleGenerateSquad}
-                    disabled={remaining <= 0}
-                    className="w-full rounded-[16px] p-5 text-left relative overflow-hidden group disabled:opacity-50 premium-card bg-accent-surface border border-accent-border/50 shadow-sm">
+                    className="w-full rounded-[16px] p-5 text-left relative overflow-hidden group premium-card bg-accent-surface border border-accent-border/50 shadow-sm">
                     <div className="absolute inset-0 bg-accent/5 opacity-0 group-hover:opacity-100 transition-opacity" />
                     <div className="flex items-start gap-4">
                       <div className="w-11 h-11 rounded-[14px] bg-accent-surface flex items-center justify-center flex-shrink-0 border border-accent-border">
@@ -175,12 +193,21 @@ export const EventJoinModal: React.FC<EventJoinModalProps> = ({ isOpen, onClose,
                           <span className="font-mono text-[9px] text-accent">{nearbyRadius} KM radius</span>
                           <span className="font-mono text-[9px] text-text-muted">·</span>
                           <span className="font-mono text-[9px] text-accent">Level-matched</span>
-                          <span className="font-mono text-[9px] text-text-muted">·</span>
-                          <span className="font-mono text-[9px] text-text-muted">{remaining}/3 daily left</span>
                         </div>
                       </div>
                       <ArrowRight size={16} className="text-accent flex-shrink-0 mt-1" />
                     </div>
+                  </motion.button>
+
+                  {/* Join Solo */}
+                  <motion.button whileHover={{ scale: 1.01 }} whileTap={{ scale: 0.99 }}
+                    onClick={handleJoinSolo}
+                    className="w-full rounded-[16px] p-4 text-left relative overflow-hidden group premium-card bg-elevated border border-border-muted flex items-center justify-between">
+                    <div>
+                      <div className="font-display text-[14px] text-text-primary tracking-wide uppercase">JOIN AS SOLO ATHLETE</div>
+                      <div className="font-mono text-[9px] text-text-muted">Register individually for open athlete slots</div>
+                    </div>
+                    <ArrowRight size={15} className="text-text-muted group-hover:text-text-primary transition-colors" />
                   </motion.button>
 
                   {/* Exit */}

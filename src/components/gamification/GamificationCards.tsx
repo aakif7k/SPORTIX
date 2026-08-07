@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Check, Lock, Zap } from 'lucide-react';
-import type { DailyReward, Mission, Badge } from '../../store/gamificationStore';
+import type { DailyReward, Mission, Badge } from '../../types/gamification.types';
 
 
 // ─── DAILY REWARD CARD ────────────────────────────────────────────────────────
@@ -195,7 +195,7 @@ const RARITY_STYLE = {
 };
 
 export const BadgeCard: React.FC<BadgeCardProps> = ({ badge }) => {
-  const rs = RARITY_STYLE[badge.rarity];
+  const rs = RARITY_STYLE[badge.rarity as keyof typeof RARITY_STYLE];
   const pct = badge.maxProgress ? Math.round((badge.progress! / badge.maxProgress) * 100) : 0;
 
   return (

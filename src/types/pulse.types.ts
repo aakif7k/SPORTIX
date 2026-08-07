@@ -122,6 +122,8 @@ export interface Squad {
   }[];
   xpBoostActive?: boolean;
   streakMultiplier?: number;
+  tags?: string[];
+  lookingFor?: string[];
 }
 
 export interface ValidationVote {

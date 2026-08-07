@@ -85,7 +85,7 @@ function generateAnalysisLog(sport: SportCategory, count: number): string[] {
 async function generateTeamWithGemini(sport: SportCategory, skillLevel: ExperienceLevel): Promise<{ reasoning: string; positions: string[] }> {
   const genAI = getGenAI();
   if (!genAI) {
-    return { reasoning: 'AI simulation mode — add your Gemini API key to .env to enable real AI team generation.', positions: SPORT_POSITIONS[sport] || SPORT_POSITIONS.default };
+    return { reasoning: 'AI simulation mode — add your API key to .env to enable real AI team generation.', positions: SPORT_POSITIONS[sport] || SPORT_POSITIONS.default };
   }
   const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' });
   const positions = SPORT_POSITIONS[sport] || SPORT_POSITIONS.default;

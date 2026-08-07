@@ -12,6 +12,7 @@ import { databases, DATABASE_ID, COLLECTIONS } from '@/lib/appwrite';
 import { useAuth } from '@/context/AuthContext';
 import { useAuthStore } from '@/store/authStore';
 import { checkUsernameAvailable, getUserProfile } from '@/lib/authService';
+import { uploadProfilePicture } from '@/services/storageService';
 import toast from 'react-hot-toast';
 import type { UserRole } from '@/types';
 
@@ -258,6 +259,17 @@ export const OnboardingPage: React.FC = () => {
     if (!currentUser) return;
     setIsLoading(true);
 
+    let uploadedUrl = photoPreview || null;
+    let uploadedFileId: string | null = null;
+
+    if (photoFile) {
+      const uploadRes = await uploadProfilePicture(currentUser.id, photoFile);
+      if (uploadRes) {
+        uploadedFileId = uploadRes.fileId;
+        uploadedUrl = uploadRes.fileUrl;
+      }
+    }
+
     const updatedUser = {
       ...currentUser,
       name: fullName,
@@ -268,7 +280,7 @@ export const OnboardingPage: React.FC = () => {
       experienceLevel: level as any,
       location,
       bio,
-      avatar: photoPreview || (currentUser as any)?.avatar_url || (currentUser as any)?.avatar || '',
+      avatar: uploadedUrl || (currentUser as any)?.avatar_url || (currentUser as any)?.avatar || '',
       isOnboardingComplete: true,
     };
 
@@ -289,7 +301,9 @@ export const OnboardingPage: React.FC = () => {
           sport:            primarySport,
           sports:           [primarySport, ...interestedSports].filter(Boolean),
           experience_level: level,
-          avatar_url:       photoPreview || null,
+          avatar_url:       uploadedUrl,
+          profile_image_file_id: uploadedFileId,
+          profile_image_url:     uploadedUrl,
           is_onboarding_complete: true,
           updated_at: new Date().toISOString(),
         },

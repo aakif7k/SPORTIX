@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { 
@@ -11,8 +11,13 @@ import { PendingReportBanner } from '../../components/performance/PendingReportB
 
 export const EventBrowse: React.FC = () => {
   const navigate = useNavigate();
-  const events = useEventStore(state => state.events);
-  
+  const { events, loadEvents } = useEventStore();
+
+  // Fetch live events from Appwrite on mount
+  useEffect(() => {
+    loadEvents();
+  }, []);
+
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedSport, setSelectedSport] = useState<string>('all');
   const [filterTab, setFilterTab] = useState<'all' | 'live' | 'featured'>('all');

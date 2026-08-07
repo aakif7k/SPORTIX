@@ -1,12 +1,25 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useCallback } from 'react';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { 
   Send, Image as ImageIcon, Smile, Search, Plus, ChevronLeft, 
-  Phone, Video, MoreVertical, Paperclip, CheckCheck, Sparkles
+  MoreVertical, Paperclip, CheckCheck, Sparkles, UserX
 } from 'lucide-react';
-import { MOCK_CONVERSATIONS, MOCK_MESSAGES, CURRENT_USER } from '../../services/mockData';
-import type { Message } from '../../types';
+import { useAuthStore } from '../../store/authStore';
+import { getCurrentUser } from '../../lib/authService';
+import { client, DATABASE_ID, COLLECTIONS } from '../../lib/appwrite';
+import { 
+  getUserConversations, 
+  getConversationMessages, 
+  sendMessage, 
+  getOrCreateConversation, 
+  markConversationAsRead,
+  type ConversationSummary, 
+  type DbMessage 
+} from '../../services/messageService';
+import { searchProfiles, type ProfileSummary } from '../../services/profileService';
 import { Avatar } from '../../components/ui/Avatar';
+import toast from 'react-hot-toast';
 
 const timeStr = (ts: string) => new Date(ts).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
 const timeAgo = (ts: string) => {
@@ -17,56 +30,169 @@ const timeAgo = (ts: string) => {
 };
 
 export const MessagesPage: React.FC = () => {
-  const [activeConvId, setActiveConvId] = useState<string | null>(MOCK_CONVERSATIONS[0]?.id || null);
-  const [messages, setMessages] = useState<Message[]>([]);
+  const location = useLocation();
+  const navigate = useNavigate();
+  const authUser = useAuthStore(state => state.user);
+
+  const [effectiveUserId, setEffectiveUserId] = useState<string>(authUser?.id || '');
+  const [conversations, setConversations] = useState<ConversationSummary[]>([]);
+  const [activeConvId, setActiveConvId] = useState<string | null>(null);
+  const [messages, setMessages] = useState<DbMessage[]>([]);
   const [input, setInput] = useState('');
   const [searchQ, setSearchQ] = useState('');
-  const [filterTab, setFilterTab] = useState<'all' | 'direct' | 'squad'>('all');
+  const [searchResults, setSearchResults] = useState<ProfileSummary[]>([]);
+  const [searchingUsers, setSearchingUsers] = useState(false);
+  const [loadingConvs, setLoadingConvs] = useState(true);
   const [mobileView, setMobileView] = useState<'list' | 'chat'>('list');
+
   const endRef = useRef<HTMLDivElement>(null);
 
-  const activeConv = MOCK_CONVERSATIONS.find(c => c.id === activeConvId);
+  useEffect(() => {
+    if (authUser?.id) {
+      setEffectiveUserId(authUser.id);
+    } else {
+      getCurrentUser().then(u => {
+        if (u?.id) setEffectiveUserId(u.id);
+      });
+    }
+  }, [authUser?.id]);
+
+  const currentUserId = effectiveUserId;
+
+  // ── Load conversations from Appwrite ──────────────────────────────────────
+  const loadConversations = useCallback(async () => {
+    if (!currentUserId) return;
+    const convs = await getUserConversations(currentUserId);
+    setConversations(convs);
+    setLoadingConvs(false);
+    return convs;
+  }, [currentUserId]);
+
+  // Handle URL target user navigation (e.g., /app/messages?user=xyz or state.userId)
+  useEffect(() => {
+    if (!currentUserId) return;
+
+    const queryParams = new URLSearchParams(location.search);
+    const targetUserId = queryParams.get('user') || (location.state as any)?.userId;
+
+    loadConversations().then(async (convs) => {
+      if (targetUserId) {
+        const convId = await getOrCreateConversation(currentUserId, targetUserId);
+        if (convId) {
+          setActiveConvId(convId);
+          setMobileView('chat');
+          await loadConversations();
+        }
+      } else if (convs && convs.length > 0 && !activeConvId) {
+        setActiveConvId(convs[0].id);
+      }
+    });
+  }, [currentUserId, location.search, location.state]);
+
+  // Load active conversation messages & mark as read
+  const loadMessages = useCallback(async (convId: string) => {
+    const msgs = await getConversationMessages(convId);
+    setMessages(msgs);
+    if (currentUserId) {
+      await markConversationAsRead(convId, currentUserId);
+      setConversations(prev =>
+        prev.map(c => c.id === convId ? { ...c, unreadCount: 0 } : c)
+      );
+    }
+    setTimeout(() => endRef.current?.scrollIntoView({ behavior: 'smooth' }), 100);
+  }, [currentUserId]);
 
   useEffect(() => {
     if (activeConvId) {
-      setMessages(MOCK_MESSAGES[activeConvId] || []);
-      setTimeout(() => endRef.current?.scrollIntoView({ behavior: 'smooth' }), 100);
+      loadMessages(activeConvId);
     }
-  }, [activeConvId]);
+  }, [activeConvId, loadMessages]);
 
-  const openConv = (id: string) => {
-    setActiveConvId(id);
+  // Appwrite Realtime Subscriptions for Messages and Conversations
+  useEffect(() => {
+    if (!currentUserId) return;
+
+    const msgsChannel = `databases.${DATABASE_ID}.collections.${COLLECTIONS.MESSAGES}.documents`;
+    const convsChannel = `databases.${DATABASE_ID}.collections.${COLLECTIONS.CONVERSATIONS}.documents`;
+
+    const unsubscribe = client.subscribe([msgsChannel, convsChannel], (response: any) => {
+      loadConversations();
+      if (activeConvId && response.payload && response.payload.conversation_id === activeConvId) {
+        loadMessages(activeConvId);
+      }
+    });
+
+    return () => {
+      unsubscribe();
+    };
+  }, [currentUserId, activeConvId, loadConversations, loadMessages]);
+
+  // User search debounce in sidebar
+  useEffect(() => {
+    if (!searchQ.trim()) {
+      setSearchResults([]);
+      setSearchingUsers(false);
+      return;
+    }
+
+    setSearchingUsers(true);
+    const timer = setTimeout(async () => {
+      const results = await searchProfiles(searchQ);
+      setSearchResults(results.filter(p => p.id !== currentUserId));
+      setSearchingUsers(false);
+    }, 350);
+
+    return () => clearTimeout(timer);
+  }, [searchQ, currentUserId]);
+
+  const openConv = (convId: string) => {
+    setActiveConvId(convId);
     setMobileView('chat');
   };
 
-  const handleSendMessage = () => {
-    if (!input.trim() || !activeConvId) return;
-    const newMsg: Message = {
-      id: `msg_${Date.now()}`,
-      conversationId: activeConvId,
-      senderId: CURRENT_USER.id,
-      content: input.trim(),
-      timestamp: new Date().toISOString(),
-      read: true,
-    };
-    setMessages(prev => [...prev, newMsg]);
-    setInput('');
-    setTimeout(() => endRef.current?.scrollIntoView({ behavior: 'smooth' }), 50);
+  const handleStartChatWithUser = async (targetUserId: string) => {
+    if (!currentUserId) return;
+    const convId = await getOrCreateConversation(currentUserId, targetUserId);
+    if (convId) {
+      setSearchQ('');
+      setSearchResults([]);
+      await loadConversations();
+      openConv(convId);
+    } else {
+      toast.error('Failed to start conversation.');
+    }
   };
 
-  const filteredConversations = MOCK_CONVERSATIONS.filter(c => {
-    const partnerName = c.participantDetails[0]?.name || '';
-    const eventName = c.eventName || '';
-    const matchesSearch = partnerName.toLowerCase().includes(searchQ.toLowerCase()) || eventName.toLowerCase().includes(searchQ.toLowerCase());
-    
-    if (!matchesSearch) return false;
-    if (filterTab === 'squad') return c.isEventChat;
-    if (filterTab === 'direct') return !c.isEventChat;
-    return true;
-  });
+  const handleSendMessage = async () => {
+    if (!input.trim() || !activeConvId || !currentUserId) return;
+    const text = input.trim();
+    setInput('');
 
-  const partner = activeConv?.participantDetails[0];
-  const chatTitle = activeConv?.isEventChat ? activeConv.eventName : partner?.name;
+    // Optimistic UI insert
+    const tempMsg: DbMessage = {
+      $id: `temp_${Date.now()}`,
+      conversation_id: activeConvId,
+      sender_id: currentUserId,
+      message: text,
+      message_type: 'text',
+      created_at: new Date().toISOString(),
+      status: 'sending',
+    };
+
+    setMessages(prev => [...prev, tempMsg]);
+    setTimeout(() => endRef.current?.scrollIntoView({ behavior: 'smooth' }), 50);
+
+    const sent = await sendMessage(activeConvId, currentUserId, text);
+    if (sent) {
+      setMessages(prev => prev.map(m => m.$id === tempMsg.$id ? sent : m));
+      loadConversations();
+    } else {
+      toast.error('Failed to send message.');
+    }
+  };
+
+  const activeConv = conversations.find(c => c.id === activeConvId);
+  const partner = activeConv?.partner;
 
   return (
     <div className="w-full h-[calc(100vh-120px)] flex overflow-hidden rounded-3xl border border-border-muted/80 bg-[#080808]/90 backdrop-blur-xl shadow-2xl">
@@ -80,7 +206,11 @@ export const MessagesPage: React.FC = () => {
             <h1 className="text-xl font-black text-white uppercase tracking-tight flex items-center gap-2">
               HUDDLE MESSAGES
             </h1>
-            <button className="w-8 h-8 rounded-xl bg-[#CCFF00] hover:bg-[#b8e600] text-black font-bold flex items-center justify-center transition-all shadow-[0_0_12px_rgba(204,255,0,0.3)]">
+            <button
+              onClick={() => navigate('/app/discover')}
+              className="w-8 h-8 rounded-xl bg-[#CCFF00] hover:bg-[#b8e600] text-black font-bold flex items-center justify-center transition-all shadow-[0_0_12px_rgba(204,255,0,0.3)]"
+              title="Discover Athletes"
+            >
               <Plus size={16} />
             </button>
           </div>
@@ -89,41 +219,66 @@ export const MessagesPage: React.FC = () => {
             <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-text-muted" />
             <input
               type="text"
-              placeholder="Search athletes or squads..."
+              placeholder="Search real athletes to chat..."
               value={searchQ}
               onChange={e => setSearchQ(e.target.value)}
               className="w-full pl-9 pr-4 py-2.5 rounded-xl bg-[#141414] border border-white/10 text-xs text-white placeholder:text-text-muted focus:outline-none focus:border-[#CCFF00]/40 font-mono transition-all"
             />
           </div>
+        </div>
 
-          {/* Category Filters */}
-          <div className="flex items-center gap-1 bg-[#121212] p-1 rounded-xl border border-white/5">
-            {[
-              { id: 'all', label: 'All' },
-              { id: 'direct', label: 'Direct' },
-              { id: 'squad', label: 'Squads' },
-            ].map(tab => (
-              <button
-                key={tab.id}
-                onClick={() => setFilterTab(tab.id as any)}
-                className={`flex-1 py-1.5 rounded-lg text-[11px] font-mono font-bold uppercase transition-all ${
-                  filterTab === tab.id
-                    ? 'bg-[#CCFF00] text-black shadow-sm'
-                    : 'text-text-muted hover:text-white'
-                }`}
+        {/* User Search Dropdown Overlay */}
+        {searchQ.trim() !== '' && (
+          <div className="p-2 border-b border-border-muted/60 bg-[#121212] space-y-1 max-h-60 overflow-y-auto font-mono text-xs">
+            <div className="px-2 py-1 text-[10px] text-text-muted uppercase">Search Results ({searchResults.length})</div>
+            {searchingUsers && <div className="px-2 py-2 text-text-muted">Searching Appwrite...</div>}
+            {!searchingUsers && searchResults.length === 0 && (
+              <div className="px-2 py-2 text-text-muted">No athletes found.</div>
+            )}
+            {searchResults.map(user => (
+              <div
+                key={user.id}
+                onClick={() => handleStartChatWithUser(user.id)}
+                className="flex items-center gap-3 p-2 rounded-xl hover:bg-white/10 cursor-pointer transition-all"
               >
-                {tab.label}
-              </button>
+                <img src={user.avatar_url || `https://i.pravatar.cc/150?u=${user.id}`} alt="" className="w-8 h-8 rounded-full object-cover" />
+                <div className="flex-1 min-w-0">
+                  <p className="font-bold text-white truncate">{user.full_name}</p>
+                  <p className="text-[10px] text-[#00D4FF]">@{user.username || 'athlete'} · {user.sport}</p>
+                </div>
+              </div>
             ))}
           </div>
-        </div>
+        )}
 
         {/* Conversation Items List */}
         <div className="flex-1 overflow-y-auto p-2 space-y-1 scrollbar-none">
-          {filteredConversations.map(conv => {
-            const p = conv.participantDetails[0];
+          {loadingConvs && (
+            <div className="flex flex-col items-center justify-center py-12 space-y-2">
+              <div className="w-8 h-8 rounded-full border-2 border-[#CCFF00] border-t-transparent animate-spin" />
+              <span className="font-mono text-xs text-text-muted">Loading chats...</span>
+            </div>
+          )}
+
+          {!loadingConvs && conversations.length === 0 && searchQ === '' && (
+            <div className="flex flex-col items-center justify-center py-12 text-center p-4 space-y-3">
+              <UserX size={36} className="text-text-muted opacity-50" />
+              <p className="font-sans font-bold text-sm text-white">No conversations yet.</p>
+              <p className="font-mono text-xs text-text-muted">
+                Search athletes above or explore Discover to start chatting!
+              </p>
+              <button
+                onClick={() => navigate('/app/discover')}
+                className="px-4 py-2 rounded-xl bg-[#CCFF00] text-black font-mono font-bold text-xs uppercase"
+              >
+                Discover Athletes
+              </button>
+            </div>
+          )}
+
+          {!loadingConvs && conversations.map(conv => {
+            const p = conv.partner;
             const isActive = activeConvId === conv.id;
-            const isSquad = conv.isEventChat;
 
             return (
               <motion.div
@@ -137,25 +292,20 @@ export const MessagesPage: React.FC = () => {
                 }`}
               >
                 <div className="relative flex-shrink-0">
-                  <Avatar src={p?.avatar} name={p?.name || 'Athlete'} isOnline={p?.isOnline} size="md" />
-                  {isSquad && (
-                    <span className="absolute -bottom-1 -right-1 px-1 py-0.2 rounded bg-[#00D4FF] text-black text-[8px] font-mono font-bold uppercase">
-                      Squad
-                    </span>
-                  )}
+                  <Avatar src={p.avatar} name={p.name || 'Athlete'} isOnline={p.isOnline} size="md" />
                 </div>
 
                 <div className="flex-1 min-w-0">
                   <div className="flex justify-between items-center mb-0.5">
                     <p className={`text-xs font-bold truncate ${isActive ? 'text-[#CCFF00]' : 'text-white'}`}>
-                      {isSquad ? conv.eventName : p?.name}
+                      {p.name}
                     </p>
                     <span className="text-[10px] font-mono text-text-muted flex-shrink-0">
                       {conv.lastMessage ? timeAgo(conv.lastMessage.timestamp) : ''}
                     </span>
                   </div>
                   <p className="text-[11px] font-sans text-text-secondary truncate">
-                    {conv.lastMessage?.content}
+                    {conv.lastMessage?.content || 'No messages yet'}
                   </p>
                 </div>
 
@@ -173,7 +323,7 @@ export const MessagesPage: React.FC = () => {
 
       {/* ── RIGHT: ACTIVE CHAT PANEL ───────────────────────────────────────── */}
       <div className={`flex-1 flex flex-col min-w-0 bg-[#0A0A0A] ${mobileView === 'list' ? 'hidden md:flex' : 'flex'}`}>
-        {activeConv ? (
+        {activeConv && partner ? (
           <>
             {/* Active Chat Header */}
             <div className="p-4 border-b border-border-muted/60 flex items-center justify-between bg-surface/40 backdrop-blur">
@@ -185,25 +335,19 @@ export const MessagesPage: React.FC = () => {
                   <ChevronLeft size={20} />
                 </button>
 
-                <Avatar src={partner?.avatar} name={partner?.name || 'Athlete'} isOnline={partner?.isOnline} size="sm" />
+                <Avatar src={partner.avatar} name={partner.name || 'Athlete'} isOnline={partner.isOnline} size="sm" />
 
                 <div>
-                  <h2 className="font-sans font-bold text-sm text-white">{chatTitle}</h2>
+                  <h2 className="font-sans font-bold text-sm text-white">{partner.name}</h2>
                   <p className="font-mono text-[10px] text-text-muted flex items-center gap-1.5">
-                    <span className={`w-1.5 h-1.5 rounded-full ${partner?.isOnline ? 'bg-[#CCFF00] animate-pulse' : 'bg-text-muted'}`} />
-                    {partner?.isOnline ? 'Active Now' : 'Offline'}
+                    <span className={`w-1.5 h-1.5 rounded-full ${partner.isOnline ? 'bg-[#CCFF00] animate-pulse' : 'bg-text-muted'}`} />
+                    {partner.isOnline ? 'Active Now' : 'Offline'}
                   </p>
                 </div>
               </div>
 
-              {/* Call & Action Buttons */}
+              {/* Action Button */}
               <div className="flex items-center gap-1">
-                <button className="p-2 rounded-xl text-text-secondary hover:text-white hover:bg-white/5 transition-colors">
-                  <Phone size={16} />
-                </button>
-                <button className="p-2 rounded-xl text-text-secondary hover:text-white hover:bg-white/5 transition-colors">
-                  <Video size={16} />
-                </button>
                 <button className="p-2 rounded-xl text-text-secondary hover:text-white hover:bg-white/5 transition-colors">
                   <MoreVertical size={16} />
                 </button>
@@ -213,17 +357,17 @@ export const MessagesPage: React.FC = () => {
             {/* Chat Messages Body */}
             <div className="flex-1 overflow-y-auto p-4 space-y-4 scrollbar-none">
               {messages.map(msg => {
-                const isOwn = msg.senderId === CURRENT_USER.id;
+                const isOwn = msg.sender_id === currentUserId;
                 return (
                   <motion.div
-                    key={msg.id}
+                    key={msg.$id}
                     initial={{ opacity: 0, y: 10 }}
                     animate={{ opacity: 1, y: 0 }}
                     className={`flex gap-2.5 ${isOwn ? 'flex-row-reverse' : 'flex-row'}`}
                   >
                     {!isOwn && (
                       <img 
-                        src={partner?.avatar || 'https://i.pravatar.cc/100?img=33'} 
+                        src={partner.avatar || 'https://i.pravatar.cc/100?img=33'} 
                         alt="" 
                         className="w-8 h-8 rounded-full object-cover flex-shrink-0 border border-white/10" 
                       />
@@ -234,11 +378,11 @@ export const MessagesPage: React.FC = () => {
                         ? 'bg-[#CCFF00] text-black rounded-tr-xs font-semibold shadow-[0_0_20px_rgba(204,255,0,0.15)]' 
                         : 'bg-[#141414] border border-white/10 text-white rounded-tl-xs'
                     }`}>
-                      <p className="text-xs font-sans leading-relaxed">{msg.content}</p>
+                      <p className="text-xs font-sans leading-relaxed">{msg.message}</p>
                       <div className={`flex items-center gap-1 justify-end mt-1 text-[9px] font-mono ${
                         isOwn ? 'text-black/70' : 'text-text-muted'
                       }`}>
-                        <span>{timeStr(msg.timestamp)}</span>
+                        <span>{timeStr(msg.created_at)}</span>
                         {isOwn && <CheckCheck size={12} className="text-black/80" />}
                       </div>
                     </div>
@@ -260,7 +404,7 @@ export const MessagesPage: React.FC = () => {
 
                 <input
                   type="text"
-                  placeholder="Type a message or squad prompt..."
+                  placeholder="Type a message..."
                   value={input}
                   onChange={e => setInput(e.target.value)}
                   onKeyDown={e => e.key === 'Enter' && handleSendMessage()}
@@ -288,7 +432,7 @@ export const MessagesPage: React.FC = () => {
             </div>
             <h3 className="font-sans font-bold text-base text-white uppercase tracking-wider">Select a Conversation</h3>
             <p className="font-mono text-xs text-text-muted max-w-xs">
-              Chat with squad teammates, coordinate upcoming ClashHub tournaments, or message athletes directly.
+              Chat with squad teammates, coordinate upcoming tournament clashes, or message athletes directly.
             </p>
           </div>
         )}

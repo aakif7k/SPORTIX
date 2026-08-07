@@ -1,6 +1,8 @@
 import { create } from 'zustand';
 import type { Squad, ChatMessage, Tournament, Athlete } from '../types/pulse.types';
 import { useAuthStore } from './authStore';
+import { getSquads, updateSquad } from '../services/squadService';
+import { getMessages, createMessage } from '../services/messageService';
 
 interface SquadStoreState {
   squads: Squad[];
@@ -10,6 +12,7 @@ interface SquadStoreState {
   generatedSquads: Squad[];
   dailyGenerationsCount: number;
   lastGenerationDate: string;
+  loadData: () => Promise<void>;
   setActiveSquadId: (id: string | null) => void;
   updateTacticalBoard: (squadId: string, formation: string, notes: string) => void;
   sendChatMessage: (squadId: string, message: Omit<ChatMessage, 'msgId' | 'timestamp'>) => void;
@@ -253,33 +256,52 @@ export const useSquadStore = create<SquadStoreState>((set) => ({
   dailyGenerationsCount: localState.dailyGenerationsCount,
   lastGenerationDate: localState.lastGenerationDate,
 
+  loadData: async () => {
+    const squads = await getSquads();
+    set({ squads });
+    // Also load chats for all squads
+    const chats: Record<string, ChatMessage[]> = {};
+    for (const squad of squads) {
+      chats[squad.squadId] = await getMessages(squad.squadId);
+    }
+    set(state => ({ chats: { ...state.chats, ...chats } }));
+  },
+
   setActiveSquadId: (id) => set({ activeSquadId: id }),
   
-  updateTacticalBoard: (squadId, formation, notes) => set((state) => {
-    const updated = state.squads.map(s => s.squadId === squadId ? { ...s, formation, tacticalNotes: notes } : s);
-    saveToLocalStorage('sportix_squads', updated);
-    return { squads: updated };
-  }),
+  updateTacticalBoard: (squadId, formation, notes) => {
+    set((state) => {
+      const updated = state.squads.map(s => s.squadId === squadId ? { ...s, formation, tacticalNotes: notes } : s);
+      saveToLocalStorage('sportix_squads', updated);
+      return { squads: updated };
+    });
+    updateSquad(squadId, { formation, tacticalNotes: notes });
+  },
 
-  sendChatMessage: (squadId, message) => set((state) => {
-    const newMessage: ChatMessage = {
+  sendChatMessage: (squadId, message) => {
+    const newMsg: ChatMessage = {
       ...message,
       msgId: `c_${Date.now()}`,
       timestamp: new Date().toISOString()
     };
-    const updatedChats = {
-      ...state.chats,
-      [squadId]: [...(state.chats[squadId] || []), newMessage]
-    };
-    saveToLocalStorage('sportix_chats', updatedChats);
-    return { chats: updatedChats };
-  }),
+    set((state) => {
+      const current = state.chats[squadId] || [];
+      const updated = { ...state.chats, [squadId]: [...current, newMsg] };
+      saveToLocalStorage('sportix_chats', updated);
+      return { chats: updated };
+    });
+    // Typecast to omit msgId for creation
+    createMessage(squadId, newMsg as any);
+  },
 
-  updateSquadSettings: (squadId, name, formation) => set((state) => {
-    const updated = state.squads.map(s => s.squadId === squadId ? { ...s, name, formation } : s);
-    saveToLocalStorage('sportix_squads', updated);
-    return { squads: updated };
-  }),
+  updateSquadSettings: (squadId, name, formation) => {
+    set((state) => {
+      const updated = state.squads.map(s => s.squadId === squadId ? { ...s, name, formation } : s);
+      saveToLocalStorage('sportix_squads', updated);
+      return { squads: updated };
+    });
+    updateSquad(squadId, { name, formation });
+  },
 
   registerSquadForTournament: (squadId, tournamentId) => set((state) => {
     const updatedSquads = state.squads.map(s => s.squadId === squadId ? { ...s, tournamentIds: [...s.tournamentIds, tournamentId] } : s);

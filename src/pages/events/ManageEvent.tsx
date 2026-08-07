@@ -7,7 +7,6 @@ import {
   Lock, Settings, BarChart3, Shield, Info, Activity, AlertTriangle, Send, ShieldCheck
 } from 'lucide-react';
 import { useEventStore } from '../../store/eventStore';
-import { MOCK_USERS } from '../../services/mockData';
 import type { SportCategory, EventFormat, ExperienceLevel } from '../../types';
 import { Button } from '../../components/ui/Button';
 import { Input, Textarea, Select } from '../../components/ui/Input';
@@ -136,8 +135,14 @@ export const ManageEvent: React.FC = () => {
   const handleAddRule = () => setRules([...rules, '']);
   const handleRemoveRule = (idx: number) => setRules(rules.filter((_, ri) => ri !== idx));
 
-  // Resolved participants from store
-  const resolvedParticipants = MOCK_USERS.filter(u => event.participants.includes(u.id));
+  // Resolved participants — use placeholder data until participants collection is migrated
+  const resolvedParticipants = event.participants.map((uid, i) => ({
+    id: uid,
+    name: `Athlete #${i + 1}`,
+    avatar: `https://i.pravatar.cc/150?u=${uid}`,
+    sport: event.sport,
+    level: undefined as number | undefined,
+  }));
 
   return (
     <div className="max-w-4xl mx-auto px-3 sm:px-4 pb-28 md:pb-12 pt-4 sm:pt-6 text-text-primary">
@@ -394,7 +399,7 @@ export const ManageEvent: React.FC = () => {
                             <Avatar src={participant.avatar} name={participant.name} size="sm" />
                             <div>
                               <span className="font-bold block text-text-primary">{participant.name}</span>
-                              <span className="text-[9px] text-text-secondary uppercase mt-0.5 block">{participant.sport} · {participant.experienceLevel}</span>
+                              <span className="text-[9px] text-text-secondary uppercase mt-0.5 block">{participant.sport}</span>
                             </div>
                           </div>
                           <div className="flex items-center justify-end gap-3 self-end sm:self-auto">

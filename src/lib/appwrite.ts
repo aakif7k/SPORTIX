@@ -35,6 +35,9 @@ export const COLLECTIONS = {
   DAILY_MISSIONS: 'daily_missions',
   USER_MISSIONS: 'user_missions',
   BADGES: 'badges',
+  CONVERSATIONS: 'conversations',
+  CONVERSATION_MEMBERS: 'conversation_members',
+  MESSAGES: 'messages',
   USER_BADGES: 'user_badges',
 };
 

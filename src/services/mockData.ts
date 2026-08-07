@@ -1,224 +1,134 @@
-import type { User, Post, Event, Conversation, Message, Notification, Story } from '../types';
+import type { Post, Event, Conversation, Message, Notification, Story } from '../types';
 
-// ─── SPORT CATEGORIES ──────────────────────────────────────────────────────
-export const SPORT_CATEGORIES = [
-  { id: 'football', label: 'Football', emoji: '⚽', color: '#22c55e' },
-  { id: 'basketball', label: 'Basketball', emoji: '🏀', color: '#f97316' },
-  { id: 'tennis', label: 'Tennis', emoji: '🎾', color: '#eab308' },
-  { id: 'cricket', label: 'Cricket', emoji: '🏏', color: '#84cc16' },
-  { id: 'swimming', label: 'Swimming', emoji: '🏊', color: '#06b6d4' },
-  { id: 'athletics', label: 'Athletics', emoji: '🏃', color: '#CCFF00' },
-  { id: 'boxing', label: 'Boxing', emoji: '🥊', color: '#ef4444' },
-  { id: 'cycling', label: 'Cycling', emoji: '🚴', color: '#3b82f6' },
-  { id: 'volleyball', label: 'Volleyball', emoji: '🏐', color: '#a855f7' },
-  { id: 'rugby', label: 'Rugby', emoji: '🏉', color: '#78716c' },
-  { id: 'baseball', label: 'Baseball', emoji: '⚾', color: '#ec4899' },
-  { id: 'golf', label: 'Golf', emoji: '⛳', color: '#10b981' },
-  { id: 'hockey', label: 'Hockey', emoji: '🏑', color: '#f59e0b' },
-  { id: 'mma', label: 'MMA', emoji: '🥋', color: '#FF3B00' },
-  { id: 'gymnastics', label: 'Gymnastics', emoji: '🤸', color: '#8b5cf6' },
-  { id: 'badminton', label: 'Badminton', emoji: '🏸', color: '#14b8a6' },
-];
+// ─── SPORT CONSTANTS ────────────────────────────────────────────────────────
+// Re-exported from lib/constants for backward compatibility.
+// Import directly from '@/lib/constants' in new code.
+export { SPORT_CATEGORIES, GLOBAL_SPORTS, SPORT_POSITIONS } from '@/lib/constants';
 
-export const GLOBAL_SPORTS = [
-  ...SPORT_CATEGORIES,
-  { id: 'archery', label: 'Archery', emoji: '🏹', color: '#fcd34d' },
-  { id: 'american_football', label: 'American Football', emoji: '🏈', color: '#b45309' },
-  { id: 'table_tennis', label: 'Table Tennis', emoji: '🏓', color: '#ef4444' },
-  { id: 'wrestling', label: 'Wrestling', emoji: '🤼', color: '#6366f1' },
-  { id: 'water_polo', label: 'Water Polo', emoji: '🤽', color: '#0ea5e9' },
-  { id: 'fencing', label: 'Fencing', emoji: '🤺', color: '#94a3b8' },
-  { id: 'weightlifting', label: 'Weightlifting', emoji: '🏋️', color: '#475569' },
-  { id: 'skateboarding', label: 'Skateboarding', emoji: '🛹', color: '#14b8a6' },
-  { id: 'surfing', label: 'Surfing', emoji: '🏄', color: '#38bdf8' },
-  { id: 'snowboarding', label: 'Snowboarding', emoji: '🏂', color: '#cbd5e1' },
-  { id: 'skiing', label: 'Skiing', emoji: '⛷️', color: '#e2e8f0' },
-  { id: 'ice_hockey', label: 'Ice Hockey', emoji: '🏒', color: '#bae6fd' },
-  { id: 'figure_skating', label: 'Figure Skating', emoji: '⛸️', color: '#fbcfe8' },
-  { id: 'martial_arts', label: 'Martial Arts', emoji: '🥋', color: '#1e293b' },
-  { id: 'taekwondo', label: 'Taekwondo', emoji: '🥋', color: '#f87171' },
-  { id: 'judo', label: 'Judo', emoji: '🥋', color: '#3b82f6' },
-  { id: 'rowing', label: 'Rowing', emoji: '🚣', color: '#2dd4bf' },
-  { id: 'canoe', label: 'Canoeing', emoji: '🛶', color: '#f59e0b' },
-  { id: 'sailing', label: 'Sailing', emoji: '⛵', color: '#0284c7' },
-  { id: 'equestrian', label: 'Equestrian', emoji: '🏇', color: '#78350f' },
-  { id: 'handball', label: 'Handball', emoji: '🤾', color: '#f43f5e' },
-  { id: 'softball', label: 'Softball', emoji: '🥎', color: '#fde047' },
-  { id: 'lacrosse', label: 'Lacrosse', emoji: '🥍', color: '#65a30d' },
-  { id: 'bowling', label: 'Bowling', emoji: '🎳', color: '#d97706' },
-  { id: 'esports', label: 'Esports', emoji: '🎮', color: '#8b5cf6' },
-  { id: 'darts', label: 'Darts', emoji: '🎯', color: '#dc2626' },
-  { id: 'billiards', label: 'Billiards / Pool', emoji: '🎱', color: '#0f172a' },
-  { id: 'rock_climbing', label: 'Rock Climbing', emoji: '🧗', color: '#57534e' },
-  { id: 'triathlon', label: 'Triathlon', emoji: '🏃🚴🏊', color: '#059669' },
-  { id: 'squash', label: 'Squash', emoji: '🏸', color: '#10b981' },
-  { id: 'netball', label: 'Netball', emoji: '🏐', color: '#d946ef' },
-];
+// ─── MOCK USERS REMOVED ─────────────────────────────────────────────────────
+// MOCK_USERS has been removed. Profile data now comes from Appwrite.
+// Use profileService.ts (searchProfiles, getProfile, etc.) instead.
 
-export const SPORT_POSITIONS: Record<string, string[]> = {
-  football: ['GK', 'CB', 'LB', 'RB', 'CDM', 'CM', 'CAM', 'LW', 'RW', 'ST', 'CF'],
-  basketball: ['PG', 'SG', 'SF', 'PF', 'C'],
-  volleyball: ['S', 'OH', 'MB', 'OPP', 'L'],
-  rugby: ['Prop', 'Hooker', 'Lock', 'Flanker', 'No.8', 'Scrum-half', 'Fly-half', 'Wing', 'Centre', 'Fullback'],
-  baseball: ['P', 'C', '1B', '2B', '3B', 'SS', 'LF', 'CF', 'RF', 'DH'],
-  hockey: ['GK', 'CB', 'LB', 'RB', 'CM', 'LW', 'RW', 'CF'],
-  cricket: ['Bat', 'Bowl', 'WK', 'All-rounder'],
-  default: ['Captain', 'Co-Captain', 'Member'],
+// ─── PLACEHOLDER AVATARS (used by still-mock collections below) ──────────────
+const PLACEHOLDER_AVATARS: Record<string, string> = {
+  u1: 'https://i.pravatar.cc/150?img=11',
+  u2: 'https://i.pravatar.cc/150?img=47',
+  u3: 'https://i.pravatar.cc/150?img=12',
+  u4: 'https://i.pravatar.cc/150?img=5',
+  u5: 'https://i.pravatar.cc/150?img=33',
+  u6: 'https://i.pravatar.cc/150?img=62',
+  u7: 'https://i.pravatar.cc/150?img=13',
+  u8: 'https://i.pravatar.cc/150?img=9',
+  u9: 'https://i.pravatar.cc/150?img=59',
+  u10: 'https://i.pravatar.cc/150?img=15',
+  cu1: 'https://i.pravatar.cc/150?img=11',
 };
+function ph(id: string) { return PLACEHOLDER_AVATARS[id] ?? `https://i.pravatar.cc/150?u=${id}`; }
 
-// ─── MOCK USERS ────────────────────────────────────────────────────────────
-export const MOCK_USERS: User[] = [
-  {
-    id: 'u1', uid: 'u1', name: 'Marcus Thielemann', username: 'marcus_thiel',
-    email: 'marcus@sportix.io', avatar: 'https://i.pravatar.cc/150?img=11',
+// Legacy: kept only so MOCK_POSTS / MOCK_STORIES / MOCK_CONVERSATIONS /
+// MOCK_NOTIFICATIONS can still reference a User-like shape.
+// These will be migrated in a future phase.
+const _MOCK_USER_STUBS = [
+  { id: 'u1', uid: 'u1', name: 'Marcus Thielemann', username: 'marcus_thiel',
+    email: 'marcus@sportix.io', avatar: ph('u1'),
     coverImage: 'https://images.unsplash.com/photo-1574629810360-7efbbe195018?w=1200&q=80',
-    role: 'athlete', sport: 'football', sports: ['football'],
-    location: 'Berlin, Germany', bio: 'Professional midfielder. Champions League finalist. Obsessed with data-driven performance.',
-    experienceLevel: 'professional', openToRecruit: false, isOnline: true, isVerified: true,
+    role: 'athlete', sport: 'football', sports: ['football'], location: 'Berlin, Germany',
+    bio: '', experienceLevel: 'professional', openToRecruit: false, isOnline: true, isVerified: true,
     createdAt: '2023-06-01',
     stats: { matches: 284, events: 47, followers: 128400, following: 312, wins: 189, losses: 61, rating: 91, yearsExperience: 11 },
     performanceData: { speed: 88, strength: 79, endurance: 92, agility: 86, technique: 94, teamwork: 90 },
-    achievements: [
-      { id: 'a1', title: 'Champions League Finalist', description: 'Reached UCL final', icon: '🏆', date: '2024-05-25', rarity: 'legendary' },
-      { id: 'a2', title: '100 Clean Sheets', description: 'Contributed to 100 clean sheets', icon: '🛡️', date: '2023-11-01', rarity: 'epic' },
-    ],
+    achievements: [] as any[],
   },
-  {
-    id: 'u2', uid: 'u2', name: 'Priya Krishnamurthy', username: 'priya_k',
-    email: 'priya@sportix.io', avatar: 'https://i.pravatar.cc/150?img=47',
+  { id: 'u2', uid: 'u2', name: 'Priya Krishnamurthy', username: 'priya_k',
+    email: 'priya@sportix.io', avatar: ph('u2'),
     coverImage: 'https://images.unsplash.com/photo-1547941126-3d5322b218b0?w=1200&q=80',
-    role: 'athlete', sport: 'tennis', sports: ['tennis', 'badminton'],
-    location: 'Mumbai, India', bio: 'WTA Top-50 player. Grand Slam veteran. Training never stops.',
-    experienceLevel: 'elite', openToRecruit: true, isOnline: false, isVerified: true,
+    role: 'athlete', sport: 'tennis', sports: ['tennis', 'badminton'], location: 'Mumbai, India',
+    bio: '', experienceLevel: 'elite', openToRecruit: true, isOnline: false, isVerified: true,
     createdAt: '2023-02-14',
     stats: { matches: 412, events: 89, followers: 342000, following: 145, wins: 318, losses: 94, rating: 94, yearsExperience: 16 },
     performanceData: { speed: 92, strength: 74, endurance: 90, agility: 96, technique: 97, teamwork: 70 },
-    achievements: [
-      { id: 'a3', title: 'Grand Slam Quarterfinalist', description: 'Reached QF at Roland Garros', icon: '🎾', date: '2024-06-05', rarity: 'legendary' },
-    ],
+    achievements: [] as any[],
   },
-  {
-    id: 'u3', uid: 'u3', name: 'DeShawn Williams', username: 'deshawn_w',
-    email: 'deshawn@sportix.io', avatar: 'https://i.pravatar.cc/150?img=52',
-    coverImage: 'https://images.unsplash.com/photo-1546519638-68e109498ffc?w=1200&q=80',
-    role: 'athlete', sport: 'basketball', sports: ['basketball'],
-    location: 'Atlanta, GA, USA', bio: 'SG | NBA hopeful | 28 PPG avg | The court is my lab.',
-    experienceLevel: 'semi-pro', openToRecruit: true, isOnline: true, isVerified: false,
-    createdAt: '2023-09-10',
-    stats: { matches: 178, events: 34, followers: 67200, following: 892, wins: 112, losses: 66, rating: 87, yearsExperience: 7 },
-    performanceData: { speed: 90, strength: 82, endurance: 85, agility: 94, technique: 88, teamwork: 83 },
-    achievements: [
-      { id: 'a4', title: 'Triple-Double Record', description: 'Most triple-doubles in a season', icon: '🏀', date: '2024-03-15', rarity: 'epic' },
-    ],
+  { id: 'u3', uid: 'u3', name: 'DeShawn Williams', username: 'deshawn_w',
+    email: 'deshawn@sportix.io', avatar: ph('u3'),
+    role: 'athlete', sport: 'basketball', sports: ['basketball'], location: 'Chicago, USA',
+    bio: '', experienceLevel: 'professional', openToRecruit: false, isOnline: true, isVerified: true,
+    createdAt: '2022-11-10',
+    stats: { matches: 380, events: 72, followers: 215000, following: 280, wins: 241, losses: 139, rating: 88, yearsExperience: 12 },
+    performanceData: { speed: 90, strength: 85, endurance: 88, agility: 93, technique: 87, teamwork: 84 },
+    achievements: [] as any[],
   },
-  {
-    id: 'u4', uid: 'u4', name: 'Isabela Moraes', username: 'isa_moraes',
-    email: 'isa@sportix.io', avatar: 'https://i.pravatar.cc/150?img=45',
-    coverImage: 'https://images.unsplash.com/photo-1567427017947-545c5f8d16ad?w=1200&q=80',
-    role: 'athlete', sport: 'swimming', sports: ['swimming', 'athletics'],
-    location: 'São Paulo, Brazil', bio: 'Olympic swimmer | 4x World Championship medalist | Water is home.',
-    experienceLevel: 'elite', openToRecruit: false, isOnline: false, isVerified: true,
-    createdAt: '2022-11-01',
-    stats: { matches: 521, events: 112, followers: 891000, following: 78, wins: 445, losses: 76, rating: 98, yearsExperience: 18 },
-    performanceData: { speed: 98, strength: 86, endurance: 99, agility: 88, technique: 99, teamwork: 75 },
-    achievements: [
-      { id: 'a5', title: 'Olympic Medalist', description: 'Gold medal at Paris 2024', icon: '🥇', date: '2024-08-01', rarity: 'legendary' },
-    ],
+  { id: 'u4', uid: 'u4', name: 'Isabela Moraes', username: 'isabela_m',
+    email: 'isabela@sportix.io', avatar: ph('u4'),
+    role: 'athlete', sport: 'swimming', sports: ['swimming'], location: 'São Paulo, Brazil',
+    bio: '', experienceLevel: 'elite', openToRecruit: false, isOnline: true, isVerified: true,
+    createdAt: '2021-08-20',
+    stats: { matches: 520, events: 105, followers: 485000, following: 201, wins: 408, losses: 112, rating: 96, yearsExperience: 18 },
+    performanceData: { speed: 95, strength: 80, endurance: 98, agility: 88, technique: 96, teamwork: 75 },
+    achievements: [] as any[],
   },
-  {
-    id: 'u5', uid: 'u5', name: 'Yuki Tanaka', username: 'yuki_mma',
-    email: 'yuki@sportix.io', avatar: 'https://i.pravatar.cc/150?img=61',
-    coverImage: 'https://images.unsplash.com/photo-1544367567-0f2fcb009e0b?w=1200&q=80',
-    role: 'athlete', sport: 'mma', sports: ['mma', 'wrestling'],
-    location: 'Tokyo, Japan', bio: 'Undefeated prospect. 12-0. Striking + grappling specialist.',
-    experienceLevel: 'professional', openToRecruit: true, isOnline: true, isVerified: true,
-    createdAt: '2023-04-20',
-    stats: { matches: 12, events: 8, followers: 234000, following: 67, wins: 12, losses: 0, rating: 93, yearsExperience: 8 },
-    performanceData: { speed: 89, strength: 94, endurance: 91, agility: 87, technique: 96, teamwork: 60 },
-    achievements: [
-      { id: 'a6', title: 'Undefeated Record', description: '12-0 professional record', icon: '🥋', date: '2025-01-15', rarity: 'legendary' },
-    ],
+  { id: 'u5', uid: 'u5', name: 'Yuki Tanaka', username: 'yuki_t',
+    email: 'yuki@sportix.io', avatar: ph('u5'),
+    role: 'athlete', sport: 'mma', sports: ['mma', 'boxing'], location: 'Tokyo, Japan',
+    bio: '', experienceLevel: 'professional', openToRecruit: false, isOnline: true, isVerified: true,
+    createdAt: '2023-03-15',
+    stats: { matches: 47, events: 18, followers: 89000, following: 124, wins: 43, losses: 4, rating: 93, yearsExperience: 8 },
+    performanceData: { speed: 93, strength: 91, endurance: 89, agility: 95, technique: 97, teamwork: 72 },
+    achievements: [] as any[],
   },
-  {
-    id: 'u6', uid: 'u6', name: 'Rajesh Kumar', username: 'rajesh_k',
-    email: 'rajesh@sportix.in', avatar: 'https://i.pravatar.cc/150?img=68',
-    coverImage: 'https://images.unsplash.com/photo-1508098682722-e99c43a406b2?w=1200&q=80',
-    role: 'athlete', sport: 'football', sports: ['football'],
-    location: 'Chennai, Tamil Nadu, India', bio: 'Futsal lover. Striker for Chennai FC Academy. Can play anywhere on the front line.',
-    experienceLevel: 'semi-pro', openToRecruit: true, isOnline: true, isVerified: false,
-    createdAt: '2023-11-12',
-    stats: { matches: 92, events: 18, followers: 8500, following: 450, wins: 55, losses: 28, rating: 82, yearsExperience: 5 },
-    performanceData: { speed: 85, strength: 72, endurance: 80, agility: 88, technique: 84, teamwork: 80 },
-    achievements: [],
+  { id: 'u6', uid: 'u6', name: 'Arjun Selvam', username: 'arjun_s',
+    email: 'arjun@sportix.in', avatar: ph('u6'),
+    role: 'athlete', sport: 'football', sports: ['football'], location: 'Chennai, Tamil Nadu, India',
+    bio: '', experienceLevel: 'semi-pro', openToRecruit: true, isOnline: true, isVerified: false,
+    createdAt: '2024-01-10',
+    stats: { matches: 62, events: 15, followers: 8400, following: 210, wins: 39, losses: 23, rating: 82, yearsExperience: 4 },
+    performanceData: { speed: 84, strength: 77, endurance: 80, agility: 86, technique: 81, teamwork: 88 },
+    achievements: [] as any[],
   },
-  {
-    id: 'u7', uid: 'u7', name: 'Ashwin Ram', username: 'ashwin_ram',
-    email: 'ashwin@sportix.in', avatar: 'https://i.pravatar.cc/150?img=12',
-    coverImage: 'https://images.unsplash.com/photo-1531415074968-036ba1b575da?w=1200&q=80',
-    role: 'athlete', sport: 'cricket', sports: ['cricket'],
-    location: 'Chennai, Tamil Nadu, India', bio: 'Wicket-keeper batsman. Love chasing high scores. SSR Rating of 88 no cap 🏏⚡',
-    experienceLevel: 'elite', openToRecruit: true, isOnline: true, isVerified: true,
-    createdAt: '2023-08-10',
-    stats: { matches: 154, events: 29, followers: 45000, following: 280, wins: 98, losses: 45, rating: 88, yearsExperience: 8 },
-    performanceData: { speed: 78, strength: 80, endurance: 85, agility: 82, technique: 90, teamwork: 92 },
-    achievements: [
-      { id: 'a8', title: 'Century in Derby', description: 'Scored 104* in final match', icon: '🏆', date: '2024-09-12', rarity: 'epic' },
-    ],
+  { id: 'u7', uid: 'u7', name: 'Kavya Nair', username: 'kavya_n',
+    email: 'kavya@sportix.in', avatar: ph('u7'),
+    role: 'athlete', sport: 'cricket', sports: ['cricket', 'badminton'], location: 'Coimbatore, Tamil Nadu, India',
+    bio: '', experienceLevel: 'amateur', openToRecruit: true, isOnline: false, isVerified: false,
+    createdAt: '2024-02-20',
+    stats: { matches: 34, events: 8, followers: 2100, following: 180, wins: 21, losses: 13, rating: 78, yearsExperience: 2 },
+    performanceData: { speed: 78, strength: 68, endurance: 74, agility: 80, technique: 76, teamwork: 85 },
+    achievements: [] as any[],
   },
-  {
-    id: 'u8', uid: 'u8', name: 'Divya Balaji', username: 'divya_b',
-    email: 'divya@sportix.in', avatar: 'https://i.pravatar.cc/150?img=32',
-    coverImage: 'https://images.unsplash.com/photo-1476480862126-209bfaa8edc8?w=1200&q=80',
-    role: 'athlete', sport: 'athletics', sports: ['athletics', 'cycling'],
-    location: 'Coimbatore, Tamil Nadu, India', bio: 'Sprinter & cyclist. Coimbatore 10k winner. Speed is my lifestyle.',
-    experienceLevel: 'semi-pro', openToRecruit: false, isOnline: false, isVerified: false,
-    createdAt: '2024-01-20',
-    stats: { matches: 45, events: 12, followers: 3200, following: 190, wins: 28, losses: 15, rating: 80, yearsExperience: 3 },
-    performanceData: { speed: 92, strength: 68, endurance: 84, agility: 86, technique: 75, teamwork: 78 },
-    achievements: [
-      { id: 'a9', title: '10K Winner', description: 'First place at Kovai Marathon', icon: '🥇', date: '2025-02-15', rarity: 'rare' },
-    ],
+  { id: 'u8', uid: 'u8', name: 'Pradeep Kumar', username: 'pradeep_k',
+    email: 'pradeep@sportix.in', avatar: ph('u8'),
+    role: 'athlete', sport: 'athletics', sports: ['athletics', 'cycling'], location: 'Madurai, Tamil Nadu, India',
+    bio: '', experienceLevel: 'professional', openToRecruit: false, isOnline: true, isVerified: true,
+    createdAt: '2023-08-05',
+    stats: { matches: 148, events: 32, followers: 34000, following: 195, wins: 112, losses: 36, rating: 87, yearsExperience: 7 },
+    performanceData: { speed: 94, strength: 76, endurance: 92, agility: 88, technique: 83, teamwork: 77 },
+    achievements: [] as any[],
   },
-  {
-    id: 'u9', uid: 'u9', name: 'Karthik Raja', username: 'karthik_raja',
-    email: 'karthik@sportix.in', avatar: 'https://i.pravatar.cc/150?img=59',
-    coverImage: 'https://images.unsplash.com/photo-1546519638-68e109498ffc?w=1200&q=80',
-    role: 'athlete', sport: 'basketball', sports: ['basketball'],
-    location: 'Madurai, Tamil Nadu, India', bio: 'Shooting Guard. Representing Madurai Strikers. Flexing those vertical jumps 🏀🔥',
-    experienceLevel: 'elite', openToRecruit: true, isOnline: true, isVerified: true,
-    createdAt: '2023-05-15',
+  { id: 'u9', uid: 'u9', name: 'Riya Menon', username: 'riya_m',
+    email: 'riya@sportix.in', avatar: ph('u9'),
+    role: 'athlete', sport: 'basketball', sports: ['basketball'], location: 'Coimbatore, Tamil Nadu, India',
+    bio: '', experienceLevel: 'semi-pro', openToRecruit: true, isOnline: false, isVerified: false,
+    createdAt: '2023-11-15',
     stats: { matches: 110, events: 24, followers: 18000, following: 350, wins: 75, losses: 32, rating: 86, yearsExperience: 6 },
     performanceData: { speed: 86, strength: 78, endurance: 82, agility: 90, technique: 85, teamwork: 88 },
-    achievements: [],
+    achievements: [] as any[],
   },
-  {
-    id: 'u10', uid: 'u10', name: 'Sanjay Selvam', username: 'sanjay_s',
-    email: 'sanjay@sportix.in', avatar: 'https://i.pravatar.cc/150?img=15',
-    coverImage: 'https://images.unsplash.com/photo-1560079007-f530de68e8bb?w=1200&q=80',
-    role: 'athlete', sport: 'tennis', sports: ['tennis'],
-    location: 'Trichy, Tamil Nadu, India', bio: 'Serve-and-volley player. Clay court enthusiast. Dedication beats talent.',
-    experienceLevel: 'amateur', openToRecruit: true, isOnline: false, isVerified: false,
+  { id: 'u10', uid: 'u10', name: 'Sanjay Selvam', username: 'sanjay_s',
+    email: 'sanjay@sportix.in', avatar: ph('u10'),
+    role: 'athlete', sport: 'tennis', sports: ['tennis'], location: 'Trichy, Tamil Nadu, India',
+    bio: '', experienceLevel: 'amateur', openToRecruit: true, isOnline: false, isVerified: false,
     createdAt: '2024-03-01',
     stats: { matches: 28, events: 5, followers: 1200, following: 95, wins: 15, losses: 13, rating: 74, yearsExperience: 2 },
     performanceData: { speed: 80, strength: 70, endurance: 76, agility: 82, technique: 72, teamwork: 65 },
-    achievements: [],
+    achievements: [] as any[],
   },
-];
+] as any[];
 
-export const CURRENT_USER: User = {
-  id: 'cu1', uid: 'cu1', name: 'Alex Rivera', username: 'alex_rivera',
-  email: 'alex@sportix.io', avatar: 'https://images.pexels.com/photos/1486064/pexels-photo-1486064.jpeg?cs=srgb&dl=pexels-nkhajotia-1486064.jpg&fm=jpg',
-  coverImage: 'https://images.unsplash.com/photo-1431324155629-1a6deb1dec8d?w=1200&q=80',
-  role: 'athlete', sport: 'athletics', sports: ['athletics', 'cycling'],
-  location: 'Madrid, Spain', bio: '400m specialist | National champion | Fueled by data.',
-  experienceLevel: 'professional', openToRecruit: false, isOnline: true, isVerified: true,
-  createdAt: '2023-01-15',
-  stats: { matches: 94, events: 28, followers: 52100, following: 431, wins: 71, losses: 23, rating: 89, yearsExperience: 9 },
-  performanceData: { speed: 96, strength: 78, endurance: 94, agility: 91, technique: 87, teamwork: 82 },
-  achievements: [
-    { id: 'a7', title: 'National Champion', description: '400m National Championship gold', icon: '🏅', date: '2024-07-20', rarity: 'epic' },
-  ],
-};
+/** @deprecated Use profileService.searchProfiles() for real data */
+export const MOCK_USERS = _MOCK_USER_STUBS;
+
+// CURRENT_USER is intentionally removed. Use useAuthStore().user or
+// useAuth().user for the authenticated user's data.
+
 
 // ─── MOCK POSTS ────────────────────────────────────────────────────────────
 export const MOCK_POSTS: Post[] = [
@@ -321,10 +231,11 @@ export const MOCK_POSTS: Post[] = [
 ];
 
 // ─── MOCK STORIES ──────────────────────────────────────────────────────────
-export const MOCK_STORIES: Story[] = MOCK_USERS.map((user, i) => ({
+// Still uses stub data — will be migrated when the stories collection is added.
+export const MOCK_STORIES: Story[] = _MOCK_USER_STUBS.map((user: any, i: number) => ({
   id: `s${i + 1}`, userId: user.id, userAvatar: user.avatar, userName: user.name.split(' ')[0],
-  userSport: user.sport, mediaUrl: user.coverImage || '',
-  mediaType: 'image', timestamp: new Date(Date.now() - i * 1800000).toISOString(), viewed: i > 2,
+  userSport: user.sport as any, mediaUrl: user.coverImage || '',
+  mediaType: 'image' as const, timestamp: new Date(Date.now() - i * 1800000).toISOString(), viewed: i > 2,
 }));
 
 // ─── MOCK EVENTS ───────────────────────────────────────────────────────────
@@ -703,21 +614,21 @@ export const MOCK_EVENTS: Event[] = [
 export const MOCK_CONVERSATIONS: Conversation[] = [
   {
     id: 'c1', participants: ['cu1', 'u1'],
-    participantDetails: [{ id: 'u1', name: 'Marcus Thielemann', avatar: MOCK_USERS[0].avatar, isOnline: true }],
+    participantDetails: [{ id: 'u1', name: 'Marcus Thielemann', avatar: ph('u1'), isOnline: true }],
     lastMessage: { id: 'm1', conversationId: 'c1', senderId: 'u1', content: 'Bro that sprint data is insane, what tracker are you using?', timestamp: new Date(Date.now() - 1800000).toISOString(), read: false },
     unreadCount: 3, isEventChat: false, createdAt: '2025-01-01', updatedAt: new Date(Date.now() - 1800000).toISOString(),
   },
   {
     id: 'c2', participants: ['cu1', 'u2'],
-    participantDetails: [{ id: 'u2', name: 'Priya Krishnamurthy', avatar: MOCK_USERS[1].avatar, isOnline: false }],
+    participantDetails: [{ id: 'u2', name: 'Priya Krishnamurthy', avatar: ph('u2'), isOnline: false }],
     lastMessage: { id: 'm2', conversationId: 'c2', senderId: 'cu1', content: 'Good luck at Roland Garros! You\'ve got this 🎾', timestamp: new Date(Date.now() - 7200000).toISOString(), read: true },
     unreadCount: 0, isEventChat: false, createdAt: '2025-01-15', updatedAt: new Date(Date.now() - 7200000).toISOString(),
   },
   {
     id: 'c3', participants: ['cu1', 'u3', 'u5'],
     participantDetails: [
-      { id: 'u3', name: 'DeShawn Williams', avatar: MOCK_USERS[2].avatar, isOnline: true },
-      { id: 'u5', name: 'Yuki Tanaka', avatar: MOCK_USERS[4].avatar, isOnline: true },
+      { id: 'u3', name: 'DeShawn Williams', avatar: ph('u3'), isOnline: true },
+      { id: 'u5', name: 'Yuki Tanaka', avatar: ph('u5'), isOnline: true },
     ],
     lastMessage: { id: 'm3', conversationId: 'c3', senderId: 'u3', content: 'Team is confirmed! See you all at the arena 🏀', timestamp: new Date(Date.now() - 3600000).toISOString(), read: false },
     unreadCount: 7, isEventChat: true, eventId: 'e2', eventName: 'Asia Pacific Basketball Open',
@@ -745,10 +656,10 @@ export const MOCK_MESSAGES: Record<string, Message[]> = {
 
 // ─── MOCK NOTIFICATIONS ────────────────────────────────────────────────────
 export const MOCK_NOTIFICATIONS: Notification[] = [
-  { id: 'n1', userId: 'cu1', type: 'event_invite', title: 'Event Invitation', message: 'Marcus Thielemann invited you to join Pro Football 5v5 Championship', read: false, timestamp: new Date(Date.now() - 1800000).toISOString(), relatedId: 'e1', actorAvatar: MOCK_USERS[0].avatar, actorName: 'Marcus Thielemann' },
+  { id: 'n1', userId: 'cu1', type: 'event_invite', title: 'Event Invitation', message: 'Marcus Thielemann invited you to join Pro Football 5v5 Championship', read: false, timestamp: new Date(Date.now() - 1800000).toISOString(), relatedId: 'e1', actorAvatar: ph('u1'), actorName: 'Marcus Thielemann' },
   { id: 'n2', userId: 'cu1', type: 'ai_match', title: 'AI Team Match', message: 'SportiX AI found you 3 compatible teammates for Asia Pacific Basketball Open', read: false, timestamp: new Date(Date.now() - 3600000).toISOString(), relatedId: 'e2', actorName: 'SportiX AI' },
-  { id: 'n3', userId: 'cu1', type: 'like', title: 'New Like', message: 'Isabela Moraes liked your training post', read: false, timestamp: new Date(Date.now() - 7200000).toISOString(), relatedId: 'p1', actorAvatar: MOCK_USERS[3].avatar, actorName: 'Isabela Moraes' },
-  { id: 'n4', userId: 'cu1', type: 'connection_request', title: 'Connection Request', message: 'Yuki Tanaka wants to connect with you', read: true, timestamp: new Date(Date.now() - 86400000).toISOString(), actorAvatar: MOCK_USERS[4].avatar, actorName: 'Yuki Tanaka' },
+  { id: 'n3', userId: 'cu1', type: 'like', title: 'New Like', message: 'Isabela Moraes liked your training post', read: false, timestamp: new Date(Date.now() - 7200000).toISOString(), relatedId: 'p1', actorAvatar: ph('u4'), actorName: 'Isabela Moraes' },
+  { id: 'n4', userId: 'cu1', type: 'connection_request', title: 'Connection Request', message: 'Yuki Tanaka wants to connect with you', read: true, timestamp: new Date(Date.now() - 86400000).toISOString(), actorAvatar: ph('u5'), actorName: 'Yuki Tanaka' },
   { id: 'n5', userId: 'cu1', type: 'match_reminder', title: 'Match Reminder', message: 'Pro Football 5v5 Championship starts in 48 hours', read: true, timestamp: new Date(Date.now() - 86400000 * 2).toISOString(), relatedId: 'e1' },
   { id: 'n6', userId: 'cu1', type: 'achievement', title: 'New Achievement', message: 'You unlocked "Early Adopter" — joined SportiX in the first wave', read: true, timestamp: new Date(Date.now() - 86400000 * 3).toISOString() },
 ];

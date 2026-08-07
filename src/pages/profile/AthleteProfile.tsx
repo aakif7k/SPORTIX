@@ -8,7 +8,7 @@ import {
 import { RadarChart, PolarGrid, PolarAngleAxis, Radar, ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip } from 'recharts';
 import { useAuthStore } from '../../store/authStore';
 import { useSquadStore } from '../../store/squadStore';
-import { MOCK_USERS } from '../../services/mockData';
+import { getProfile, profileToUserShape } from '../../services/profileService';
 import type { User } from '../../types';
 import { VerifiedBadge } from '../../components/ui/Badge';
 import { Toggle } from '../../components/ui/index';
@@ -21,14 +21,14 @@ export const AthleteProfile: React.FC = () => {
   const navigate = useNavigate();
   const authUser = useAuthStore(state => state.user);
 
-  const isMe = !uid || uid === 'me' || uid === authUser?.id;
+  const isMe = !uid || uid === 'me' || uid === 'my-profile' || uid === authUser?.id;
   const targetId = isMe ? authUser?.id : uid;
 
-  const [profileUser, setProfileUser] = useState<User | null>(() => {
-    if (isMe) return authUser || null;
-    const found = MOCK_USERS.find(u => u.id === targetId || u.username === targetId);
-    return (found as unknown as User) || null;
-  });
+  const [profileUser, setProfileUser] = useState<User | null>(
+    isMe && authUser ? (authUser as unknown as User) : null
+  );
+  const [profileLoading, setProfileLoading] = useState(true);
+  const [profileError, setProfileError] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState('Overview');
   const [isConnected, setIsConnected] = useState(false);
   const [editOpen, setEditOpen] = useState(false);
@@ -37,14 +37,87 @@ export const AthleteProfile: React.FC = () => {
   const { squads } = useSquadStore();
   const userSquad = squads[0] || null;
 
+  // ── Fetch profile from Appwrite ────────────────────────────────────────────
   useEffect(() => {
-    if (isMe) {
-      if (authUser) setProfileUser(authUser);
-    } else if (targetId) {
-      const found = MOCK_USERS.find(u => u.id === targetId || u.username === targetId);
-      if (found) setProfileUser(found as unknown as User);
+    let isMounted = true;
+
+    if (isMe && authUser) {
+      setProfileUser(authUser as unknown as User);
+      setProfileLoading(false);
+      setProfileError(null);
+      return;
     }
+
+    const lookupId = targetId || authUser?.id || uid;
+
+    if (!lookupId) {
+      setProfileLoading(false);
+      if (!authUser) setProfileError('Please sign in to view your profile.');
+      return;
+    }
+
+    setProfileLoading(true);
+    setProfileError(null);
+
+    getProfile(lookupId)
+      .then(appwriteProfile => {
+        if (isMounted) {
+          if (appwriteProfile) {
+            setProfileUser(profileToUserShape(appwriteProfile) as unknown as User);
+            setProfileError(null);
+          } else if (authUser) {
+            setProfileUser(authUser as unknown as User);
+            setProfileError(null);
+          } else {
+            setProfileError('Athlete profile not found.');
+          }
+        }
+      })
+      .catch(err => {
+        console.error('[AthleteProfile] fetch error:', err);
+        if (isMounted) {
+          if (authUser) {
+            setProfileUser(authUser as unknown as User);
+            setProfileError(null);
+          } else {
+            setProfileError('Failed to load profile. Please try again.');
+          }
+        }
+      })
+      .finally(() => {
+        if (isMounted) setProfileLoading(false);
+      });
+
+    return () => {
+      isMounted = false;
+    };
   }, [uid, authUser, isMe, targetId]);
+
+  // ── Loading state ──────────────────────────────────────────────────────────
+  if (profileLoading) {
+    return (
+      <div className="min-h-[60vh] flex flex-col items-center justify-center space-y-4 text-white">
+        <div className="w-12 h-12 rounded-full border-2 border-[#CCFF00] border-t-transparent animate-spin" />
+        <p className="font-mono text-xs text-text-muted">Loading PlayerDNA Profile...</p>
+      </div>
+    );
+  }
+
+  // ── Error state ────────────────────────────────────────────────────────────
+  if (profileError) {
+    return (
+      <div className="min-h-[60vh] flex flex-col items-center justify-center space-y-4 text-white">
+        <Shield size={48} className="text-red-400 opacity-60" />
+        <p className="font-mono text-sm text-red-400">{profileError}</p>
+        <button
+          onClick={() => navigate(-1)}
+          className="px-4 py-2 rounded-xl bg-white/10 text-white font-mono text-xs hover:bg-white/20 transition"
+        >
+          ← Go Back
+        </button>
+      </div>
+    );
+  }
 
   if (!profileUser) {
     return (
@@ -161,7 +234,7 @@ export const AthleteProfile: React.FC = () => {
                   </button>
 
                   <button
-                    onClick={() => navigate('/app/messages')}
+                    onClick={() => navigate(`/app/messages?user=${profileUser.id}`)}
                     className="px-4 py-2.5 rounded-xl bg-elevated border border-white/10 hover:border-[#CCFF00]/40 text-white font-mono text-xs font-bold uppercase tracking-wider transition-all flex items-center gap-2"
                   >
                     <MessageCircle size={14} /> Message

@@ -57,7 +57,7 @@ export const AITeamBuilder: React.FC = () => {
         </div>
         <div>
           <h1 className="font-display text-4xl text-text-primary tracking-wide uppercase">AUTOSQUAD</h1>
-          <p className="text-xs font-label text-text-secondary">Powered by Google Gemini · {sportData?.emoji} {event?.title}</p>
+          <p className="text-xs font-label text-text-secondary">Powered by SPORTiX AI · {sportData?.emoji} {event?.title}</p>
         </div>
       </div>
 

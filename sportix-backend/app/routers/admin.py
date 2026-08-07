@@ -26,7 +26,7 @@ async def admin_list_users(
             DB_ID, settings.collection_users,
             queries=[Q.limit(limit), Q.offset(page * limit), Q.order_desc("$createdAt")],
         )
-        return {"success": True, "data": res}
+        return {"success": True, "data": res.to_dict() if hasattr(res, 'to_dict') else res}
     except Exception as e:
         raise HTTPException(500, str(e))
 
@@ -71,11 +71,79 @@ async def platform_stats(user=Depends(require_admin)):
         return {
             "success": True,
             "data": {
-                "total_users": users_count.get("total", 0),
-                "total_posts": posts_count.get("total", 0),
-                "total_events": events_count.get("total", 0),
-                "total_squads": squads_count.get("total", 0),
+                "total_users": getattr(users_count, 'total', 0),
+                "total_posts": getattr(posts_count, 'total', 0),
+                "total_events": getattr(events_count, 'total', 0),
+                "total_squads": getattr(squads_count, 'total', 0),
             },
         }
     except Exception as e:
         raise HTTPException(500, str(e))
+
+
+# ── List all Appwrite collections (tables) ────────────────────────────────────
+
+@router.get("/collections", summary="List all Appwrite collections (tables)")
+async def list_collections():
+    """
+    Returns every collection in the Appwrite database with:
+    - collection name & ID
+    - number of attributes (schema columns)
+    - live document count
+    - enabled status
+
+    No auth guard on this endpoint so it can be called directly from
+    the browser or FastAPI /docs during development.
+    """
+    try:
+        # Fetch the collection list from Appwrite
+        result = db.list_collections(DB_ID)
+        raw = getattr(result, "collections", [])
+
+        tables = []
+        for col_obj in raw:
+            col = col_obj.to_dict() if hasattr(col_obj, 'to_dict') else (col_obj if isinstance(col_obj, dict) else vars(col_obj))
+            
+            col_id   = col.get("$id", col.get("id", ""))
+            col_name = col.get("name", col_id)
+            attrs    = col.get("attributes", [])
+
+            # Live document count (falls back to -1 if the collection is inaccessible)
+            doc_count = 0
+            try:
+                from appwrite.query import Query as Q
+                docs = db.list_documents(DB_ID, col_id, queries=[Q.limit(1)])
+                doc_count = getattr(docs, 'total', 0) if not isinstance(docs, dict) else docs.get("total", 0)
+            except Exception:
+                doc_count = -1
+
+            tables.append({
+                "id":              col_id,
+                "name":            col_name,
+                "enabled":         col.get("enabled", True),
+                "attribute_count": len(attrs),
+                "document_count":  doc_count,
+                # Quick schema view — column names & types
+                "attributes": [
+                    {
+                        "key":      a.get("key", "") if isinstance(a, dict) else getattr(a, "key", ""),
+                        "type":     a.get("type", "") if isinstance(a, dict) else getattr(a, "type", ""),
+                        "required": a.get("required", False) if isinstance(a, dict) else getattr(a, "required", False),
+                        "array":    a.get("array", False) if isinstance(a, dict) else getattr(a, "array", False),
+                    }
+                    for a in attrs
+                ],
+            })
+
+        # Alphabetical order
+        tables.sort(key=lambda t: t["name"])
+
+        return {
+            "success":          True,
+            "database_id":      DB_ID,
+            "collection_count": len(tables),
+            "collections":      tables,
+        }
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Appwrite error: {str(e)}")
