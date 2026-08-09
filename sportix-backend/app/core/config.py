@@ -61,7 +61,9 @@ class Settings(BaseSettings):
     frontend_url: str = "http://localhost:5173"
     upload_dir: str = "uploads"
     max_upload_size_mb: int = 50
-    max_autosquad_generations: int = 3
+    max_autosquad_generations: int = 5
+    gemini_api_key: str = ""
+    gemini_model: str = "gemini-2.5-flash"
 
     class Config:
         env_file = ".env"

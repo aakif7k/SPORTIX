@@ -159,6 +159,21 @@ export async function getCurrentUser(): Promise<AuthUser | null> {
   }
 }
 
+export type PostAuthDestination = 'AUTH_REQUIRED' | 'ONBOARDING' | 'APP';
+
+/**
+ * Authoritative destination decision for authenticated users.
+ * Both email/password users and Google OAuth users MUST converge into this single decision.
+ */
+export function resolvePostAuthDestination(
+  isAuthenticated: boolean,
+  profile: UserProfile | null
+): PostAuthDestination {
+  if (!isAuthenticated) return 'AUTH_REQUIRED';
+  if (!profile || !profile.is_onboarding_complete) return 'ONBOARDING';
+  return 'APP';
+}
+
 /* ─── GET USER PROFILE ───────────────────────────────────────────────────── */
 export async function getUserProfile(uid: string): Promise<UserProfile | null> {
   try {

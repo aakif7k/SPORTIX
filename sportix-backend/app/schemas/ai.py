@@ -22,6 +22,8 @@ class AutoSquadRequest(BaseModel):
     entry_type: EntryType = EntryType.solo
     skill_level: SkillLevel = SkillLevel.amateur
     partner_id: Optional[str] = None
+    radius_km: Optional[float] = 25.0
+    location: Optional[str] = None
 
 
 class PulseAward(BaseModel):

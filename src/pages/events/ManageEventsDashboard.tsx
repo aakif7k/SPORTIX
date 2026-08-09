@@ -33,14 +33,14 @@ export const ManageEventsDashboard: React.FC = () => {
   };
 
   return (
-    <div className="max-w-5xl mx-auto space-y-6 text-white px-4 pb-24 pt-6">
+    <div className="max-w-5xl mx-auto space-y-6 text-text-primary px-4 pb-24 pt-6">
       
       {/* ── HEADER ──────────────────────────────────────────── */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-6 sm:p-8 rounded-3xl bg-gradient-to-r from-[#141200] via-[#0A0A0A] to-[#120A05] border border-[#CCFF00]/20 shadow-[0_0_40px_rgba(204,255,0,0.1)]">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-6 sm:p-8 rounded-3xl bg-surface border border-border-muted shadow-2xl">
         <div className="flex items-center gap-4">
           <button
             onClick={() => navigate('/app/events')}
-            className="w-11 h-11 rounded-2xl bg-elevated border border-white/10 hover:border-[#CCFF00]/40 flex items-center justify-center text-white transition-all"
+            className="w-11 h-11 rounded-2xl bg-elevated border border-border-muted hover:border-[#CCFF00]/40 flex items-center justify-center text-text-primary transition-all"
           >
             <ArrowLeft size={18} />
           </button>
@@ -48,7 +48,7 @@ export const ManageEventsDashboard: React.FC = () => {
             <div className="inline-flex items-center gap-1.5 font-mono text-[10px] font-bold text-[#CCFF00] uppercase tracking-widest">
               <Settings size={12} /> ORGANIZER DASHBOARD
             </div>
-            <h1 className="text-2xl sm:text-4xl font-black uppercase tracking-tight">Manage My Events</h1>
+            <h1 className="text-2xl sm:text-4xl font-black text-text-primary uppercase tracking-tight">Manage My Events</h1>
             <p className="font-mono text-xs text-text-secondary mt-1">
               You are organizing {myEvents.length} active tournaments
             </p>
@@ -71,7 +71,7 @@ export const ManageEventsDashboard: React.FC = () => {
           value={searchQuery}
           onChange={e => setSearchQuery(e.target.value)}
           placeholder="Search your tournaments by title or location..."
-          className="w-full pl-10 pr-4 py-3 rounded-2xl bg-surface border border-border-muted text-xs text-white placeholder:text-text-muted focus:outline-none focus:border-[#CCFF00]/40 font-mono transition-all"
+          className="w-full pl-10 pr-4 py-3 rounded-2xl bg-surface border border-border-muted text-xs text-text-primary placeholder:text-text-muted focus:outline-none focus:border-[#CCFF00]/40 font-mono transition-all"
         />
       </div>
 
@@ -93,20 +93,20 @@ export const ManageEventsDashboard: React.FC = () => {
                     alt={event.title}
                     className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
                   />
-                  <div className="absolute inset-0 bg-gradient-to-t from-[#0C0C0C] via-transparent to-transparent" />
+                  <div className="absolute inset-0 bg-gradient-to-t from-surface via-transparent to-transparent" />
                   
                   {/* Action Buttons */}
                   <div className="absolute top-3 right-3 flex items-center gap-2">
                     <button
                       onClick={(e) => { e.stopPropagation(); navigate(`/app/events/${event.id}/manage`); }}
-                      className="p-2 rounded-xl bg-black/60 backdrop-blur border border-white/20 hover:bg-[#CCFF00] hover:text-black text-white transition-all"
+                      className="p-2 rounded-xl bg-surface/80 backdrop-blur border border-border-muted hover:bg-[#CCFF00] hover:text-black text-text-primary transition-all"
                       title="Edit Event"
                     >
                       <Edit size={14} />
                     </button>
                     <button
                       onClick={(e) => handleDelete(e, event.id)}
-                      className="p-2 rounded-xl bg-black/60 backdrop-blur border border-white/20 hover:bg-red-600 text-white transition-all"
+                      className="p-2 rounded-xl bg-surface/80 backdrop-blur border border-border-muted hover:bg-red-600 hover:text-white text-text-primary transition-all"
                       title="Delete Event"
                     >
                       <Trash2 size={14} />
@@ -124,11 +124,11 @@ export const ManageEventsDashboard: React.FC = () => {
                     <span className="truncate">{event.location}</span>
                   </div>
 
-                  <h3 className="font-sans font-bold text-base text-white uppercase tracking-tight group-hover:text-[#CCFF00] transition-colors line-clamp-1">
+                  <h3 className="font-sans font-bold text-base text-text-primary uppercase tracking-tight group-hover:text-[#CCFF00] transition-colors line-clamp-1">
                     {event.title}
                   </h3>
 
-                  <div className="flex items-center justify-between text-xs font-mono text-text-muted pt-2 border-t border-white/5">
+                  <div className="flex items-center justify-between text-xs font-mono text-text-muted pt-2 border-t border-border-muted">
                     <span>Format: {event.format}</span>
                     <span className="text-[#CCFF00] font-bold">Prize: {event.prizePool || 'TBD'}</span>
                   </div>
@@ -139,7 +139,7 @@ export const ManageEventsDashboard: React.FC = () => {
               <div className="p-5 pt-0">
                 <button
                   onClick={() => navigate(`/app/events/${event.id}/manage`)}
-                  className="w-full py-2.5 rounded-xl bg-elevated border border-white/10 hover:border-[#CCFF00]/40 text-[#CCFF00] font-mono text-xs font-bold uppercase tracking-wider flex items-center justify-center gap-1 transition-all"
+                  className="w-full py-2.5 rounded-xl bg-elevated border border-border-muted hover:border-[#CCFF00]/40 text-[#CCFF00] font-mono text-xs font-bold uppercase tracking-wider flex items-center justify-center gap-1 transition-all"
                 >
                   Manage Event Settings <ChevronRight size={14} />
                 </button>

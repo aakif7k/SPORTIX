@@ -6,11 +6,12 @@
  */
 
 import { storage, ID, BUCKET_ID } from '@/lib/appwrite';
+import { api } from '@/lib/api';
 import { updateProfile } from './profileService';
 import { updateEvent } from './eventService';
 import toast from 'react-hot-toast';
 
-export const MEDIA_BUCKET_ID = import.meta.env.VITE_APPWRITE_STORAGE_BUCKET_ID || BUCKET_ID || '6a5faf1a000b5d9156b5';
+export const MEDIA_BUCKET_ID = import.meta.env.VITE_APPWRITE_STORAGE_BUCKET_ID || BUCKET_ID || 'sportix-media';
 
 export interface StorageUploadResult {
   fileId: string;
@@ -18,37 +19,37 @@ export interface StorageUploadResult {
 }
 
 /**
- * Validate image file format and size
+ * Validate image or video file format and size
  */
-export function validateImageFile(file: File, maxSizeMB = 10): boolean {
-  if (!file.type.startsWith('image/')) {
-    toast.error('Please select a valid image file (PNG, JPG, WEBP, GIF).');
+export function validateImageFile(file: File, maxSizeMB = 50): boolean {
+  if (!file.type.startsWith('image/') && !file.type.startsWith('video/')) {
+    toast.error('Please select a valid image (PNG, JPG, WEBP, GIF) or video file (MP4, MOV, WEBM).');
     return false;
   }
   if (file.size > maxSizeMB * 1024 * 1024) {
-    toast.error(`Image size exceeds ${maxSizeMB}MB limit.`);
+    toast.error(`File size exceeds ${maxSizeMB}MB limit.`);
     return false;
   }
   return true;
 }
 
 /**
- * Upload an image file to Appwrite Storage.
- * Attempts upload using configured bucket ID, then candidate bucket ID fallbacks.
- * Returns { fileId, fileUrl } or null on failure.
+ * Upload an image or video file to Appwrite Storage with robust candidate bucket fallbacks and backend upload fallback.
  */
 export async function uploadMediaFile(
   file: File,
-  bucketId: string = MEDIA_BUCKET_ID
+  bucketId: string = 'sportix-media'
 ): Promise<StorageUploadResult | null> {
   if (!validateImageFile(file)) return null;
 
   const candidateBuckets = Array.from(new Set([
+    'sportix-media',
+    'sportix-images',
+    'sportix-videos',
+    '6a5faf6c00197d36a3a9',
     bucketId,
     import.meta.env.VITE_APPWRITE_STORAGE_BUCKET_ID,
     BUCKET_ID,
-    '6a5faf1a000b5d9156b5',
-    'sportix-media',
   ].filter(Boolean))) as string[];
 
   let lastErr: any = null;
@@ -64,17 +65,25 @@ export async function uploadMediaFile(
       return { fileId: fileDoc.$id, fileUrl };
     } catch (err: any) {
       lastErr = err;
-      // If 404 / bucket not found, try next candidate bucket ID
-      if (err?.code === 404 || err?.message?.includes('could not be found') || err?.type === 'storage_bucket_not_found') {
-        console.warn(`[storageService] Bucket '${bId}' not found, trying next candidate...`);
-        continue;
-      }
-      break;
+      console.warn(`[storageService] Upload attempt to bucket '${bId}' failed:`, err?.message || err);
+      continue;
     }
   }
 
-  console.error('[storageService] uploadMediaFile error:', lastErr?.message ?? lastErr);
-  toast.error(lastErr?.message || 'Failed to upload image to Appwrite storage.');
+  // 3. Fallback to FastAPI backend server upload endpoint if client SDK upload fails
+  try {
+    const formData = new FormData();
+    formData.append('file', file);
+    const res = await api.upload<any>('/api/upload/post-media', formData);
+    if (res.data?.url) {
+      return { fileId: res.data.file_id || ID.unique(), fileUrl: res.data.url };
+    }
+  } catch (backendErr) {
+    console.warn('[storageService] Backend server upload fallback error:', backendErr);
+  }
+
+  console.error('[storageService] uploadMediaFile failed across all buckets:', lastErr?.message ?? lastErr);
+  toast.error(lastErr?.message || 'Failed to upload media to Appwrite storage.');
   return null;
 }
 
@@ -84,13 +93,25 @@ export async function uploadMediaFile(
 export function getMediaFileUrl(
   fileId?: string | null,
   fallbackUrl?: string | null,
-  bucketId: string = MEDIA_BUCKET_ID
+  bucketId: string = 'sportix-media'
 ): string {
   if (fileId) {
-    try {
-      return storage.getFileView(bucketId, fileId).toString();
-    } catch (err) {
-      console.error('[storageService] getMediaFileUrl error:', err);
+    const candidateBuckets = Array.from(new Set([
+      bucketId,
+      'sportix-media',
+      'sportix-images',
+      'sportix-videos',
+      '6a5faf6c00197d36a3a9',
+      MEDIA_BUCKET_ID,
+    ].filter(Boolean))) as string[];
+
+    for (const bId of candidateBuckets) {
+      try {
+        const url = storage.getFileView(bId, fileId).toString();
+        if (url) return url;
+      } catch {
+        continue;
+      }
     }
   }
   return fallbackUrl || '';

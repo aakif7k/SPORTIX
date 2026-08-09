@@ -11,6 +11,7 @@ import { Button } from '../../components/ui/Button';
 import { databases, DATABASE_ID, COLLECTIONS } from '@/lib/appwrite';
 import { useAuth } from '@/context/AuthContext';
 import { useAuthStore } from '@/store/authStore';
+import { ensureUserProfile, sanitizeExperienceLevel } from '@/services/profileService';
 import { checkUsernameAvailable, getUserProfile } from '@/lib/authService';
 import { uploadProfilePicture } from '@/services/storageService';
 import toast from 'react-hot-toast';
@@ -124,7 +125,7 @@ export const OnboardingPage: React.FC = () => {
   const fileRef   = useRef<HTMLInputElement>(null);
   const searchRef = useRef<HTMLInputElement>(null);
 
-  const { user: currentUser } = useAuth();
+  const { user: currentUser, refreshUser } = useAuth();
 
   /* Step */
   const [step, setStep] = useState(0);
@@ -160,11 +161,23 @@ export const OnboardingPage: React.FC = () => {
   /* Global */
   const [isLoading, setIsLoading] = useState(false);
 
-  /* ── Pre-populate from existing profile ── */
+  /* ── Pre-populate from existing profile or auth user ── */
   useEffect(() => {
     if (currentUser) {
+      const defaultName = currentUser.name || (currentUser.email ? currentUser.email.split('@')[0] : '') || 'Athlete';
+      setFullName(prev => prev || defaultName);
+
+      const defaultUser = (currentUser.name || currentUser.email?.split('@')[0] || 'athlete')
+        .toLowerCase().replace(/[^a-z0-9]/g, '_').slice(0, 18);
+      setUsername(prev => prev || defaultUser);
+
+      setLevel(prev => prev || 'amateur');
+      setPrimarySport(prev => prev || 'football');
+      setLocation(prev => prev || 'New York, USA');
+
       getUserProfile(currentUser.id).then(profile => {
         if (!profile) return;
+        if (profile.full_name)          setFullName(profile.full_name);
         if (profile.username)          setUsername(profile.username);
         if (profile.role)              setRole(profile.role as UserRole);
         if (profile.location)          setLocation(profile.location);
@@ -172,13 +185,46 @@ export const OnboardingPage: React.FC = () => {
         if (profile.sports?.length) {
           setPrimarySport(profile.sports[0]);
           setInterestedSports(profile.sports.slice(1));
+        } else if (profile.sport) {
+          setPrimarySport(profile.sport);
         }
         if (profile.experience_level)  setLevel(profile.experience_level);
         if (profile.avatar_url)        setPhotoPreview(profile.avatar_url);
-        if (profile.full_name)    setFullName(profile.full_name);
       });
     }
   }, [currentUser]);
+
+  /* ── Instant Skip Handler ── */
+  const handleSkipOnboarding = async () => {
+    if (!currentUser) {
+      navigate('/login', { replace: true });
+      return;
+    }
+    setIsLoading(true);
+    try {
+      await ensureUserProfile({
+        $id: currentUser.id,
+        email: currentUser.email || '',
+        name: fullName || currentUser.name || 'Athlete',
+      });
+      await databases.updateDocument(
+        DATABASE_ID,
+        COLLECTIONS.PROFILES,
+        currentUser.id,
+        {
+          is_onboarding_complete: true,
+          updated_at: new Date().toISOString(),
+        }
+      );
+    } catch (err: any) {
+      console.warn('Skip onboarding update failed:', err?.message);
+    } finally {
+      setIsLoading(false);
+      try { await refreshUser(); } catch {}
+      toast.success("Welcome to SPORTiX ⚡");
+      navigate('/app/feed', { replace: true });
+    }
+  };
 
   /* ── Username debounce ── */
   useEffect(() => {
@@ -222,23 +268,35 @@ export const OnboardingPage: React.FC = () => {
   };
 
   /* ── Photo ── */
-  const handlePhotoSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handlePhotoSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    if (!file) return;
+    if (!file || !currentUser) return;
     setPhotoFile(file);
     setIsUploading(true);
-    setUploadProgress(0);
+    setUploadProgress(15);
+
     const reader = new FileReader();
-    reader.onload = ev => {
-      const interval = setInterval(() => {
-        setUploadProgress(prev => {
-          if (prev >= 100) { clearInterval(interval); setIsUploading(false); return 100; }
-          return prev + 12;
-        });
-      }, 80);
-      setPhotoPreview(ev.target?.result as string);
-    };
+    reader.onload = ev => { setPhotoPreview(ev.target?.result as string); };
     reader.readAsDataURL(file);
+
+    const interval = setInterval(() => {
+      setUploadProgress(prev => (prev >= 90 ? 90 : prev + 15));
+    }, 100);
+
+    try {
+      const uploadRes = await uploadProfilePicture(currentUser.id, file);
+      clearInterval(interval);
+      setUploadProgress(100);
+      if (uploadRes?.fileUrl) {
+        setPhotoPreview(uploadRes.fileUrl);
+        try { await refreshUser(); } catch {}
+      }
+    } catch (err: any) {
+      clearInterval(interval);
+      console.error('[OnboardingPage] Avatar upload error:', err);
+    } finally {
+      setIsUploading(false);
+    }
   };
 
   /* ── Sports ── */
@@ -288,6 +346,14 @@ export const OnboardingPage: React.FC = () => {
     useAuthStore.getState().updateProfile(updatedUser);
 
     try {
+      await ensureUserProfile({
+        $id: currentUser.id,
+        email: currentUser.email || '',
+        name: fullName,
+      });
+
+      const sanitizedLevel = sanitizeExperienceLevel(level);
+
       await databases.updateDocument(
         DATABASE_ID,
         COLLECTIONS.PROFILES,
@@ -300,7 +366,7 @@ export const OnboardingPage: React.FC = () => {
           bio,
           sport:            primarySport,
           sports:           [primarySport, ...interestedSports].filter(Boolean),
-          experience_level: level,
+          experience_level: sanitizedLevel,
           avatar_url:       uploadedUrl,
           profile_image_file_id: uploadedFileId,
           profile_image_url:     uploadedUrl,
@@ -309,11 +375,14 @@ export const OnboardingPage: React.FC = () => {
         },
       );
     } catch (err: any) {
-      console.warn('Appwrite profiles collection missing, saved onboarding state locally:', err?.message);
+      console.warn('Onboarding update failed, attempting profile creation fallback:', err?.message);
     } finally {
       setIsLoading(false);
+      try {
+        await refreshUser();
+      } catch {}
       toast.success("Profile set up! Welcome to SPORTiX ⚡");
-      navigate('/app/feed');
+      navigate('/app/feed', { replace: true });
     }
   };
 
@@ -334,12 +403,24 @@ export const OnboardingPage: React.FC = () => {
       <div className="absolute inset-0 pointer-events-none" style={{ background: 'radial-gradient(ellipse at 50% 20%, rgba(204,255,0,0.07) 0%, transparent 60%)' }} />
 
       <div className="w-full max-w-xl relative z-10 py-8">
-        {/* Logo */}
-        <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="flex items-center justify-center gap-2 mb-6">
-          <div className="w-8 h-8 bg-volt rounded-lg flex items-center justify-center">
-            <Zap size={16} className="text-black" fill="currentColor" />
+        {/* Top Header with Logo and Skip to Feed */}
+        <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="flex items-center justify-between gap-2 mb-6">
+          <div className="flex items-center gap-2">
+            <div className="w-8 h-8 bg-volt rounded-lg flex items-center justify-center">
+              <Zap size={16} className="text-black" fill="currentColor" />
+            </div>
+            <span className="font-display text-2xl text-volt tracking-widest">SPORTIX</span>
           </div>
-          <span className="font-display text-2xl text-volt tracking-widest">SPORTIX</span>
+
+          <button
+            type="button"
+            onClick={handleSkipOnboarding}
+            disabled={isLoading}
+            className="text-xs font-mono font-bold text-volt hover:text-white px-3.5 py-1.5 rounded-xl border border-volt/30 hover:bg-volt/10 transition-all flex items-center gap-1.5 bg-elevated/80 shadow-sm"
+          >
+            {isLoading ? 'Entering…' : 'Skip to Feed ⚡'}
+            <ChevronRight size={14} />
+          </button>
         </motion.div>
 
         {/* Progress bar */}
@@ -523,7 +604,7 @@ export const OnboardingPage: React.FC = () => {
                   <Button variant="ghost" onClick={() => setStep(0)}>← Back</Button>
                   <Button
                     fullWidth size="lg"
-                    disabled={!fullName.trim() || username.length < 3 || !location.trim() || !level || usernameAvailable === false || isLocating}
+                    disabled={!fullName.trim() || username.length < 3 || usernameAvailable === false || isLocating}
                     onClick={() => setStep(2)}
                     icon={<ChevronRight size={16} />}
                   >

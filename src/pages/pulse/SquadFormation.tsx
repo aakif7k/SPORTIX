@@ -3,7 +3,7 @@ import { useSearchParams, useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { AILoader } from '../../components/pulse/AILoader';
 import { PlayerCard } from '../../components/pulse/PlayerCard';
-import { generateAIPulseSquad } from '../../services/squadAI';
+import { getRemainingGenerations, generateAutoSquad, acceptAutoSquad, type DailyLimitInfo } from '../../services/autoSquadService';
 import { useSquadStore } from '../../store/squadStore';
 import { useAuthStore } from '../../store/authStore';
 import { useAISettingsStore } from '../../store/aiSettingsStore';
@@ -130,30 +130,96 @@ export const SquadFormation: React.FC = () => {
   const [status, setStatus] = useState<'selection' | 'matching'>('selection');
   const [selectedDraftId, setSelectedDraftId] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState('generate');
+  const [dailyQuota, setDailyQuota] = useState<DailyLimitInfo>({ used: 0, remaining: 3, max: 3 });
+  const [genError, setGenError] = useState<string | null>(null);
+
+  React.useEffect(() => {
+    getRemainingGenerations().then(setDailyQuota).catch(() => null);
+  }, []);
 
   const handleGenerateSquad = async () => {
+    setGenError(null);
+    if (dailyQuota.remaining <= 0) {
+      setGenError('Daily limit reached (3 generations max per day). Please try again tomorrow.');
+      return;
+    }
+
     setActiveTab('generate');
     setStatus('matching');
-    setTimeout(async () => {
-      try {
-        const userProfile = {
-          name: user?.name || 'Zack Miller',
-          username: user?.username || 'zack_pulse',
-          avatar: user?.avatar || 'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=150',
-          level: user?.stats?.rating ? Math.round(user.stats.rating / 10) : 24,
-          gameplayCategory
-        };
-        const newSquad = await generateAIPulseSquad(selectedSport, entryType, userProfile);
-        addGeneratedSquad(newSquad);
-        incrementGenerationsCount();
-        setSelectedDraftId(newSquad.squadId);
-        setActiveTab('results');
-      } catch (err) {
-        console.error(err);
-      } finally {
-        setStatus('selection');
-      }
-    }, 4500);
+
+    try {
+      const res = await generateAutoSquad({
+        sport: selectedSport,
+        entry_type: entryType as any,
+        skill_level: gameplayCategory.toLowerCase() as any,
+        radius_km: nearbyRadius || 25,
+      });
+
+      // Map backend squad data to SquadStore format
+      const squadData = res.squad_data;
+      const squadObj: any = {
+        squadId: res.squad_id || `squad_${Date.now()}`,
+        name: squadData.name || `Volt ${selectedSport} Squad`,
+        sport: selectedSport,
+        captainId: squadData.captain_recommendation?.id || user?.id || 'cu1',
+        members: squadData.members.map((m: any) => ({
+          uid: m.id,
+          name: m.full_name,
+          avatar: m.avatar_url || `https://i.pravatar.cc/150?u=${m.id}`,
+          sport: m.sport,
+          position: m.position,
+          pulseScore: m.pulse_score || 750,
+          tier: m.ssr >= 85 ? 'ELITE' : 'CONTENDER',
+          compatibility: m.compatibility_score,
+          role: m.is_captain ? 'captain' : 'member',
+          readiness: 'Ready',
+          level: m.level || 1,
+          distance: m.distance_km || 0,
+        })),
+        chemistry: {
+          overall: res.overall_compatibility || 85,
+          trust: squadData.score_breakdown?.activity_score || 85,
+          coordination: squadData.score_breakdown?.position_score || 88,
+          communication: squadData.score_breakdown?.level_score || 82,
+          retentionScore: 88,
+          activityScore: squadData.score_breakdown?.activity_score || 85,
+          consistencyScore: squadData.score_breakdown?.skill_score || 85,
+          approvalScore: squadData.score_breakdown?.history_score || 80,
+        },
+        pulseAvg: Math.round(squadData.members.reduce((sum: number, m: any) => sum + (m.pulse_score || 700), 0) / squadData.members.length),
+        winRate: squadData.score_breakdown?.skill_score || 80,
+        matchHistory: [],
+        achievements: [],
+        formation: squadData.formation || '4-3-3',
+        tacticalNotes: squadData.reasoning || res.reasoning,
+        createdAt: new Date().toISOString().split('T')[0],
+        lastActive: new Date().toISOString().split('T')[0],
+        tournamentIds: [],
+        events: [],
+        posts: [],
+        xpBoostActive: false,
+        streakMultiplier: 1.0,
+        tags: ['AutoSquad AI', squadData.formation || '4-3-3'],
+        lookingFor: [],
+        score_breakdown: squadData.score_breakdown,
+        captain_recommendation: squadData.captain_recommendation,
+        exclusion_reasons: squadData.exclusion_reasons || [],
+      };
+
+      addGeneratedSquad(squadObj);
+      incrementGenerationsCount();
+      setSelectedDraftId(squadObj.squadId);
+      setActiveTab('results');
+
+      // Refresh daily limit count
+      const updatedQuota = await getRemainingGenerations();
+      setDailyQuota(updatedQuota);
+    } catch (err: any) {
+      console.error(err);
+      setGenError(err.message || 'AutoSquad generation failed.');
+    } finally {
+      setStatus('selection');
+    }
   };
 
   const handleDecline = (id: string) => {
@@ -164,9 +230,10 @@ export const SquadFormation: React.FC = () => {
     }
   };
 
-  const handleAccept = (id: string) => {
+  const handleAccept = async (id: string) => {
+    await acceptAutoSquad(id).catch(() => null);
     acceptGeneratedSquad(id);
-    navigate(`/pulse/squad/${id}`);
+    navigate('/app/messages');
   };
 
   const activeSquad = generatedSquads.find(s => s.squadId === selectedDraftId) || generatedSquads[0] || null;
@@ -262,14 +329,35 @@ export const SquadFormation: React.FC = () => {
               Configure your parameters and click Generate to let the AutoSquad AI engine scan nearby athletes and build your perfect squad.
             </p>
           </div>
-          <div className="grid grid-cols-1 gap-3 w-full max-w-xs">
-            {[[generatedSquads.length.toString(), 'Generated Drafts']].map(([val, label]) => (
-              <div key={label} className="rounded-[12px] p-3 bg-base border border-border-muted/50 text-center">
-                <div className="font-display text-[22px] text-volt">{val}</div>
-                <div className="font-mono text-[9px] text-text-muted">{label}</div>
-              </div>
-            ))}
+          <div className="grid grid-cols-2 gap-3 w-full max-w-xs">
+            <div className="rounded-[12px] p-3 bg-base border border-border-muted/50 text-center">
+              <div className="font-display text-[20px] text-volt">{generatedSquads.length}</div>
+              <div className="font-mono text-[9px] text-text-muted">Generated Drafts</div>
+            </div>
+            <div className="rounded-[12px] p-3 bg-base border border-border-muted/50 text-center">
+              <div className="font-display text-[20px] text-cyan">{dailyQuota.remaining} / 5</div>
+              <div className="font-mono text-[9px] text-text-muted">Daily Limit Left</div>
+            </div>
           </div>
+
+          {genError && (
+            <div className="p-3 rounded-xl bg-danger-dim border border-danger/30 text-danger font-mono text-[10px]">
+              {genError}
+            </div>
+          )}
+
+          <button
+            onClick={handleGenerateSquad}
+            disabled={dailyQuota.remaining <= 0}
+            className={`w-full max-w-xs py-3.5 rounded-xl font-display text-[13px] uppercase tracking-wider font-bold transition-all shadow-glow-volt ${
+              dailyQuota.remaining > 0
+                ? 'bg-volt text-volt-text hover:bg-volt-light'
+                : 'bg-surface border border-border-muted/50 text-text-muted cursor-not-allowed'
+            }`}
+          >
+            {dailyQuota.remaining > 0 ? 'Generate AutoSquad' : 'Daily Limit Reached (5/5)'}
+          </button>
+
           {generatedSquads.length > 0 && (
             <button onClick={() => setActiveTab('results')} className="flex items-center gap-2 font-mono text-[11px] text-volt hover:underline">
               View {generatedSquads.length} Generated Result{generatedSquads.length !== 1 ? 's' : ''} <ArrowRight size={12} />

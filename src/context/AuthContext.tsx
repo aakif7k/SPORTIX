@@ -5,7 +5,7 @@ import {
 import type { ReactNode } from 'react';
 import { account } from '@/lib/appwrite';
 import { useAuthStore } from '@/store/authStore';
-import { getProfile, profileToUserShape } from '@/services/profileService';
+import { ensureUserProfile, profileToUserShape } from '@/services/profileService';
 import type { UserProfile } from '@/services/profileService';
 
 // Appwrite SDK v26+ removed the Models namespace — use inline type
@@ -28,6 +28,7 @@ interface AuthUser {
   name: string;
   username?: string;
   avatar_url?: string | null;
+  avatar?: string | null;
   role?: string;
   sport?: string;
   level?: number;
@@ -68,21 +69,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [authLoading, setAuthLoading] = useState(true);
 
   /**
-   * Load the full profile from Appwrite directly.
-   * Falls back to a minimal AuthUser if the profile document doesn't exist yet
-   * (e.g. during Google OAuth first-time signup).
+   * Idempotently load or create the full profile from Appwrite directly.
+   * Ensures every authenticated user has a real profile document in Appwrite.
    */
-  const loadProfileFromAppwrite = useCallback(async (uid: string, appwriteAcc: AppwriteUser) => {
-    const appwriteProfile = await getProfile(uid);
-
-    if (appwriteProfile) {
-      // Rich profile document found — use it everywhere
+  const loadProfileFromAppwrite = useCallback(async (_uid: string, appwriteAcc: AppwriteUser) => {
+    try {
+      const appwriteProfile = await ensureUserProfile(appwriteAcc);
       const richUser: AuthUser = {
         id: appwriteProfile.id,
         email: appwriteProfile.email || appwriteAcc.email,
         name: appwriteProfile.full_name || appwriteAcc.name,
         username: appwriteProfile.username,
         avatar_url: appwriteProfile.avatar_url,
+        avatar: appwriteProfile.avatar_url,
         role: appwriteProfile.role,
         sport: appwriteProfile.sport,
         level: appwriteProfile.level,
@@ -90,19 +89,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       };
       setUser(richUser);
       setProfile(appwriteProfile);
-      // Also push to Zustand so legacy components using useAuthStore still work
       useAuthStore.getState().setUser(profileToUserShape(appwriteProfile) as any);
-    } else {
-      // No profile doc yet (new OAuth user) — use minimal auth data
+    } catch (err) {
+      console.error('[AuthContext] Profile load/creation error:', err);
       const basicUser: AuthUser = {
         id: appwriteAcc.$id,
         email: appwriteAcc.email,
         name: appwriteAcc.name,
-        username: appwriteAcc.name
-          ? appwriteAcc.name.toLowerCase().replace(/\s+/g, '_')
-          : 'user',
+        username: appwriteAcc.name ? appwriteAcc.name.toLowerCase().replace(/\s+/g, '_') : 'user',
         role: 'athlete',
-        sport: '',
+        sport: 'Multi-Sport',
         level: 1,
         pulse_score: 100,
       };
@@ -206,9 +202,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   // ─── REFRESH ───────────────────────────────────────────────────────────────
   const refreshUser = async () => {
-    const uid = localStorage.getItem('sportix_uid');
-    if (!uid || !appwriteUser) return;
-    await loadProfileFromAppwrite(uid, appwriteUser);
+    try {
+      const appwriteAcc = appwriteUser || await account.get();
+      if (!appwriteUser) setAppwriteUser(appwriteAcc);
+      localStorage.setItem('sportix_uid', appwriteAcc.$id);
+      await loadProfileFromAppwrite(appwriteAcc.$id, appwriteAcc);
+    } catch (err) {
+      console.warn('[AuthContext] refreshUser error:', err);
+    }
   };
 
   return (

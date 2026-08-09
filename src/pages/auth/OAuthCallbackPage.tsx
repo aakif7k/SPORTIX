@@ -4,15 +4,15 @@
  * Appwrite redirects here after a successful Google OAuth flow.
  * Responsibilities:
  *  1. Wait for AuthContext to detect the new session
- *  2. Check if this Google account already has a profile document
- *  3a. If YES  → go directly to /app/feed
- *  3b. If NO   → create a bare profile document, go to /onboarding
+ *  2. Check if this Google account already has a profile document via ensureUserProfile()
+ *  3a. If onboarding is complete  → go directly to /app/feed
+ *  3b. If onboarding is incomplete → go to /onboarding
  */
 import React, { useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/context/AuthContext';
-import { getUserProfile } from '@/lib/authService';
-import { databases, DATABASE_ID, COLLECTIONS } from '@/lib/appwrite';
+import { resolvePostAuthDestination } from '@/lib/authService';
+import { ensureUserProfile } from '@/services/profileService';
 import toast from 'react-hot-toast';
 
 export const OAuthCallbackPage: React.FC = () => {
@@ -38,51 +38,18 @@ export const OAuthCallbackPage: React.FC = () => {
       }
 
       try {
-        const existing = await getUserProfile(user.id);
+        const userProfile = await ensureUserProfile(user);
+        const destination = resolvePostAuthDestination(true, userProfile);
 
-        if (existing && existing.is_onboarding_complete) {
-          // Returning Google user with completed onboarding — go straight to feed
-          toast.success(`Welcome back, ${existing.full_name || user.name}! ⚡`);
+        if (destination === 'APP') {
+          toast.success(`Welcome back, ${userProfile.full_name || user.name}! ⚡`);
           navigate('/app/feed', { replace: true });
         } else {
-          // Brand-new Google user — attempt document creation if possible, then onboard
-          try {
-            const now = new Date().toISOString();
-            await databases.createDocument(
-              DATABASE_ID,
-              COLLECTIONS.PROFILES,
-              user.id,
-              {
-                full_name:              user.name  || '',
-                username:               '',
-                email:                  user.email || '',
-                role:                   'athlete',
-                sport:                  '',
-                sports:                 [],
-                experience_level:       'amateur',
-                location:               '',
-                avatar_url:             null,
-                bio:                    '',
-                is_open_to_recruit:     false,
-                is_active:              true,
-                is_onboarding_complete: false,
-                pulse_score:            100,
-                level:                  1,
-                coins_balance:          0,
-                login_streak:           0,
-                created_at:             now,
-                updated_at:             now,
-              },
-            );
-          } catch (docErr: any) {
-            console.warn('OAuth profile doc creation skipped:', docErr?.message);
-          }
-
-          toast.success('Google account verified! Let\'s set up your PlayerDNA ⚡');
+          toast.success("Google account verified! Let's set up your PlayerDNA ⚡");
           navigate('/onboarding', { replace: true });
         }
       } catch (err: any) {
-        console.error('OAuth callback fallback:', err);
+        console.error('[OAuthCallbackPage] error:', err);
         navigate('/onboarding', { replace: true });
       }
     };
@@ -99,27 +66,30 @@ export const OAuthCallbackPage: React.FC = () => {
       alignItems: 'center', justifyContent: 'center',
       gap: '20px',
     }}>
-      <div style={{ fontFamily: 'Urbanist, sans-serif', fontSize: '32px', color: '#fff', letterSpacing: '4px' }}>
+      <div style={{
+        fontFamily: 'Urbanist, sans-serif',
+        fontSize: '32px',
+        color: '#fff',
+        letterSpacing: '4px',
+      }}>
         SPORT<span style={{ color: '#CCFF00' }}>iX</span>
       </div>
-
-      {/* Animated volt bar */}
-      <div style={{ width: '180px', height: '2px', background: '#1A2200', borderRadius: '999px', overflow: 'hidden' }}>
+      <div style={{
+        width: '180px', height: '2px',
+        background: '#1A2200', borderRadius: '999px',
+        overflow: 'hidden',
+      }}>
         <div style={{
-          height: '100%', background: '#CCFF00', borderRadius: '999px',
-          animation: 'loadBar 1.4s ease-in-out infinite',
+          height: '100%',
+          background: '#CCFF00',
+          animation: 'loadBar 1.5s ease-in-out infinite',
         }} />
       </div>
-
-      <p style={{ fontFamily: 'Urbanist, sans-serif', fontSize: '11px', color: '#555', letterSpacing: '3px', textTransform: 'uppercase' }}>
-        Verifying Google account…
-      </p>
-
       <style>{`
         @keyframes loadBar {
-          0%   { width: 0%;   margin-left: 0%; }
-          50%  { width: 60%;  margin-left: 20%; }
-          100% { width: 0%;   margin-left: 100%; }
+          0% { width: 0%; marginLeft: 0% }
+          50% { width: 60%; marginLeft: 20% }
+          100% { width: 0%; marginLeft: 100% }
         }
       `}</style>
     </div>

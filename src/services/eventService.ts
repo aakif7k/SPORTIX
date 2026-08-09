@@ -220,6 +220,49 @@ async function addParticipantRecord(
   }
 }
 
+// Helper to filter active registration status
+export function isActiveParticipant(status?: string | null): boolean {
+  if (!status) return true;
+  const s = status.toLowerCase();
+  return s !== 'withdrawn' && s !== 'cancelled' && s !== 'removed' && s !== 'rejected';
+}
+
+/**
+ * Fetch all active participant records for an event from event_participants (Source of Truth).
+ */
+export async function getEventParticipants(
+  eventId: string
+): Promise<DbEventParticipant[]> {
+  if (isMockId(eventId)) return [];
+  try {
+    const res = await databases.listDocuments(
+      DATABASE_ID,
+      COLLECTIONS.EVENT_PARTICIPANTS,
+      [Query.equal('event_id', eventId), Query.orderAsc('joined_at'), Query.limit(200)]
+    );
+    const docs = res.documents.map(d => ({
+      $id:        d.$id,
+      event_id:   d.event_id,
+      user_id:    d.user_id,
+      joined_at:  d.joined_at || d.$createdAt,
+      created_at: d.created_at || d.$createdAt,
+      status:     (d.status || 'registered') as 'registered' | 'confirmed' | 'withdrawn',
+      entry_type: d.entry_type || d.registration_type || 'solo',
+      team_id:    d.team_id || d.squad_id || d.crew_id || null,
+    }));
+    return docs.filter(d => isActiveParticipant(d.status));
+  } catch (err: any) {
+    console.error('[eventService] getEventParticipants failed:', err?.message ?? err);
+    return [];
+  }
+}
+
+/** Single source of truth helper for active participant count */
+export async function getEventParticipantCount(eventId: string): Promise<number> {
+  const activeParts = await getEventParticipants(eventId);
+  return activeParts.length;
+}
+
 // ─── READ ────────────────────────────────────────────────────────────────────
 
 export async function getEvents(): Promise<Event[]> {
@@ -233,7 +276,30 @@ export async function getEvents(): Promise<Event[]> {
       console.warn('[eventService] No events in Appwrite — using mock data.');
       return MOCK_EVENTS;
     }
-    return res.documents.map(d => docToEvent(d as AppwriteDocument));
+
+    // Reconcile active participant count from event_participants for all events
+    const events = await Promise.all(
+      res.documents.map(async (doc) => {
+        const event = docToEvent(doc as AppwriteDocument);
+        if (!isMockId(event.id)) {
+          const dbParts = await getEventParticipants(event.id);
+          const activeCount = dbParts.length;
+          const userIds = dbParts.map(p => p.user_id);
+
+          event.participants = userIds.length > 0 ? userIds : Array(activeCount).fill('__db__');
+
+          // Reconcile current_participants in Appwrite if mismatched
+          if (doc.current_participants !== activeCount) {
+            databases.updateDocument(DATABASE_ID, COLLECTIONS.EVENTS, event.id, {
+              current_participants: activeCount,
+            }).catch(() => null);
+          }
+        }
+        return event;
+      })
+    );
+
+    return events;
   } catch (err: any) {
     console.error('[eventService] getEvents failed (using mocks):', err?.message ?? err);
     return MOCK_EVENTS;
@@ -246,7 +312,20 @@ export async function getEvent(id: string): Promise<Event | null> {
   }
   try {
     const doc = await databases.getDocument(DATABASE_ID, COLLECTIONS.EVENTS, id);
-    return docToEvent(doc as AppwriteDocument);
+    const event = docToEvent(doc as AppwriteDocument);
+    const dbParts = await getEventParticipants(id);
+    const activeCount = dbParts.length;
+    const userIds = dbParts.map(p => p.user_id);
+
+    event.participants = userIds.length > 0 ? userIds : Array(activeCount).fill('__db__');
+
+    if (doc.current_participants !== activeCount) {
+      databases.updateDocument(DATABASE_ID, COLLECTIONS.EVENTS, id, {
+        current_participants: activeCount,
+      }).catch(() => null);
+    }
+
+    return event;
   } catch (err: any) {
     const mock = MOCK_EVENTS.find(e => e.id === id);
     if (mock) {
@@ -255,35 +334,6 @@ export async function getEvent(id: string): Promise<Event | null> {
     }
     console.error('[eventService] getEvent failed:', err?.message ?? err);
     return null;
-  }
-}
-
-/**
- * Fetch all participant records for an event from event_participants (Source of Truth).
- */
-export async function getEventParticipants(
-  eventId: string
-): Promise<DbEventParticipant[]> {
-  if (isMockId(eventId)) return [];
-  try {
-    const res = await databases.listDocuments(
-      DATABASE_ID,
-      COLLECTIONS.EVENT_PARTICIPANTS,
-      [Query.equal('event_id', eventId), Query.orderAsc('joined_at'), Query.limit(200)]
-    );
-    return res.documents.map(d => ({
-      $id:        d.$id,
-      event_id:   d.event_id,
-      user_id:    d.user_id,
-      joined_at:  d.joined_at || d.$createdAt,
-      created_at: d.created_at || d.$createdAt,
-      status:     d.status || 'registered',
-      entry_type: d.entry_type || d.registration_type || 'solo',
-      team_id:    d.team_id || d.squad_id || d.crew_id || null,
-    }));
-  } catch (err: any) {
-    console.error('[eventService] getEventParticipants failed:', err?.message ?? err);
-    return [];
   }
 }
 

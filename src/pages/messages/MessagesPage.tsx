@@ -17,7 +17,7 @@ import {
   type ConversationSummary, 
   type DbMessage 
 } from '../../services/messageService';
-import { searchProfiles, type ProfileSummary } from '../../services/profileService';
+import { getProfile, profileToUserShape, searchProfiles, type ProfileSummary } from '../../services/profileService';
 import { Avatar } from '../../components/ui/Avatar';
 import toast from 'react-hot-toast';
 
@@ -77,11 +77,30 @@ export const MessagesPage: React.FC = () => {
 
     loadConversations().then(async (convs) => {
       if (targetUserId) {
+        const targetProf = await getProfile(targetUserId);
         const convId = await getOrCreateConversation(currentUserId, targetUserId);
         if (convId) {
+          const userShape = targetProf ? profileToUserShape(targetProf) : null;
+          const syntheticConv: ConversationSummary = {
+            id: convId,
+            partner: {
+              id: targetProf?.id || targetUserId,
+              name: targetProf?.full_name || targetProf?.username || 'Athlete',
+              username: targetProf?.username || 'athlete',
+              avatar: userShape?.avatar || `https://i.pravatar.cc/150?u=${targetUserId}`,
+              isOnline: true,
+            },
+            lastMessage: undefined,
+            unreadCount: 0,
+            updatedAt: new Date().toISOString(),
+          };
+
+          setConversations(prev => {
+            const exists = prev.some(c => c.id === convId);
+            return exists ? prev.map(c => c.id === convId ? { ...c, partner: syntheticConv.partner } : c) : [syntheticConv, ...prev];
+          });
           setActiveConvId(convId);
           setMobileView('chat');
-          await loadConversations();
         }
       } else if (convs && convs.length > 0 && !activeConvId) {
         setActiveConvId(convs[0].id);
@@ -150,16 +169,39 @@ export const MessagesPage: React.FC = () => {
     setMobileView('chat');
   };
 
-  const handleStartChatWithUser = async (targetUserId: string) => {
+  const handleStartChatWithUser = async (targetUser: ProfileSummary | string) => {
     if (!currentUserId) return;
-    const convId = await getOrCreateConversation(currentUserId, targetUserId);
+    const targetId = typeof targetUser === 'string' ? targetUser : targetUser.id;
+    const targetProf = typeof targetUser === 'string' ? await getProfile(targetId) : targetUser;
+
+    const convId = await getOrCreateConversation(currentUserId, targetId);
     if (convId) {
+      const avatarUrl = (targetProf as any)?.profile_image_url || (targetProf as any)?.avatar_url || (targetProf as any)?.avatar || `https://i.pravatar.cc/150?u=${targetId}`;
+      const syntheticConv: ConversationSummary = {
+        id: convId,
+        partner: {
+          id: (targetProf as any)?.id || targetId,
+          name: (targetProf as any)?.full_name || (targetProf as any)?.username || 'Athlete',
+          username: (targetProf as any)?.username || 'athlete',
+          avatar: avatarUrl,
+          isOnline: true,
+        },
+        lastMessage: undefined,
+        unreadCount: 0,
+        updatedAt: new Date().toISOString(),
+      };
+
+      setConversations(prev => {
+        const exists = prev.some(c => c.id === convId);
+        return exists ? prev.map(c => c.id === convId ? { ...c, partner: syntheticConv.partner } : c) : [syntheticConv, ...prev];
+      });
+
       setSearchQ('');
       setSearchResults([]);
-      await loadConversations();
-      openConv(convId);
+      setActiveConvId(convId);
+      setMobileView('chat');
     } else {
-      toast.error('Failed to start conversation.');
+      toast.error('Could not start conversation with athlete.');
     }
   };
 
@@ -195,20 +237,20 @@ export const MessagesPage: React.FC = () => {
   const partner = activeConv?.partner;
 
   return (
-    <div className="w-full h-[calc(100vh-120px)] flex overflow-hidden rounded-3xl border border-border-muted/80 bg-[#080808]/90 backdrop-blur-xl shadow-2xl">
+    <div className="w-full h-[calc(100vh-120px)] flex overflow-hidden rounded-3xl border border-border-muted bg-surface backdrop-blur-xl shadow-2xl">
       
       {/* ── LEFT: CONVERSATION LIST SIDEBAR ────────────────────────────────── */}
-      <div className={`w-full md:w-80 lg:w-96 flex-shrink-0 border-r border-border-muted/60 flex flex-col ${mobileView === 'chat' ? 'hidden md:flex' : 'flex'}`}>
+      <div className={`w-full md:w-80 lg:w-96 flex-shrink-0 border-r border-border-muted flex flex-col ${mobileView === 'chat' ? 'hidden md:flex' : 'flex'}`}>
         
         {/* Header & Search */}
-        <div className="p-4 border-b border-border-muted/60 space-y-3">
+        <div className="p-4 border-b border-border-muted space-y-3">
           <div className="flex items-center justify-between">
-            <h1 className="text-xl font-black text-white uppercase tracking-tight flex items-center gap-2">
+            <h1 className="text-xl font-black text-text-primary uppercase tracking-tight flex items-center gap-2">
               HUDDLE MESSAGES
             </h1>
             <button
               onClick={() => navigate('/app/discover')}
-              className="w-8 h-8 rounded-xl bg-[#CCFF00] hover:bg-[#b8e600] text-black font-bold flex items-center justify-center transition-all shadow-[0_0_12px_rgba(204,255,0,0.3)]"
+              className="w-8 h-8 rounded-xl bg-accent hover:bg-accent/90 text-volt-text font-bold flex items-center justify-center transition-all shadow-md"
               title="Discover Athletes"
             >
               <Plus size={16} />
@@ -222,15 +264,15 @@ export const MessagesPage: React.FC = () => {
               placeholder="Search real athletes to chat..."
               value={searchQ}
               onChange={e => setSearchQ(e.target.value)}
-              className="w-full pl-9 pr-4 py-2.5 rounded-xl bg-[#141414] border border-white/10 text-xs text-white placeholder:text-text-muted focus:outline-none focus:border-[#CCFF00]/40 font-mono transition-all"
+              className="w-full pl-9 pr-4 py-2.5 rounded-xl bg-elevated border border-border-muted text-xs text-text-primary placeholder:text-text-muted focus:outline-none focus:border-accent font-mono transition-all"
             />
           </div>
         </div>
 
         {/* User Search Dropdown Overlay */}
         {searchQ.trim() !== '' && (
-          <div className="p-2 border-b border-border-muted/60 bg-[#121212] space-y-1 max-h-60 overflow-y-auto font-mono text-xs">
-            <div className="px-2 py-1 text-[10px] text-text-muted uppercase">Search Results ({searchResults.length})</div>
+          <div className="p-2 border-b border-border-muted bg-elevated shadow-xl space-y-1 max-h-60 overflow-y-auto font-mono text-xs">
+            <div className="px-2 py-1 text-[10px] text-text-muted uppercase font-bold">Search Results ({searchResults.length})</div>
             {searchingUsers && <div className="px-2 py-2 text-text-muted">Searching Appwrite...</div>}
             {!searchingUsers && searchResults.length === 0 && (
               <div className="px-2 py-2 text-text-muted">No athletes found.</div>
@@ -238,13 +280,13 @@ export const MessagesPage: React.FC = () => {
             {searchResults.map(user => (
               <div
                 key={user.id}
-                onClick={() => handleStartChatWithUser(user.id)}
-                className="flex items-center gap-3 p-2 rounded-xl hover:bg-white/10 cursor-pointer transition-all"
+                onClick={() => handleStartChatWithUser(user)}
+                className="flex items-center gap-3 p-2 rounded-xl hover:bg-surface cursor-pointer transition-all border border-transparent hover:border-border-muted"
               >
-                <img src={user.avatar_url || `https://i.pravatar.cc/150?u=${user.id}`} alt="" className="w-8 h-8 rounded-full object-cover" />
+                <img src={user.profile_image_url || user.avatar_url || `https://i.pravatar.cc/150?u=${user.id}`} alt="" className="w-8 h-8 rounded-full object-cover border border-border-muted" />
                 <div className="flex-1 min-w-0">
-                  <p className="font-bold text-white truncate">{user.full_name}</p>
-                  <p className="text-[10px] text-[#00D4FF]">@{user.username || 'athlete'} · {user.sport}</p>
+                  <p className="font-bold text-text-primary truncate">{user.full_name || user.username}</p>
+                  <p className="text-[10px] text-accent font-semibold">@{user.username || 'athlete'} · {user.sport}</p>
                 </div>
               </div>
             ))}
@@ -255,7 +297,7 @@ export const MessagesPage: React.FC = () => {
         <div className="flex-1 overflow-y-auto p-2 space-y-1 scrollbar-none">
           {loadingConvs && (
             <div className="flex flex-col items-center justify-center py-12 space-y-2">
-              <div className="w-8 h-8 rounded-full border-2 border-[#CCFF00] border-t-transparent animate-spin" />
+              <div className="w-8 h-8 rounded-full border-2 border-accent border-t-transparent animate-spin" />
               <span className="font-mono text-xs text-text-muted">Loading chats...</span>
             </div>
           )}
@@ -263,13 +305,13 @@ export const MessagesPage: React.FC = () => {
           {!loadingConvs && conversations.length === 0 && searchQ === '' && (
             <div className="flex flex-col items-center justify-center py-12 text-center p-4 space-y-3">
               <UserX size={36} className="text-text-muted opacity-50" />
-              <p className="font-sans font-bold text-sm text-white">No conversations yet.</p>
+              <p className="font-sans font-bold text-sm text-text-primary">No conversations yet.</p>
               <p className="font-mono text-xs text-text-muted">
                 Search athletes above or explore Discover to start chatting!
               </p>
               <button
                 onClick={() => navigate('/app/discover')}
-                className="px-4 py-2 rounded-xl bg-[#CCFF00] text-black font-mono font-bold text-xs uppercase"
+                className="px-4 py-2 rounded-xl bg-accent text-volt-text font-mono font-bold text-xs uppercase shadow-md"
               >
                 Discover Athletes
               </button>
@@ -287,8 +329,8 @@ export const MessagesPage: React.FC = () => {
                 onClick={() => openConv(conv.id)}
                 className={`flex items-center gap-3 p-3 rounded-2xl cursor-pointer transition-all border ${
                   isActive 
-                    ? 'bg-[#CCFF00]/10 border-[#CCFF00]/30 shadow-glow-volt-sm' 
-                    : 'hover:bg-white/5 border-transparent'
+                    ? 'bg-accent/15 border-accent/40 shadow-sm' 
+                    : 'hover:bg-elevated/50 border-transparent'
                 }`}
               >
                 <div className="relative flex-shrink-0">
@@ -297,7 +339,7 @@ export const MessagesPage: React.FC = () => {
 
                 <div className="flex-1 min-w-0">
                   <div className="flex justify-between items-center mb-0.5">
-                    <p className={`text-xs font-bold truncate ${isActive ? 'text-[#CCFF00]' : 'text-white'}`}>
+                    <p className={`text-xs font-bold truncate ${isActive ? 'text-accent font-black' : 'text-text-primary'}`}>
                       {p.name}
                     </p>
                     <span className="text-[10px] font-mono text-text-muted flex-shrink-0">
@@ -310,7 +352,7 @@ export const MessagesPage: React.FC = () => {
                 </div>
 
                 {conv.unreadCount > 0 && (
-                  <span className="flex-shrink-0 w-5 h-5 rounded-full bg-[#CCFF00] text-black text-[10px] font-mono font-bold flex items-center justify-center shadow-[0_0_8px_rgba(204,255,0,0.5)]">
+                  <span className="flex-shrink-0 w-5 h-5 rounded-full bg-accent text-volt-text text-[10px] font-mono font-bold flex items-center justify-center shadow-md">
                     {conv.unreadCount}
                   </span>
                 )}
@@ -322,15 +364,15 @@ export const MessagesPage: React.FC = () => {
       </div>
 
       {/* ── RIGHT: ACTIVE CHAT PANEL ───────────────────────────────────────── */}
-      <div className={`flex-1 flex flex-col min-w-0 bg-[#0A0A0A] ${mobileView === 'list' ? 'hidden md:flex' : 'flex'}`}>
+      <div className={`flex-1 flex flex-col min-w-0 bg-surface/50 ${mobileView === 'list' ? 'hidden md:flex' : 'flex'}`}>
         {activeConv && partner ? (
           <>
             {/* Active Chat Header */}
-            <div className="p-4 border-b border-border-muted/60 flex items-center justify-between bg-surface/40 backdrop-blur">
+            <div className="p-4 border-b border-border-muted flex items-center justify-between bg-surface/80 backdrop-blur">
               <div className="flex items-center gap-3">
                 <button 
                   onClick={() => setMobileView('list')} 
-                  className="md:hidden text-text-secondary hover:text-white p-1 rounded-xl hover:bg-white/10"
+                  className="md:hidden text-text-secondary hover:text-text-primary p-1 rounded-xl hover:bg-elevated"
                 >
                   <ChevronLeft size={20} />
                 </button>
@@ -338,9 +380,9 @@ export const MessagesPage: React.FC = () => {
                 <Avatar src={partner.avatar} name={partner.name || 'Athlete'} isOnline={partner.isOnline} size="sm" />
 
                 <div>
-                  <h2 className="font-sans font-bold text-sm text-white">{partner.name}</h2>
+                  <h2 className="font-sans font-bold text-sm text-text-primary">{partner.name}</h2>
                   <p className="font-mono text-[10px] text-text-muted flex items-center gap-1.5">
-                    <span className={`w-1.5 h-1.5 rounded-full ${partner.isOnline ? 'bg-[#CCFF00] animate-pulse' : 'bg-text-muted'}`} />
+                    <span className={`w-1.5 h-1.5 rounded-full ${partner.isOnline ? 'bg-accent animate-pulse' : 'bg-text-muted'}`} />
                     {partner.isOnline ? 'Active Now' : 'Offline'}
                   </p>
                 </div>
@@ -348,7 +390,7 @@ export const MessagesPage: React.FC = () => {
 
               {/* Action Button */}
               <div className="flex items-center gap-1">
-                <button className="p-2 rounded-xl text-text-secondary hover:text-white hover:bg-white/5 transition-colors">
+                <button className="p-2 rounded-xl text-text-secondary hover:text-text-primary hover:bg-elevated transition-colors">
                   <MoreVertical size={16} />
                 </button>
               </div>
@@ -369,21 +411,21 @@ export const MessagesPage: React.FC = () => {
                       <img 
                         src={partner.avatar || 'https://i.pravatar.cc/100?img=33'} 
                         alt="" 
-                        className="w-8 h-8 rounded-full object-cover flex-shrink-0 border border-white/10" 
+                        className="w-8 h-8 rounded-full object-cover flex-shrink-0 border border-border-muted" 
                       />
                     )}
 
                     <div className={`max-w-[75%] sm:max-w-[65%] px-4 py-3 rounded-2xl ${
                       isOwn 
-                        ? 'bg-[#CCFF00] text-black rounded-tr-xs font-semibold shadow-[0_0_20px_rgba(204,255,0,0.15)]' 
-                        : 'bg-[#141414] border border-white/10 text-white rounded-tl-xs'
+                        ? 'bg-accent text-volt-text rounded-tr-xs font-semibold shadow-md' 
+                        : 'bg-elevated border border-border-muted text-text-primary rounded-tl-xs'
                     }`}>
                       <p className="text-xs font-sans leading-relaxed">{msg.message}</p>
                       <div className={`flex items-center gap-1 justify-end mt-1 text-[9px] font-mono ${
-                        isOwn ? 'text-black/70' : 'text-text-muted'
+                        isOwn ? 'opacity-80' : 'text-text-muted'
                       }`}>
                         <span>{timeStr(msg.created_at)}</span>
-                        {isOwn && <CheckCheck size={12} className="text-black/80" />}
+                        {isOwn && <CheckCheck size={12} className="opacity-90" />}
                       </div>
                     </div>
                   </motion.div>
@@ -393,12 +435,12 @@ export const MessagesPage: React.FC = () => {
             </div>
 
             {/* Input Bar */}
-            <div className="p-3 sm:p-4 border-t border-border-muted/60 bg-surface/40 backdrop-blur">
+            <div className="p-3 sm:p-4 border-t border-border-muted bg-surface/80 backdrop-blur">
               <div className="flex items-center gap-2">
-                <button className="p-2 rounded-xl text-text-muted hover:text-white hover:bg-white/5 transition-colors">
+                <button className="p-2 rounded-xl text-text-muted hover:text-text-primary hover:bg-elevated transition-colors">
                   <Paperclip size={18} />
                 </button>
-                <button className="p-2 rounded-xl text-text-muted hover:text-white hover:bg-white/5 transition-colors">
+                <button className="p-2 rounded-xl text-text-muted hover:text-text-primary hover:bg-elevated transition-colors">
                   <ImageIcon size={18} />
                 </button>
 
@@ -408,17 +450,17 @@ export const MessagesPage: React.FC = () => {
                   value={input}
                   onChange={e => setInput(e.target.value)}
                   onKeyDown={e => e.key === 'Enter' && handleSendMessage()}
-                  className="flex-1 px-4 py-2.5 rounded-xl bg-[#141414] border border-white/10 text-xs text-white placeholder:text-text-muted focus:outline-none focus:border-[#CCFF00]/40 font-mono transition-all"
+                  className="flex-1 px-4 py-2.5 rounded-xl bg-elevated border border-border-muted text-xs text-text-primary placeholder:text-text-muted focus:outline-none focus:border-accent font-mono transition-all"
                 />
 
-                <button className="p-2 rounded-xl text-text-muted hover:text-white hover:bg-white/5 transition-colors">
+                <button className="p-2 rounded-xl text-text-muted hover:text-text-primary hover:bg-elevated transition-colors">
                   <Smile size={18} />
                 </button>
 
                 <motion.button
                   whileTap={{ scale: 0.9 }}
                   onClick={handleSendMessage}
-                  className="p-2.5 rounded-xl bg-[#CCFF00] hover:bg-[#b8e600] text-black font-bold transition-all shadow-[0_0_15px_rgba(204,255,0,0.3)] flex-shrink-0"
+                  className="p-2.5 rounded-xl bg-accent hover:bg-accent/90 text-volt-text font-bold transition-all shadow-md flex-shrink-0"
                 >
                   <Send size={16} />
                 </motion.button>
@@ -427,10 +469,10 @@ export const MessagesPage: React.FC = () => {
           </>
         ) : (
           <div className="flex-1 flex flex-col items-center justify-center p-6 text-center space-y-3">
-            <div className="w-14 h-14 rounded-2xl bg-[#CCFF00]/10 border border-[#CCFF00]/30 flex items-center justify-center text-[#CCFF00]">
+            <div className="w-14 h-14 rounded-2xl bg-accent/10 border border-accent/30 flex items-center justify-center text-accent">
               <Sparkles size={28} />
             </div>
-            <h3 className="font-sans font-bold text-base text-white uppercase tracking-wider">Select a Conversation</h3>
+            <h3 className="font-sans font-bold text-base text-text-primary uppercase tracking-wider">Select a Conversation</h3>
             <p className="font-mono text-xs text-text-muted max-w-xs">
               Chat with squad teammates, coordinate upcoming tournament clashes, or message athletes directly.
             </p>

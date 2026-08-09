@@ -40,16 +40,16 @@ export const EventBrowse: React.FC = () => {
       <PendingReportBanner />
 
       {/* ── CLASHHUB HEADER ──────────────────────────────────────────────── */}
-      <div className="relative rounded-3xl p-6 sm:p-10 overflow-hidden bg-gradient-to-br from-[#140D00] via-[#0A0A0A] to-[#120A00] border border-[#FF6B00]/25 shadow-[0_0_50px_rgba(255,107,0,0.15)]">
+      <div className="relative rounded-3xl p-6 sm:p-10 overflow-hidden bg-surface border border-border-muted shadow-2xl">
         {/* Glow orb background */}
-        <div className="absolute top-0 right-0 w-80 h-80 rounded-full bg-gradient-to-br from-[#FF6B00]/20 to-transparent blur-3xl pointer-events-none" />
+        <div className="absolute top-0 right-0 w-80 h-80 rounded-full bg-gradient-to-br from-[#FF6B00]/15 to-transparent blur-3xl pointer-events-none" />
         
         <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-6">
           <div className="space-y-3">
             <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-[#FF6B00]/10 border border-[#FF6B00]/30 font-mono text-[11px] font-bold text-[#FF6B00] uppercase tracking-widest">
               <Trophy size={13} /> CLASHHUB LIVE TOURNAMENTS
             </div>
-            <h1 className="text-3xl sm:text-5xl font-black text-white uppercase tracking-tight leading-tight">
+            <h1 className="text-3xl sm:text-5xl font-black text-text-primary uppercase tracking-tight leading-tight">
               COMPETE. WIN.<br />
               <span className="text-transparent bg-clip-text bg-gradient-to-r from-[#FF6B00] via-[#FFA800] to-[#CCFF00]">
                 CLAIM GLORY.
@@ -76,7 +76,7 @@ export const EventBrowse: React.FC = () => {
             </button>
             <button
               onClick={() => navigate('/app/clashhub/history')}
-              className="px-5 py-3 rounded-2xl bg-elevated border border-white/10 hover:border-[#FF6B00]/40 text-white font-mono font-bold text-xs uppercase tracking-wider transition-all flex items-center justify-center gap-2"
+              className="px-5 py-3 rounded-2xl bg-elevated border border-border-muted hover:border-[#FF6B00]/40 text-text-primary font-mono font-bold text-xs uppercase tracking-wider transition-all flex items-center justify-center gap-2"
             >
               <Activity size={15} /> Match History
             </button>
@@ -90,7 +90,7 @@ export const EventBrowse: React.FC = () => {
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           onClick={() => navigate(`/app/events/${featuredEvent.id}`)}
-          className="relative rounded-3xl overflow-hidden border border-white/10 bg-surface cursor-pointer group shadow-2xl"
+          className="relative rounded-3xl overflow-hidden border border-border-muted bg-surface cursor-pointer group shadow-2xl"
         >
           <div className="h-64 sm:h-80 relative overflow-hidden">
             <img 
@@ -98,7 +98,7 @@ export const EventBrowse: React.FC = () => {
               alt={featuredEvent.title}
               className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700" 
             />
-            <div className="absolute inset-0 bg-gradient-to-t from-[#0A0A0A] via-[#0A0A0A]/60 to-transparent" />
+            <div className="absolute inset-0 bg-gradient-to-t from-surface via-surface/60 to-transparent" />
             
             {/* Top Badges */}
             <div className="absolute top-4 left-4 flex items-center gap-2">
@@ -119,13 +119,13 @@ export const EventBrowse: React.FC = () => {
                 <span>•</span>
                 <span className="flex items-center gap-1"><MapPin size={12} /> {featuredEvent.location}</span>
               </div>
-              <h2 className="text-xl sm:text-3xl font-black text-white uppercase tracking-tight leading-tight group-hover:text-[#FF6B00] transition-colors">
+              <h2 className="text-xl sm:text-3xl font-black text-text-primary uppercase tracking-tight leading-tight group-hover:text-[#FF6B00] transition-colors">
                 {featuredEvent.title}
               </h2>
-              <div className="flex items-center justify-between pt-2 border-t border-white/10">
+              <div className="flex items-center justify-between pt-2 border-t border-border-muted">
                 <div className="flex items-center gap-3 text-xs font-mono text-text-secondary">
                   <span>{featuredEvent.participants.length} / {featuredEvent.maxParticipants} Registered</span>
-                  <div className="w-24 h-1.5 rounded-full bg-white/10 overflow-hidden hidden sm:block">
+                  <div className="w-24 h-1.5 rounded-full bg-elevated overflow-hidden hidden sm:block border border-border-muted">
                     <div 
                       className="h-full bg-[#FF6B00] rounded-full" 
                       style={{ width: `${(featuredEvent.participants.length / featuredEvent.maxParticipants) * 100}%` }} 
@@ -152,7 +152,7 @@ export const EventBrowse: React.FC = () => {
               placeholder="Search tournaments by name or city..."
               value={searchQuery}
               onChange={e => setSearchQuery(e.target.value)}
-              className="w-full pl-10 pr-4 py-3 rounded-2xl bg-surface border border-border-muted text-xs text-white placeholder:text-text-muted focus:outline-none focus:border-[#FF6B00]/40 font-mono transition-all"
+              className="w-full pl-10 pr-4 py-3 rounded-2xl bg-surface border border-border-muted text-xs text-text-primary placeholder:text-text-muted focus:outline-none focus:border-[#FF6B00]/40 font-mono transition-all"
             />
           </div>
 
@@ -169,7 +169,7 @@ export const EventBrowse: React.FC = () => {
                 className={`flex-1 sm:flex-initial px-4 py-2 rounded-xl text-xs font-mono font-bold uppercase transition-all ${
                   filterTab === tab.id
                     ? 'bg-[#FF6B00] text-black shadow-sm'
-                    : 'text-text-muted hover:text-white'
+                    : 'text-text-muted hover:text-text-primary'
                 }`}
               >
                 {tab.label}
@@ -185,7 +185,7 @@ export const EventBrowse: React.FC = () => {
             className={`px-4 py-2 rounded-xl text-xs font-mono font-bold uppercase tracking-wider transition-all whitespace-nowrap ${
               selectedSport === 'all'
                 ? 'bg-[#CCFF00] text-black shadow-[0_0_12px_rgba(204,255,0,0.3)]'
-                : 'bg-surface border border-border-muted text-text-secondary hover:text-white'
+                : 'bg-surface border border-border-muted text-text-secondary hover:text-text-primary'
             }`}
           >
             🔥 All Sports ({events.length})
@@ -197,7 +197,7 @@ export const EventBrowse: React.FC = () => {
               className={`px-4 py-2 rounded-xl text-xs font-mono font-bold uppercase tracking-wider transition-all whitespace-nowrap ${
                 selectedSport === sport.id
                   ? 'bg-[#CCFF00] text-black shadow-[0_0_12px_rgba(204,255,0,0.3)]'
-                  : 'bg-surface border border-border-muted text-text-secondary hover:text-white'
+                  : 'bg-surface border border-border-muted text-text-secondary hover:text-text-primary'
               }`}
             >
               {sport.emoji} {sport.label}
@@ -215,7 +215,7 @@ export const EventBrowse: React.FC = () => {
               key={event.id}
               whileHover={{ y: -4 }}
               onClick={() => navigate(`/app/events/${event.id}`)}
-              className="rounded-3xl overflow-hidden bg-surface border border-border-muted/80 cursor-pointer group flex flex-col justify-between shadow-lg transition-all hover:border-[#FF6B00]/40"
+              className="rounded-3xl overflow-hidden bg-surface border border-border-muted cursor-pointer group flex flex-col justify-between shadow-lg transition-all hover:border-[#FF6B00]/40"
             >
               <div>
                 {/* Event Image Banner */}
@@ -225,7 +225,7 @@ export const EventBrowse: React.FC = () => {
                     alt={event.title} 
                     className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
                   />
-                  <div className="absolute inset-0 bg-gradient-to-t from-[#0C0C0C] via-transparent to-transparent" />
+                  <div className="absolute inset-0 bg-gradient-to-t from-surface via-transparent to-transparent" />
                   
                   {/* Status Tag */}
                   <div className="absolute top-3 left-3 flex items-center gap-1.5">
@@ -234,7 +234,7 @@ export const EventBrowse: React.FC = () => {
                         <span className="w-1.5 h-1.5 rounded-full bg-white animate-pulse" /> LIVE
                       </span>
                     ) : (
-                      <span className="px-2.5 py-0.5 rounded-full bg-black/70 backdrop-blur border border-white/10 font-mono text-[9px] font-bold text-[#CCFF00] uppercase tracking-wider">
+                      <span className="px-2.5 py-0.5 rounded-full bg-surface/80 backdrop-blur border border-border-muted font-mono text-[9px] font-bold text-[#CCFF00] uppercase tracking-wider">
                         {event.sport}
                       </span>
                     )}
@@ -251,7 +251,7 @@ export const EventBrowse: React.FC = () => {
                     <span className="truncate">{event.location}</span>
                   </div>
 
-                  <h3 className="font-sans font-bold text-base text-white uppercase tracking-tight group-hover:text-[#FF6B00] transition-colors line-clamp-1">
+                  <h3 className="font-sans font-bold text-base text-text-primary uppercase tracking-tight group-hover:text-[#FF6B00] transition-colors line-clamp-1">
                     {event.title}
                   </h3>
 
@@ -263,12 +263,12 @@ export const EventBrowse: React.FC = () => {
 
               {/* Card Footer Progress */}
               <div className="p-5 pt-0">
-                <div className="pt-3 border-t border-white/5 space-y-2">
+                <div className="pt-3 border-t border-border-muted space-y-2">
                   <div className="flex items-center justify-between text-[11px] font-mono">
                     <span className="text-text-muted">Filled: {pctFull}%</span>
                     <span className="text-[#FF6B00] font-bold">{event.participants.length}/{event.maxParticipants}</span>
                   </div>
-                  <div className="w-full h-1.5 rounded-full bg-white/10 overflow-hidden">
+                  <div className="w-full h-1.5 rounded-full bg-elevated overflow-hidden border border-border-muted">
                     <div className="h-full bg-[#FF6B00] rounded-full transition-all" style={{ width: `${pctFull}%` }} />
                   </div>
                 </div>

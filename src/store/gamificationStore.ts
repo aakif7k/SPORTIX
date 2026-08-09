@@ -130,7 +130,14 @@ export const useGamificationStore = create<GamificationState>((set) => ({
       getMissions(user.id, INITIAL_MISSIONS),
       getBadges(user.id, INITIAL_BADGES)
     ]);
-    set({ missions: fetchedMissions, badges: fetchedBadges });
+    const pulse = (user as any).pulse_score || (user.stats?.rating ? user.stats.rating * 25 : 2450);
+    const lvl = user.level || Math.max(1, Math.floor(pulse / 100));
+    set({
+      missions: fetchedMissions,
+      badges: fetchedBadges,
+      currentPulse: pulse,
+      currentLevel: lvl,
+    });
   },
 
   addPulse: (amount) => set((state) => {

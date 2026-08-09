@@ -2,6 +2,7 @@
  * messageService.ts
  * ─────────────────────────────────────────────────────────────────────────────
  * Real-time chat service for Appwrite `conversations`, `conversation_members`, `messages`, and `notifications`.
+ * Features schema-resilient fallbacks for attribute and index variations.
  */
 
 import { databases, ID, Query, DATABASE_ID, COLLECTIONS } from '@/lib/appwrite';
@@ -78,23 +79,39 @@ export async function getOrCreateConversation(
 
     if (realCurrentId === realTargetId) return null;
 
+    // Collect all candidate user IDs for current and target
+    const currentIds = Array.from(new Set([currentUserId, realCurrentId])).filter(Boolean);
+    const targetIds  = Array.from(new Set([targetUserId, realTargetId])).filter(Boolean);
+
     // 2. Fetch current user's conversation memberships
-    const currentMembers = await databases.listDocuments(
-      DATABASE_ID,
-      COLLECTIONS.CONVERSATION_MEMBERS,
-      [Query.equal('user_id', realCurrentId), Query.limit(100)]
-    );
+    const currentMembersDocs: any[] = [];
+    for (const uid of currentIds) {
+      try {
+        const res = await databases.listDocuments(
+          DATABASE_ID,
+          COLLECTIONS.CONVERSATION_MEMBERS,
+          [Query.equal('user_id', uid), Query.limit(100)]
+        );
+        currentMembersDocs.push(...res.documents);
+      } catch {}
+    }
 
     // 3. Fetch target user's conversation memberships
-    const targetMembers = await databases.listDocuments(
-      DATABASE_ID,
-      COLLECTIONS.CONVERSATION_MEMBERS,
-      [Query.equal('user_id', realTargetId), Query.limit(100)]
-    );
+    const targetMembersDocs: any[] = [];
+    for (const uid of targetIds) {
+      try {
+        const res = await databases.listDocuments(
+          DATABASE_ID,
+          COLLECTIONS.CONVERSATION_MEMBERS,
+          [Query.equal('user_id', uid), Query.limit(100)]
+        );
+        targetMembersDocs.push(...res.documents);
+      } catch {}
+    }
 
     // 4. Intersect conversation IDs to find existing 1-to-1 chat
-    const currentConvIds = new Set(currentMembers.documents.map(d => d.conversation_id));
-    const sharedConv = targetMembers.documents.find(d => currentConvIds.has(d.conversation_id));
+    const currentConvIds = new Set(currentMembersDocs.map(d => d.conversation_id));
+    const sharedConv = targetMembersDocs.find(d => currentConvIds.has(d.conversation_id));
 
     if (sharedConv) {
       return sharedConv.conversation_id;
@@ -104,64 +121,53 @@ export async function getOrCreateConversation(
     const now = new Date().toISOString();
     let convDoc: any = null;
 
-    try {
-      convDoc = await databases.createDocument(
-        DATABASE_ID,
-        COLLECTIONS.CONVERSATIONS,
-        ID.unique(),
-        {
-          created_at: now,
-          updated_at: now,
-          last_message: 'Started a new conversation',
-          last_message_time: now,
-          is_group: false,
-        }
-      );
-    } catch {
-      convDoc = await databases.createDocument(
-        DATABASE_ID,
-        COLLECTIONS.CONVERSATIONS,
-        ID.unique(),
-        {
-          created_at: now,
-          updated_at: now,
-        }
-      );
+    const convPayloads = [
+      {
+        created_at: now,
+        updated_at: now,
+        last_message: 'Started a new conversation',
+        last_message_time: now,
+        is_group: false,
+      },
+      {
+        created_at: now,
+        updated_at: now,
+      },
+      {}
+    ];
+
+    for (const payload of convPayloads) {
+      try {
+        convDoc = await databases.createDocument(
+          DATABASE_ID,
+          COLLECTIONS.CONVERSATIONS,
+          ID.unique(),
+          payload
+        );
+        if (convDoc?.$id) break;
+      } catch {}
     }
 
+    if (!convDoc?.$id) return null;
     const convId = convDoc.$id;
 
-    // Create member records for both users
-    try {
-      await databases.createDocument(
-        DATABASE_ID,
-        COLLECTIONS.CONVERSATION_MEMBERS,
-        ID.unique(),
-        {
-          conversation_id: convId,
-          user_id: realCurrentId,
-          joined_at: now,
-          unread_count: 0,
-        }
-      );
-    } catch (e1) {
-      console.error('[messageService] create member current user error:', e1);
-    }
-
-    try {
-      await databases.createDocument(
-        DATABASE_ID,
-        COLLECTIONS.CONVERSATION_MEMBERS,
-        ID.unique(),
-        {
-          conversation_id: convId,
-          user_id: realTargetId,
-          joined_at: now,
-          unread_count: 0,
-        }
-      );
-    } catch (e2) {
-      console.error('[messageService] create member target user error:', e2);
+    // Create member records for both users with fallback
+    for (const uid of [realCurrentId, realTargetId]) {
+      const memberPayloads = [
+        { conversation_id: convId, user_id: uid, joined_at: now, unread_count: 0 },
+        { conversation_id: convId, user_id: uid },
+      ];
+      for (const payload of memberPayloads) {
+        try {
+          await databases.createDocument(
+            DATABASE_ID,
+            COLLECTIONS.CONVERSATION_MEMBERS,
+            ID.unique(),
+            payload
+          );
+          break;
+        } catch {}
+      }
     }
 
     return convId;
@@ -178,35 +184,48 @@ export async function getUserConversations(currentUserId: string): Promise<Conve
   if (!currentUserId) return [];
 
   try {
-    const userMembers = await databases.listDocuments(
-      DATABASE_ID,
-      COLLECTIONS.CONVERSATION_MEMBERS,
-      [Query.equal('user_id', currentUserId), Query.limit(100)]
-    );
+    const currentProfile = await getProfile(currentUserId);
+    const realCurrentId  = currentProfile?.id || currentUserId;
+    const userIds = Array.from(new Set([currentUserId, realCurrentId])).filter(Boolean);
 
-    if (userMembers.documents.length === 0) return [];
+    const userMembersDocs: any[] = [];
+    for (const uid of userIds) {
+      try {
+        const res = await databases.listDocuments(
+          DATABASE_ID,
+          COLLECTIONS.CONVERSATION_MEMBERS,
+          [Query.equal('user_id', uid), Query.limit(100)]
+        );
+        userMembersDocs.push(...res.documents);
+      } catch {}
+    }
+
+    if (userMembersDocs.length === 0) return [];
 
     const memberMap = new Map<string, number>();
-    const convIds: string[] = [];
+    const convIdsSet = new Set<string>();
 
-    userMembers.documents.forEach(doc => {
-      convIds.push(doc.conversation_id);
-      memberMap.set(doc.conversation_id, doc.unread_count || 0);
+    userMembersDocs.forEach(doc => {
+      if (doc.conversation_id) {
+        convIdsSet.add(doc.conversation_id);
+        memberMap.set(doc.conversation_id, doc.unread_count || 0);
+      }
     });
 
+    const convIds = Array.from(convIdsSet);
     const summaries: ConversationSummary[] = [];
 
     for (const convId of convIds) {
       try {
         const convDoc = await databases.getDocument(DATABASE_ID, COLLECTIONS.CONVERSATIONS, convId);
         
-        const membersRes = await databases.listDocuments(
+        let membersRes = await databases.listDocuments(
           DATABASE_ID,
           COLLECTIONS.CONVERSATION_MEMBERS,
           [Query.equal('conversation_id', convId), Query.limit(10)]
-        );
+        ).catch(() => ({ documents: [] }));
 
-        const partnerMember = membersRes.documents.find(d => d.user_id !== currentUserId);
+        const partnerMember = membersRes.documents.find(d => !userIds.includes(d.user_id));
         const partnerId = partnerMember?.user_id;
 
         let partnerInfo = {
@@ -223,7 +242,7 @@ export async function getUserConversations(currentUserId: string): Promise<Conve
             const userShape = profileToUserShape(partnerProfile);
             partnerInfo = {
               id: partnerProfile.id,
-              name: partnerProfile.full_name || 'Athlete',
+              name: partnerProfile.full_name || partnerProfile.username || 'Athlete',
               username: partnerProfile.username || 'athlete',
               avatar: userShape.avatar,
               isOnline: true,
@@ -255,33 +274,47 @@ export async function getUserConversations(currentUserId: string): Promise<Conve
 }
 
 /**
- * Fetch messages for a specific conversation.
+ * Fetch messages for a specific conversation with unindexed fallback.
  */
 export async function getConversationMessages(conversationId: string): Promise<DbMessage[]> {
   if (!conversationId) return [];
 
+  let docs: any[] = [];
   try {
     const res = await databases.listDocuments(
       DATABASE_ID,
       COLLECTIONS.MESSAGES,
       [Query.equal('conversation_id', conversationId), Query.limit(100), Query.orderAsc('created_at')]
     );
-
-    return res.documents.map(d => ({
-      $id: d.$id,
-      conversation_id: d.conversation_id,
-      sender_id: d.sender_id,
-      message: d.message || d.content || '',
-      message_type: d.message_type || 'text',
-      created_at: d.created_at || d.$createdAt,
-      edited_at: d.edited_at,
-      read_at: d.read_at,
-      status: d.status || 'sent',
-    }));
-  } catch (err: any) {
-    console.error('[messageService] getConversationMessages error:', err?.message ?? err);
-    return [];
+    docs = res.documents;
+  } catch {
+    // Unindexed fallback query
+    try {
+      const res = await databases.listDocuments(
+        DATABASE_ID,
+        COLLECTIONS.MESSAGES,
+        [Query.equal('conversation_id', conversationId), Query.limit(100)]
+      );
+      docs = res.documents.sort(
+        (a, b) => new Date(a.created_at || a.$createdAt).getTime() - new Date(b.created_at || b.$createdAt).getTime()
+      );
+    } catch (err: any) {
+      console.error('[messageService] getConversationMessages fallback failed:', err?.message ?? err);
+      docs = [];
+    }
   }
+
+  return docs.map(d => ({
+    $id: d.$id,
+    conversation_id: d.conversation_id,
+    sender_id: d.sender_id || d.user_id || d.userId || '',
+    message: d.message || d.content || d.text || '',
+    message_type: d.message_type || 'text',
+    created_at: d.created_at || d.$createdAt,
+    edited_at: d.edited_at,
+    read_at: d.read_at,
+    status: d.status || 'sent',
+  }));
 }
 
 /**
@@ -297,60 +330,89 @@ export async function sendMessage(
 
   try {
     const now = new Date().toISOString();
+    const cleanText = messageText.trim();
+    let msgDoc: any = null;
 
-    const msgDoc = await databases.createDocument(
-      DATABASE_ID,
-      COLLECTIONS.MESSAGES,
-      ID.unique(),
+    const messagePayloads = [
       {
         conversation_id: conversationId,
         sender_id: senderId,
-        message: messageText.trim(),
+        message: cleanText,
         message_type: messageType,
         created_at: now,
         status: 'sent',
+      },
+      {
+        conversation_id: conversationId,
+        sender_id: senderId,
+        message: cleanText,
+        created_at: now,
+      },
+      {
+        conversation_id: conversationId,
+        sender_id: senderId,
+        content: cleanText,
+        created_at: now,
+      },
+      {
+        conversation_id: conversationId,
+        user_id: senderId,
+        message: cleanText,
       }
-    );
+    ];
 
-    try {
-      await databases.updateDocument(
-        DATABASE_ID,
-        COLLECTIONS.CONVERSATIONS,
-        conversationId,
-        {
-          last_message: messageText.trim(),
-          last_message_time: now,
-          updated_at: now,
-        }
-      );
-    } catch { /* fallback if attribute schema differs */ }
+    for (const payload of messagePayloads) {
+      try {
+        msgDoc = await databases.createDocument(
+          DATABASE_ID,
+          COLLECTIONS.MESSAGES,
+          ID.unique(),
+          payload
+        );
+        if (msgDoc?.$id) break;
+      } catch {}
+    }
 
-    try {
-      const membersRes = await databases.listDocuments(
-        DATABASE_ID,
-        COLLECTIONS.CONVERSATION_MEMBERS,
-        [Query.equal('conversation_id', conversationId)]
-      );
+    if (!msgDoc?.$id) {
+      console.error('[messageService] Could not create message document with any payload variant.');
+      return null;
+    }
 
+    // Update conversation last_message asynchronously
+    databases.updateDocument(
+      DATABASE_ID,
+      COLLECTIONS.CONVERSATIONS,
+      conversationId,
+      {
+        last_message: cleanText,
+        last_message_time: now,
+        updated_at: now,
+      }
+    ).catch(() => null);
+
+    // Update member unread count asynchronously
+    databases.listDocuments(
+      DATABASE_ID,
+      COLLECTIONS.CONVERSATION_MEMBERS,
+      [Query.equal('conversation_id', conversationId)]
+    ).then(membersRes => {
       for (const memberDoc of membersRes.documents) {
         if (memberDoc.user_id !== senderId) {
-          await databases.updateDocument(
+          databases.updateDocument(
             DATABASE_ID,
             COLLECTIONS.CONVERSATION_MEMBERS,
             memberDoc.$id,
-            {
-              unread_count: (memberDoc.unread_count || 0) + 1,
-            }
-          );
+            { unread_count: (memberDoc.unread_count || 0) + 1 }
+          ).catch(() => null);
         }
       }
-    } catch { /* ignore member updates if failing */ }
+    }).catch(() => null);
 
     return {
       $id: msgDoc.$id,
       conversation_id: conversationId,
       sender_id: senderId,
-      message: messageText.trim(),
+      message: cleanText,
       message_type: messageType,
       created_at: now,
       status: 'sent',
@@ -372,7 +434,7 @@ export async function markConversationAsRead(conversationId: string, userId: str
       DATABASE_ID,
       COLLECTIONS.CONVERSATION_MEMBERS,
       [Query.equal('conversation_id', conversationId), Query.equal('user_id', userId), Query.limit(1)]
-    );
+    ).catch(() => ({ documents: [] }));
 
     if (memberRes.documents.length > 0) {
       const memberDoc = memberRes.documents[0];
@@ -385,7 +447,7 @@ export async function markConversationAsRead(conversationId: string, userId: str
             unread_count: 0,
             last_read_at: new Date().toISOString(),
           }
-        );
+        ).catch(() => null);
       }
     }
   } catch (err: any) {

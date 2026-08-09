@@ -1,15 +1,17 @@
 import React, { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import {
   Heart, MessageCircle, Share2, Bookmark,
   MoreHorizontal, MapPin, ChevronLeft, ChevronRight, Trash2,
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
-import type { DbPost } from '../../services/socialService';
 import { SportBadge } from '../ui/Badge';
 import { useAuth } from '@/context/AuthContext';
+import { CommentsModal } from './CommentsModal';
+import toast from 'react-hot-toast';
 
 interface PostCardProps {
-  post: DbPost;
+  post: any;
   onLike: (postId: string, currentlyLiked: boolean) => void;
   onDelete?: (postId: string) => void;
 }
@@ -17,6 +19,7 @@ interface PostCardProps {
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
 function formatTimeAgo(iso: string): string {
+  if (!iso) return 'just now';
   const diff = Date.now() - new Date(iso).getTime();
   const m = Math.floor(diff / 60000);
   if (m < 1) return 'just now';
@@ -28,7 +31,7 @@ function formatTimeAgo(iso: string): string {
   return new Date(iso).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
 }
 
-function formatCount(n: number): string {
+function formatCount(n: number = 0): string {
   if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
   if (n >= 1000) return `${(n / 1000).toFixed(1)}k`;
   return n.toString();
@@ -57,10 +60,10 @@ const AuthorAvatar: React.FC<{ avatarUrl: string | null; name: string; size?: nu
 
   return (
     <div
-      className="rounded-full flex items-center justify-center bg-[#1A2200] border border-[#CCFF00]/30 flex-shrink-0"
+      className="rounded-full flex items-center justify-center bg-accent/15 border border-accent/30 flex-shrink-0"
       style={{ width: size, height: size }}
     >
-      <span className="text-[#CCFF00] font-bold leading-none" style={{ fontSize: size * 0.45 }}>
+      <span className="text-accent font-bold leading-none" style={{ fontSize: size * 0.45 }}>
         {initial}
       </span>
     </div>
@@ -68,14 +71,14 @@ const AuthorAvatar: React.FC<{ avatarUrl: string | null; name: string; size?: nu
 };
 
 // ─── Media Grid ───────────────────────────────────────────────────────────────
-const MediaGrid: React.FC<{ urls: string[]; type: DbPost['media_type'] }> = ({ urls, type }) => {
+const MediaGrid: React.FC<{ urls: string[]; type: string }> = ({ urls, type }) => {
   const [activeIndex, setActiveIndex] = useState(0);
 
   if (!urls || urls.length === 0 || type === 'none') return null;
 
   if (type === 'video') {
     return (
-      <div className="relative rounded-xl overflow-hidden bg-black aspect-video">
+      <div className="relative rounded-xl overflow-hidden bg-black aspect-video border border-border-muted">
         <video src={urls[0]} className="w-full h-full object-contain" controls muted playsInline />
       </div>
     );
@@ -83,7 +86,7 @@ const MediaGrid: React.FC<{ urls: string[]; type: DbPost['media_type'] }> = ({ u
 
   if (urls.length === 1) {
     return (
-      <div className="rounded-xl overflow-hidden">
+      <div className="rounded-xl overflow-hidden border border-border-muted">
         <img src={urls[0]} alt="Post media" className="w-full max-h-96 object-cover" />
       </div>
     );
@@ -91,7 +94,7 @@ const MediaGrid: React.FC<{ urls: string[]; type: DbPost['media_type'] }> = ({ u
 
   if (urls.length === 2) {
     return (
-      <div className="grid grid-cols-2 gap-0.5 rounded-xl overflow-hidden">
+      <div className="grid grid-cols-2 gap-1 rounded-xl overflow-hidden border border-border-muted">
         {urls.map((url, i) => (
           <img key={i} src={url} alt={`Media ${i + 1}`} className="w-full h-44 object-cover" />
         ))}
@@ -101,7 +104,7 @@ const MediaGrid: React.FC<{ urls: string[]; type: DbPost['media_type'] }> = ({ u
 
   if (urls.length === 3) {
     return (
-      <div className="grid grid-cols-2 gap-0.5 rounded-xl overflow-hidden">
+      <div className="grid grid-cols-2 gap-1 rounded-xl overflow-hidden border border-border-muted">
         <img src={urls[0]} alt="Media 1" className="row-span-2 w-full h-56 object-cover" />
         <img src={urls[1]} alt="Media 2" className="w-full h-28 object-cover" />
         <img src={urls[2]} alt="Media 3" className="w-full h-28 object-cover" />
@@ -111,7 +114,7 @@ const MediaGrid: React.FC<{ urls: string[]; type: DbPost['media_type'] }> = ({ u
 
   // 4+ images — carousel
   return (
-    <div className="relative rounded-xl overflow-hidden">
+    <div className="relative rounded-xl overflow-hidden border border-border-muted">
       <img src={urls[activeIndex]} alt={`Media ${activeIndex + 1}`} className="w-full max-h-80 object-cover" />
       {activeIndex > 0 && (
         <button
@@ -170,25 +173,57 @@ const DeleteConfirm: React.FC<{ onConfirm: () => void; onCancel: () => void }> =
 // ─── Post Card ────────────────────────────────────────────────────────────────
 export const PostCard: React.FC<PostCardProps> = ({ post, onLike, onDelete }) => {
   const { user: currentUser } = useAuth();
+  const navigate = useNavigate();
+
+  const postId = post.$id || post.id;
+  const authorId = post.author_id || post.author?.id;
+  const authorName = post.author_full_name || post.author?.full_name || 'SportiX Athlete';
+  const authorUsername = post.author_username || post.author?.username || 'athlete';
+  const authorSport = post.sport_tag || post.author_sport || post.author?.sport || '';
+  const authorAvatar = post.author_avatar_url || post.author?.avatar_url || null;
+
   const [saved, setSaved] = useState(false);
   const [showDelete, setShowDelete] = useState(false);
   const [showMore, setShowMore] = useState(false);
+  const [showComments, setShowComments] = useState(false);
+  const [commentsCount, setCommentsCount] = useState(post.comments_count || 0);
 
-  const isOwnPost = post.author_id === currentUser?.id;
-  const authorName = post.author?.full_name || 'Unknown Athlete';
-  const authorSport = post.author?.sport || '';
-  const authorAvatar = post.author?.avatar_url || null;
+  const isOwnPost = authorId === currentUser?.id;
+
+  const handleShare = async () => {
+    const postUrl = `${window.location.origin}/app/feed?post=${postId}`;
+    if (navigator.share) {
+      try {
+        await navigator.share({
+          title: `SportiX Post by ${authorName}`,
+          text: post.content,
+          url: postUrl,
+        });
+        return;
+      } catch {}
+    }
+    await navigator.clipboard.writeText(postUrl);
+    toast.success('Post link copied to clipboard!');
+  };
+
+  const handleToggleSave = () => {
+    setSaved(prev => {
+      const next = !prev;
+      toast.success(next ? 'Post saved to bookmarks!' : 'Removed from bookmarks');
+      return next;
+    });
+  };
 
   return (
     <motion.div
       layout
-      className="relative bg-surface border border-border-muted/60 rounded-2xl overflow-hidden"
+      className="relative bg-surface border border-border-muted rounded-2xl overflow-hidden"
     >
       {/* Delete confirm overlay */}
       <AnimatePresence>
         {showDelete && (
           <DeleteConfirm
-            onConfirm={() => { onDelete?.(post.id); setShowDelete(false); }}
+            onConfirm={() => { onDelete?.(postId); setShowDelete(false); }}
             onCancel={() => setShowDelete(false)}
           />
         )}
@@ -196,21 +231,31 @@ export const PostCard: React.FC<PostCardProps> = ({ post, onLike, onDelete }) =>
 
       {/* Header */}
       <div className="flex items-center justify-between px-4 pt-4 pb-3">
-        <div className="flex items-center gap-2.5">
+        <div 
+          onClick={() => authorId && navigate(`/app/profile/${authorId}`)}
+          className="flex items-center gap-2.5 cursor-pointer group"
+        >
           <AuthorAvatar avatarUrl={authorAvatar} name={authorName} size={36} />
           <div>
             <div className="flex items-center gap-1.5">
-              <span className="text-white font-semibold text-[13px] leading-tight">{authorName}</span>
+              <span className="text-text-primary font-bold text-[13px] leading-tight group-hover:text-accent transition-colors">
+                {authorName}
+              </span>
               {authorSport && <SportBadge sport={authorSport as any} size="sm" />}
             </div>
-            <div className="flex items-center gap-1.5 mt-0.5">
+            <div className="flex items-center gap-1.5 mt-0.5 font-mono text-[10px] text-text-muted">
+              <span className="text-accent font-medium">@{authorUsername}</span>
+              <span>•</span>
               {post.location_tag && (
-                <div className="flex items-center gap-0.5">
-                  <MapPin size={9} className="text-text-muted" />
-                  <span className="text-text-muted text-[10px]">{post.location_tag}</span>
-                </div>
+                <>
+                  <div className="flex items-center gap-0.5">
+                    <MapPin size={9} />
+                    <span>{post.location_tag}</span>
+                  </div>
+                  <span>•</span>
+                </>
               )}
-              <span className="text-text-muted text-[10px]">{formatTimeAgo(post.created_at)}</span>
+              <span>{formatTimeAgo(post.created_at || post.$createdAt)}</span>
             </div>
           </div>
         </div>
@@ -219,7 +264,7 @@ export const PostCard: React.FC<PostCardProps> = ({ post, onLike, onDelete }) =>
         <div className="relative">
           <button
             onClick={() => setShowMore(m => !m)}
-            className="text-text-muted hover:text-text-secondary p-1 transition-colors"
+            className="text-text-muted hover:text-text-primary p-1 transition-colors"
           >
             <MoreHorizontal size={16} />
           </button>
@@ -233,7 +278,7 @@ export const PostCard: React.FC<PostCardProps> = ({ post, onLike, onDelete }) =>
               >
                 <button
                   onClick={() => { setShowMore(false); setShowDelete(true); }}
-                  className="flex items-center gap-2 px-3 py-2.5 text-red-400 hover:bg-red-500/10 text-[13px] w-full transition-colors"
+                  className="flex items-center gap-2 px-3 py-2.5 text-red-400 hover:bg-red-500/10 text-[13px] w-full transition-colors font-mono"
                 >
                   <Trash2 size={13} />
                   Delete post
@@ -247,58 +292,75 @@ export const PostCard: React.FC<PostCardProps> = ({ post, onLike, onDelete }) =>
       {/* Content */}
       {post.content && (
         <div className="px-4 pb-3">
-          <p className="text-white text-[13px] leading-relaxed whitespace-pre-wrap">{post.content}</p>
+          <p className="text-text-primary text-[13px] leading-relaxed whitespace-pre-wrap font-sans">{post.content}</p>
         </div>
       )}
 
       {/* Media */}
       {post.media_urls && post.media_urls.length > 0 && (
         <div className="px-4 pb-3">
-          <MediaGrid urls={post.media_urls} type={post.media_type} />
+          <MediaGrid urls={post.media_urls} type={post.media_type || 'image'} />
         </div>
       )}
 
       {/* Sport tag */}
       {post.sport_tag && (
         <div className="px-4 pb-3">
-          <span className="text-[#CCFF00] text-[12px] font-medium">#{post.sport_tag}</span>
+          <span className="text-accent text-[12px] font-mono font-bold">#{post.sport_tag}</span>
         </div>
       )}
 
       {/* Divider */}
-      <div className="mx-4 border-t border-border-muted/40" />
+      <div className="mx-4 border-t border-border-muted" />
 
       {/* Actions */}
       <div className="flex items-center justify-between px-4 py-3">
         <div className="flex items-center gap-4">
           <motion.button
             whileTap={{ scale: 0.85 }}
-            onClick={() => onLike(post.id, post.is_liked ?? false)}
-            className={`flex items-center gap-1.5 text-[12px] font-medium transition-colors
-              ${post.is_liked ? 'text-[#ff4d6d]' : 'text-text-secondary hover:text-white'}`}
+            onClick={() => onLike(postId, post.is_liked ?? false)}
+            className={`flex items-center gap-1.5 text-[12px] font-mono font-semibold transition-colors
+              ${post.is_liked ? 'text-red-500' : 'text-text-secondary hover:text-text-primary'}`}
           >
-            <Heart size={16} className={post.is_liked ? 'fill-[#ff4d6d]' : ''} />
+            <Heart size={16} className={post.is_liked ? 'fill-red-500 text-red-500' : ''} />
             <span>{formatCount(post.likes_count)}</span>
           </motion.button>
 
-          <button className="flex items-center gap-1.5 text-text-secondary hover:text-white text-[12px] font-medium transition-colors">
+          <button
+            onClick={() => setShowComments(true)}
+            className="flex items-center gap-1.5 text-text-secondary hover:text-text-primary text-[12px] font-mono font-semibold transition-colors"
+          >
             <MessageCircle size={16} />
-            <span>{formatCount(post.comments_count)}</span>
+            <span>{formatCount(commentsCount)}</span>
           </button>
 
-          <button className="flex items-center gap-1.5 text-text-secondary hover:text-white text-[12px] font-medium transition-colors">
+          <button
+            onClick={handleShare}
+            className="flex items-center gap-1.5 text-text-secondary hover:text-text-primary text-[12px] font-mono font-semibold transition-colors"
+            title="Share post"
+          >
             <Share2 size={16} />
           </button>
         </div>
 
         <motion.button
           whileTap={{ scale: 0.85 }}
-          onClick={() => setSaved(s => !s)}
-          className={`transition-colors ${saved ? 'text-[#CCFF00]' : 'text-text-secondary hover:text-white'}`}
+          onClick={handleToggleSave}
+          className={`transition-colors ${saved ? 'text-accent' : 'text-text-secondary hover:text-text-primary'}`}
+          title="Save post"
         >
-          <Bookmark size={16} className={saved ? 'fill-[#CCFF00]' : ''} />
+          <Bookmark size={16} className={saved ? 'fill-accent' : ''} />
         </motion.button>
       </div>
+
+      {/* Real Comments Modal */}
+      {showComments && (
+        <CommentsModal
+          postId={postId}
+          onClose={() => setShowComments(false)}
+          onCommentAdded={() => setCommentsCount((c: number) => c + 1)}
+        />
+      )}
     </motion.div>
   );
 };

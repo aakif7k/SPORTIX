@@ -304,7 +304,7 @@ export async function createPost(authUid: string, payload: CreatePostPayload): P
     ID.unique(),
     {
       author_id:          authUid,
-      author_name:        payload.authorName,
+      author_full_name:   payload.authorName,
       author_username:    payload.authorUsername,
       author_avatar_url:  payload.authorAvatarUrl  ?? null,
       author_sport:       payload.authorSport       ?? '',

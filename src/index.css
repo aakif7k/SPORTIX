@@ -137,8 +137,62 @@ html.light .text-white\/50:not(.btn-primary *, .btn-neon-volt *, [class*="bg-bla
 html.light .text-white\/40:not(.btn-primary *, .btn-neon-volt *, [class*="bg-black"] *, [class*="bg-neutral-900"] *, [class*="bg-slate-900"] *, [class*="bg-[#FF3B00]"] *, [class*="bg-accent"] *, [class*="bg-volt"] *, [class*="bg-success"] *, [class*="bg-danger"] *, [class*="bg-warning"] *, [class*="bg-info"] *) { color: var(--text-muted) !important; }
 html.light .text-white\/30:not(.btn-primary *, .btn-neon-volt *, [class*="bg-black"] *, [class*="bg-neutral-900"] *, [class*="bg-slate-900"] *, [class*="bg-[#FF3B00]"] *, [class*="bg-accent"] *, [class*="bg-volt"] *, [class*="bg-success"] *, [class*="bg-danger"] *, [class*="bg-warning"] *, [class*="bg-info"] *) { color: var(--text-disabled) !important; }
 html.light .text-white\/20:not(.btn-primary *, .btn-neon-volt *, [class*="bg-black"] *, [class*="bg-neutral-900"] *, [class*="bg-slate-900"] *, [class*="bg-[#FF3B00]"] *, [class*="bg-accent"] *, [class*="bg-volt"] *, [class*="bg-success"] *, [class*="bg-danger"] *, [class*="bg-warning"] *, [class*="bg-info"] *) { color: var(--text-disabled) !important; }
-html.light .text-white\/10:not(.btn-primary *, .btn-neon-volt *, [class*="bg-black"] *, [class*="bg-neutral-900"] *, [class*="bg-slate-900"] *, [class*="bg-[#FF3B00]"] *, [class*="bg-accent"] *, [class*="bg-volt"] *, [class*="bg-success"] *, [class*="bg-danger"] *, [class*="bg-warning"] *, [class*="bg-info"] *) { color: var(--text-disabled) !important; }
+/* ─── REDUCE MOTION PREFERENCE ─── */
+html[data-reduce-motion="true"] *,
+html[data-reduce-motion="true"] *::before,
+html[data-reduce-motion="true"] *::after {
+  animation-duration: 0.001ms !important;
+  animation-iteration-count: 1 !important;
+  transition-duration: 0.001ms !important;
+}
 
+/* ─── GLOBAL LIGHT MODE COMPONENT & FORM OVERRIDES ─── */
+html.light input:not([type="checkbox"]):not([type="radio"]),
+html.light select,
+html.light textarea {
+  background-color: var(--bg-surface) !important;
+  color: var(--text-primary) !important;
+  border-color: var(--border) !important;
+}
+
+html.light input::placeholder,
+html.light textarea::placeholder {
+  color: var(--text-muted) !important;
+}
+
+html.light .bg-\[\#060606\],
+html.light .bg-\[\#080808\],
+html.light .bg-\[\#0A0A0A\],
+html.light .bg-\[\#0C0C0C\],
+html.light .bg-\[\#101010\],
+html.light .bg-\[\#121212\],
+html.light .bg-\[\#141414\],
+html.light .bg-\[\#181818\],
+html.light .bg-\[\#050508\],
+html.light .bg-\[\#080814\],
+html.light .bg-black {
+  background-color: var(--bg-surface) !important;
+}
+
+html.light .bg-surface\/40,
+html.light .bg-surface\/50,
+html.light .bg-surface\/60,
+html.light .bg-surface\/80,
+html.light .bg-surface\/90 {
+  background-color: rgba(255, 255, 255, 0.92) !important;
+}
+
+html.light [class*="border-white\/5"],
+html.light [class*="border-white\/10"],
+html.light [class*="border-white\/20"],
+html.light [class*="border-white\/30"] {
+  border-color: var(--border) !important;
+}
+
+html.light .shadow-2xl,
+html.light .shadow-xl {
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.08), 0 2px 8px rgba(0, 0, 0, 0.04) !important;
+}
 
 html { scroll-behavior: smooth; }
 

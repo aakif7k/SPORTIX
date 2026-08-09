@@ -850,9 +850,14 @@ const NAV_TABS = [
 ];
 
 export const PulseLobby: React.FC = () => {
+  const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState('registered');
-  const { currentPulse, streakDays, missions } = useGamificationStore();
+  const { currentPulse, streakDays, missions, loadGamificationData } = useGamificationStore();
   const { level } = getLevelProgress(currentPulse);
+
+  React.useEffect(() => {
+    loadGamificationData().catch(() => null);
+  }, [loadGamificationData]);
 
   const pendingMissions = missions.filter(m => m.completed && !m.claimed).length;
 
@@ -874,6 +879,13 @@ export const PulseLobby: React.FC = () => {
           </p>
         </div>
         <div className="flex items-center gap-3">
+          <button
+            onClick={() => navigate('/pulse/matchmaking')}
+            className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-volt/10 border border-volt/30 font-mono text-xs text-volt font-bold hover:bg-volt/20 transition-all"
+          >
+            <Zap size={14} />
+            <span>AutoSquad AI</span>
+          </button>
           <div className="flex items-center gap-2 px-3 py-2 rounded-xl bg-elevated border border-border-muted font-mono text-sm">
             <span className="text-volt font-bold">{currentPulse}</span>
             <span className="text-text-muted">PTS</span>

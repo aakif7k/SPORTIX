@@ -50,17 +50,17 @@ export const SearchPage: React.FC = () => {
   }));
 
   return (
-    <div className="max-w-5xl mx-auto space-y-6 pb-24 text-white">
+    <div className="max-w-5xl mx-auto space-y-6 pb-24 text-text-primary">
       
       {/* ── DISCOVER HERO BANNER ────────────────────────────────────────── */}
-      <div className="relative rounded-3xl p-6 sm:p-10 overflow-hidden bg-gradient-to-br from-[#05141A] via-[#0A0A0A] to-[#120A1A] border border-[#00D4FF]/25 shadow-[0_0_50px_rgba(0,212,255,0.15)]">
-        <div className="absolute top-0 right-0 w-80 h-80 rounded-full bg-gradient-to-br from-[#00D4FF]/20 to-transparent blur-3xl pointer-events-none" />
+      <div className="relative rounded-3xl p-6 sm:p-10 overflow-hidden bg-surface border border-border-muted shadow-2xl">
+        <div className="absolute top-0 right-0 w-80 h-80 rounded-full bg-gradient-to-br from-[#00D4FF]/15 to-transparent blur-3xl pointer-events-none" />
         
         <div className="relative z-10 space-y-3">
           <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-[#00D4FF]/10 border border-[#00D4FF]/30 font-mono text-[10px] font-bold text-[#00D4FF] uppercase tracking-widest">
             <Zap size={12} /> AI ATHLETE DISCOVERY
           </div>
-          <h1 className="text-3xl sm:text-5xl font-black uppercase tracking-tight leading-tight">
+          <h1 className="text-3xl sm:text-5xl font-black uppercase tracking-tight leading-tight text-text-primary">
             DISCOVER <span className="text-transparent bg-clip-text bg-gradient-to-r from-[#00D4FF] via-[#A855F7] to-[#CCFF00]">TALENT & CLASHES</span>
           </h1>
           <p className="text-xs sm:text-sm text-text-secondary max-w-lg font-sans">
@@ -78,14 +78,14 @@ export const SearchPage: React.FC = () => {
             placeholder="Search athletes by name, username, sport, city, country, or skill level..."
             value={query}
             onChange={e => setQuery(e.target.value)}
-            className="w-full pl-11 pr-4 py-3.5 rounded-2xl bg-surface border border-border-muted text-xs text-white placeholder:text-text-muted focus:outline-none focus:border-[#00D4FF]/50 font-mono transition-all"
+            className="w-full pl-11 pr-4 py-3.5 rounded-2xl bg-surface border border-border-muted text-xs text-text-primary placeholder:text-text-muted focus:outline-none focus:border-[#00D4FF]/50 font-mono transition-all"
           />
         </div>
 
         <button
           onClick={() => setFilterOpen(!filterOpen)}
           className={`w-full sm:w-auto px-5 py-3.5 rounded-2xl border font-mono text-xs font-bold uppercase tracking-wider flex items-center justify-center gap-2 transition-all ${
-            filterOpen ? 'bg-[#00D4FF] text-black border-[#00D4FF]' : 'bg-elevated border-white/10 hover:border-[#00D4FF]/40 text-white'
+            filterOpen ? 'bg-[#00D4FF] text-black border-[#00D4FF]' : 'bg-elevated border-border-muted hover:border-[#00D4FF]/40 text-text-primary'
           }`}
         >
           <SlidersHorizontal size={15} className={filterOpen ? 'text-black' : 'text-[#00D4FF]'} /> Filter Criteria
@@ -101,8 +101,8 @@ export const SearchPage: React.FC = () => {
             exit={{ opacity: 0, height: 0 }}
             className="p-5 rounded-2xl bg-surface border border-border-muted space-y-4 font-mono text-xs overflow-hidden"
           >
-            <div className="flex items-center justify-between border-b border-white/10 pb-3">
-              <h3 className="font-bold text-white uppercase tracking-wider flex items-center gap-2">
+            <div className="flex items-center justify-between border-b border-border-muted pb-3">
+              <h3 className="font-bold text-text-primary uppercase tracking-wider flex items-center gap-2">
                 <SlidersHorizontal size={14} className="text-[#00D4FF]" /> Appwrite Filter Panel
               </h3>
               <button
@@ -119,87 +119,79 @@ export const SearchPage: React.FC = () => {
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-              {/* Sport filter */}
-              <div className="space-y-1.5">
-                <label className="text-[10px] text-text-muted uppercase tracking-wider block">Sport</label>
+              <div>
+                <label className="text-text-muted block mb-1 font-bold">Sport Category</label>
                 <select
                   value={selectedSport}
                   onChange={e => setSelectedSport(e.target.value)}
-                  className="w-full px-3 py-2 rounded-xl bg-elevated border border-border-muted text-white outline-none focus:border-[#00D4FF]"
+                  className="w-full px-3 py-2 rounded-xl bg-elevated border border-border-muted text-text-primary focus:outline-none focus:border-[#00D4FF]"
                 >
                   <option value="all">All Sports</option>
-                  {SPORT_CATEGORIES.map(s => (
-                    <option key={s.id} value={s.id}>{s.label}</option>
-                  ))}
+                  <option value="Football">Football / Soccer</option>
+                  <option value="Basketball">Basketball</option>
+                  <option value="Cricket">Cricket</option>
+                  <option value="Volleyball">Volleyball</option>
+                  <option value="Tennis">Tennis</option>
+                  <option value="Padel">Padel</option>
+                  <option value="Running">Running</option>
                 </select>
               </div>
 
-              {/* Skill level filter */}
-              <div className="space-y-1.5">
-                <label className="text-[10px] text-text-muted uppercase tracking-wider block">Skill Level</label>
+              <div>
+                <label className="text-text-muted block mb-1 font-bold">Skill Level</label>
                 <select
                   value={selectedLevel}
                   onChange={e => setSelectedLevel(e.target.value)}
-                  className="w-full px-3 py-2 rounded-xl bg-elevated border border-border-muted text-white outline-none focus:border-[#00D4FF]"
+                  className="w-full px-3 py-2 rounded-xl bg-elevated border border-border-muted text-text-primary focus:outline-none focus:border-[#00D4FF]"
                 >
                   <option value="all">All Levels</option>
-                  <option value="beginner">Beginner</option>
+                  <option value="beginner">Beginner / Rookie</option>
                   <option value="amateur">Amateur</option>
-                  <option value="semi_pro">Semi-Pro</option>
-                  <option value="pro">Professional</option>
-                  <option value="elite">Elite</option>
+                  <option value="intermediate">Intermediate</option>
+                  <option value="advanced">Advanced</option>
+                  <option value="pro">Pro</option>
                 </select>
               </div>
 
-              {/* Location filter */}
-              <div className="space-y-1.5">
-                <label className="text-[10px] text-text-muted uppercase tracking-wider block">City / Country</label>
+              <div>
+                <label className="text-text-muted block mb-1 font-bold">City / Location</label>
                 <input
                   type="text"
-                  placeholder="Filter by location..."
+                  placeholder="Filter by city..."
                   value={locationQuery}
                   onChange={e => setLocationQuery(e.target.value)}
-                  className="w-full px-3 py-2 rounded-xl bg-elevated border border-border-muted text-white outline-none focus:border-[#00D4FF] placeholder:text-text-muted"
+                  className="w-full px-3 py-2 rounded-xl bg-elevated border border-border-muted text-text-primary focus:outline-none focus:border-[#00D4FF]"
                 />
               </div>
             </div>
 
-            {/* Toggle filter */}
-            <div className="flex items-center gap-3 pt-2">
-              <label className="flex items-center gap-2 cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={openToRecruitOnly}
-                  onChange={e => setOpenToRecruitOnly(e.target.checked)}
-                  className="rounded border-border-muted text-[#00D4FF] focus:ring-0"
-                />
-                <span className="text-xs text-text-secondary font-bold">Open to Squad Recruitment Only</span>
+            <div className="flex items-center gap-2 pt-2">
+              <input
+                type="checkbox"
+                id="recruitOnly"
+                checked={openToRecruitOnly}
+                onChange={e => setOpenToRecruitOnly(e.target.checked)}
+                className="rounded accent-[#00D4FF]"
+              />
+              <label htmlFor="recruitOnly" className="text-text-secondary cursor-pointer">
+                Only show athletes open to squad recruitment
               </label>
             </div>
           </motion.div>
         )}
       </AnimatePresence>
 
-      {/* ── AI RECOMMENDATION STRIP ──────────────────────────────────────── */}
-      <div className="p-4 rounded-2xl bg-gradient-to-r from-[#00D4FF]/10 via-[#0A0A0A] to-transparent border border-[#00D4FF]/20 flex items-center gap-3">
-        <div className="w-8 h-8 rounded-xl bg-[#00D4FF]/20 border border-[#00D4FF]/40 flex items-center justify-center text-[#00D4FF] flex-shrink-0">
-          <Zap size={16} />
-        </div>
-        <p className="font-mono text-xs text-text-secondary flex-1">
-          <span className="text-[#00D4FF] font-bold">AI Scouting Recommendation:</span> 84% compatible strikers and defenders actively looking for squad offers near your area.
-        </p>
-      </div>
 
       {/* ── NAVIGATION TABS ─────────────────────────────────────────────── */}
-      <div className="flex gap-2 overflow-x-auto scrollbar-none bg-surface p-1.5 rounded-2xl border border-border-muted">
+      <div className="flex gap-2 overflow-x-auto scrollbar-none bg-surface p-1.5 rounded-2xl border border-border-muted font-mono text-xs">
         {TABS.map(tab => (
           <button
             key={tab}
             onClick={() => setActiveTab(tab)}
-            className={`flex-1 min-w-[120px] py-2.5 px-4 rounded-xl text-xs font-mono font-bold uppercase tracking-wider transition-all whitespace-nowrap ${
+            className={`flex-1 min-w-[120px] py-2.5 px-4 rounded-xl font-bold uppercase tracking-wider transition-all whitespace-nowrap ${
               activeTab === tab
                 ? 'bg-[#00D4FF] text-black shadow-[0_0_15px_rgba(0,212,255,0.3)]'
-                : 'text-text-muted hover:text-white'
+                : 'text-text-muted hover:text-text-primary'
             }`}
           >
             {tab}
@@ -259,12 +251,12 @@ export const SearchPage: React.FC = () => {
                                 alt={athlete.full_name}
                                 className="w-14 h-14 rounded-2xl object-cover border border-[#00D4FF]/40 shadow-md bg-elevated"
                               />
-                              <span className="absolute -bottom-1 -right-1 w-4 h-4 rounded-full bg-[#CCFF00] ring-2 ring-black flex items-center justify-center text-[9px] font-black text-black">
+                              <span className="absolute -bottom-1 -right-1 w-4 h-4 rounded-full bg-[#CCFF00] ring-2 ring-surface flex items-center justify-center text-[9px] font-black text-black">
                                 <CheckCircle2 size={10} className="text-black" />
                               </span>
                             </div>
                             <div>
-                              <h3 className="font-sans font-bold text-base text-white">{athlete.full_name}</h3>
+                              <h3 className="font-sans font-bold text-base text-text-primary">{athlete.full_name}</h3>
                               <div className="flex items-center gap-2 font-mono text-[11px] text-[#00D4FF]">
                                 <span>@{athlete.username || 'athlete'}</span>
                                 <span>•</span>
@@ -286,10 +278,10 @@ export const SearchPage: React.FC = () => {
                           </div>
                         )}
 
-                        <div className="grid grid-cols-3 gap-2 p-3 rounded-2xl bg-elevated/60 border border-white/5 text-center font-mono">
+                        <div className="grid grid-cols-3 gap-2 p-3 rounded-2xl bg-elevated border border-border-muted text-center font-mono">
                           <div>
                             <p className="text-[9px] text-text-muted uppercase">Sport</p>
-                            <p className="text-xs font-bold text-white capitalize truncate">{athlete.sport || '—'}</p>
+                            <p className="text-xs font-bold text-text-primary capitalize truncate">{athlete.sport || '—'}</p>
                           </div>
                           <div>
                             <p className="text-[9px] text-text-muted uppercase">Level</p>
@@ -302,7 +294,7 @@ export const SearchPage: React.FC = () => {
                         </div>
                       </div>
 
-                      <div className="flex items-center gap-2 pt-2 border-t border-white/5">
+                      <div className="flex items-center gap-2 pt-2 border-t border-border-muted">
                         <button
                           onClick={() => navigate(`/app/profile/${athlete.id}`)}
                           className="flex-1 py-2.5 rounded-xl bg-[#00D4FF] hover:bg-[#1ad8ff] text-black font-mono font-bold text-xs uppercase tracking-wider transition-all"
@@ -311,14 +303,14 @@ export const SearchPage: React.FC = () => {
                         </button>
                         <button
                           onClick={() => navigate(`/app/messages?user=${athlete.id}`)}
-                          className="p-2.5 rounded-xl bg-elevated border border-white/10 hover:border-white/20 text-white transition-all"
+                          className="p-2.5 rounded-xl bg-elevated border border-border-muted hover:border-border-muted text-text-primary transition-all"
                           title="Message"
                         >
                           <MessageCircle size={16} />
                         </button>
                         <button
                           onClick={() => toggleSaveUser(athlete.id)}
-                          className={`p-2.5 rounded-xl border transition-all ${isSaved ? 'bg-[#CCFF00]/10 border-[#CCFF00] text-[#CCFF00]' : 'bg-elevated border-white/10 text-white'}`}
+                          className={`p-2.5 rounded-xl border transition-all ${isSaved ? 'bg-[#CCFF00]/10 border-[#CCFF00] text-[#CCFF00]' : 'bg-elevated border-border-muted text-text-primary'}`}
                           title="Bookmark Athlete"
                         >
                           <Bookmark size={16} fill={isSaved ? 'currentColor' : 'none'} />
@@ -345,7 +337,7 @@ export const SearchPage: React.FC = () => {
                   <span>{event.sport.toUpperCase()}</span>
                   <span>{new Date(event.date).toLocaleDateString()}</span>
                 </div>
-                <h3 className="font-sans font-bold text-base text-white uppercase">{event.title}</h3>
+                <h3 className="font-sans font-bold text-base text-text-primary uppercase">{event.title}</h3>
                 <p className="text-xs text-text-secondary flex items-center gap-1 font-mono">
                   <MapPin size={12} /> {event.location}
                 </p>

@@ -51,7 +51,7 @@ import { ChemistryDashboard } from './pages/pulse/ChemistryDashboard';
 import { TournamentHub } from './pages/pulse/TournamentHub';
 
 // Auth Guards
-import { ProtectedRoute, PublicRoute } from './components/ProtectedRoute';
+import { ProtectedRoute, PublicRoute, OnboardingRoute } from './components/ProtectedRoute';
 
 const App: React.FC = () => {
   return (
@@ -62,7 +62,7 @@ const App: React.FC = () => {
           <Route path="/" element={<LandingPage />} />
           <Route path="/login" element={<PublicRoute><LoginPage /></PublicRoute>} />
           <Route path="/signup" element={<PublicRoute><SignupPage /></PublicRoute>} />
-          <Route path="/onboarding" element={<PublicRoute><OnboardingPage /></PublicRoute>} />
+          <Route path="/onboarding" element={<OnboardingRoute><OnboardingPage /></OnboardingRoute>} />
           <Route path="/forgot-password" element={<PublicRoute><ForgotPasswordPage /></PublicRoute>} />
           {/* OAuth callback — must be public, Appwrite redirects here after Google auth */}
           <Route path="/auth/callback" element={<OAuthCallbackPage />} />

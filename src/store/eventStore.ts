@@ -38,6 +38,25 @@ interface EventState {
   updateBracket:     (eventId: string, bracket: BracketRound[]) => void;
 }
 
+import { client, DATABASE_ID, COLLECTIONS } from '../lib/appwrite';
+
+let isRealtimeSubscribed = false;
+
+function setupRealtimeSubscription(refreshFn: (id: string) => Promise<void>) {
+  if (isRealtimeSubscribed) return;
+  isRealtimeSubscribed = true;
+  try {
+    const channel = `databases.${DATABASE_ID}.collections.${COLLECTIONS.EVENT_PARTICIPANTS}.documents`;
+    client.subscribe(channel, (response: any) => {
+      if (response.payload && response.payload.event_id) {
+        refreshFn(response.payload.event_id).catch(() => null);
+      }
+    });
+  } catch (err) {
+    console.warn('[eventStore] Realtime subscription warning:', err);
+  }
+}
+
 export const useEventStore = create<EventState>((set, get) => ({
   events:          MOCK_EVENTS,
   activeEvent:     null,
@@ -47,6 +66,7 @@ export const useEventStore = create<EventState>((set, get) => ({
 
   // ── Load all events from Appwrite ──────────────────────────────────────────
   loadEvents: async () => {
+    setupRealtimeSubscription(id => get().refreshEventData(id));
     const events = await getEvents();
     set({ events });
   },

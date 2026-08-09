@@ -7,6 +7,7 @@ import { useEventStore } from '../../store/eventStore';
 import { useAuthStore } from '../../store/authStore';
 import { useAISettingsStore } from '../../store/aiSettingsStore';
 import { generateAIPulseSquad } from '../../services/squadAI';
+import { getEventReadiness, type EventReadinessData } from '../../services/eventReadinessService';
 import { BadgeIcon } from '../../components/gamification/BadgeIcon';
 import type { Event } from '../../types';
 import type { Athlete } from '../../types/pulse.types';
@@ -21,8 +22,6 @@ interface EventJoinModalProps {
 type FlowStep = 'choice' | 'generating' | 'result' | 'confirmed';
 
 const CATEGORY_OPTIONS = ['Amateur', 'Semi-Pro', 'Professional'] as const;
-
-
 
 export const EventJoinModal: React.FC<EventJoinModalProps> = ({ isOpen, onClose, onJoined, event }) => {
   const { user } = useAuthStore();
@@ -45,17 +44,19 @@ export const EventJoinModal: React.FC<EventJoinModalProps> = ({ isOpen, onClose,
   const [category, setCategory] = useState<'Amateur' | 'Semi-Pro' | 'Professional'>('Semi-Pro');
   const [logs, setLogs] = useState<string[]>([]);
   const [generatedSquad, setGeneratedSquad] = useState<any>(null);
+  const [readiness, setReadiness] = useState<EventReadinessData | null>(null);
   const logRef = useRef<HTMLDivElement>(null);
-  const remaining = Math.max(0, 3 - dailyGenerationsCount);
+  const remaining = Math.max(0, 5 - dailyGenerationsCount);
 
-  // Reset state when opened
+  // Reset state & fetch readiness when opened
   useEffect(() => {
     if (isOpen) {
       setStep('choice');
       setLogs([]);
       setGeneratedSquad(null);
+      getEventReadiness(event.id).then(setReadiness).catch(() => null);
     }
-  }, [isOpen]);
+  }, [isOpen, event.id]);
 
   // Auto-scroll logs
   useEffect(() => {
@@ -175,17 +176,46 @@ export const EventJoinModal: React.FC<EventJoinModalProps> = ({ isOpen, onClose,
                     </div>
                   </div>
 
+                  {/* AutoSquad Readiness Banner */}
+                  {readiness && (
+                    <div className={`p-3.5 rounded-xl border font-mono text-[10px] space-y-1 ${
+                      readiness.is_autosquad_ready
+                        ? 'bg-volt/10 border-volt/30 text-volt'
+                        : 'bg-orange-500/10 border-orange-500/30 text-orange-400'
+                    }`}>
+                      <div className="flex items-center justify-between font-bold">
+                        <span>{readiness.is_autosquad_ready ? '⚡ AUTOSQUAD READY' : '🔒 AUTOSQUAD LOCKED (MIN 10 ATHLETES)'}</span>
+                        <span>{readiness.eligible_count} / 10 Joined</span>
+                      </div>
+                      <p className="text-text-muted text-[9px]">
+                        {readiness.is_autosquad_ready
+                          ? `${readiness.matched_players} / ${readiness.target_squad_size} suitable players found in talent pool.`
+                          : `AutoSquad matching unlocks when 10 athletes join this event. You can still register solo!`}
+                      </p>
+                    </div>
+                  )}
+
                   {/* Join with AI AutoSquad */}
-                  <motion.button whileHover={{ scale: 1.01 }} whileTap={{ scale: 0.99 }}
-                    onClick={handleGenerateSquad}
-                    className="w-full rounded-[16px] p-5 text-left relative overflow-hidden group premium-card bg-accent-surface border border-accent-border/50 shadow-sm">
+                  <motion.button whileHover={{ scale: readiness?.is_autosquad_ready === false ? 1 : 1.01 }} whileTap={{ scale: readiness?.is_autosquad_ready === false ? 1 : 0.99 }}
+                    onClick={() => {
+                      if (readiness && !readiness.is_autosquad_ready) return;
+                      handleGenerateSquad();
+                    }}
+                    disabled={readiness ? !readiness.is_autosquad_ready : false}
+                    className={`w-full rounded-[16px] p-5 text-left relative overflow-hidden group premium-card border shadow-sm transition-all ${
+                      readiness?.is_autosquad_ready === false
+                        ? 'bg-elevated/40 border-border-muted/50 cursor-not-allowed opacity-60'
+                        : 'bg-accent-surface border-accent-border/50'
+                    }`}>
                     <div className="absolute inset-0 bg-accent/5 opacity-0 group-hover:opacity-100 transition-opacity" />
                     <div className="flex items-start gap-4">
                       <div className="w-11 h-11 rounded-[14px] bg-accent-surface flex items-center justify-center flex-shrink-0 border border-accent-border">
                         <Sparkles size={20} className="text-accent" />
                       </div>
                       <div className="flex-1">
-                        <div className="font-display text-[15px] text-text-primary tracking-wide uppercase">JOIN WITH AI AUTOSQUAD</div>
+                        <div className="font-display text-[15px] text-text-primary tracking-wide uppercase">
+                          {readiness?.is_autosquad_ready === false ? 'AUTOSQUAD LOCKED (REQUIRES 10 ATHLETES)' : 'JOIN WITH AI AUTOSQUAD'}
+                        </div>
                         <div className="font-mono text-[10px] text-text-secondary mt-1">
                           AutoSquad AI scans nearby athletes, builds the perfect team for {event.sport}, and registers you instantly.
                         </div>

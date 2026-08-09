@@ -148,6 +148,8 @@ const MATCH_SCHEDULE = [
 const stagger = { visible: { transition: { staggerChildren: 0.06 } } };
 const fadeUp  = { hidden: { opacity: 0, y: 18 }, visible: { opacity: 1, y: 0, transition: { duration: 0.4, ease: 'easeOut' as any } } };
 
+import { getEventReadiness, type EventReadinessData } from '../../services/eventReadinessService';
+
 // ─── Event Detail ─────────────────────────────────────────────────────────────
 export const EventDetail: React.FC = () => {
   const { id } = useParams();
@@ -166,6 +168,7 @@ export const EventDetail: React.FC = () => {
   const [activeTab, setActiveTab]       = useState<'overview' | 'schedule' | 'participants' | 'bracket'>('overview');
   const [shared, setShared]             = useState(false);
   const [loadingEvent, setLoadingEvent] = useState(false);
+  const [readiness, setReadiness]       = useState<EventReadinessData | null>(null);
 
   // Appwrite event_participants (Source of Truth)
   const [dbParticipants, setDbParticipants] = useState<DbEventParticipant[]>([]);
@@ -175,12 +178,18 @@ export const EventDetail: React.FC = () => {
     setDbParticipants(records);
   };
 
+  const fetchReadiness = async (eventId: string) => {
+    const data = await getEventReadiness(eventId);
+    setReadiness(data);
+  };
+
   // ── Realtime & initial load ──────────────────────────────────────────────
   useEffect(() => {
     if (!id) return;
     setLoadingEvent(true);
     loadEvent(id).finally(() => setLoadingEvent(false));
     fetchParticipants(id);
+    fetchReadiness(id);
 
     // Appwrite Realtime subscription for event_participants
     const channel = `databases.${DATABASE_ID}.collections.${COLLECTIONS.EVENT_PARTICIPANTS}.documents`;
@@ -354,6 +363,18 @@ export const EventDetail: React.FC = () => {
                 style={{ background: 'rgba(204,255,0,0.2)', border: '1px solid rgba(204,255,0,0.4)', color: '#CCFF00' }}>
                 AI POWERED
               </motion.div>
+
+              {readiness && (
+                <motion.div initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: 0.12 }}
+                  className="px-3 py-1.5 rounded-full font-mono text-[10px] font-bold backdrop-blur-md flex items-center gap-1.5"
+                  style={{
+                    background: readiness.is_autosquad_ready ? 'rgba(204,255,0,0.25)' : 'rgba(249,115,22,0.25)',
+                    border: `1px solid ${readiness.is_autosquad_ready ? 'rgba(204,255,0,0.5)' : 'rgba(249,115,22,0.5)'}`,
+                    color: readiness.is_autosquad_ready ? '#CCFF00' : '#fb923c'
+                  }}>
+                  <span>{readiness.is_autosquad_ready ? '⚡ AUTOSQUAD READY' : `🔒 AUTOSQUAD LOCKED (${readiness.eligible_count}/10)`}</span>
+                </motion.div>
+              )}
             </div>
             <div className="flex items-center gap-2">
               {isOrganizer && (

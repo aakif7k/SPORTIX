@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException, status
 from app.core.dependencies import get_current_user
 from app.schemas.ai import AutoSquadRequest
 from app.services import ai_squad_service
@@ -11,10 +11,16 @@ async def generate_squad(payload: AutoSquadRequest, user=Depends(get_current_use
     """
     AI AutoSquad — generates an optimal squad for the user based on
     their sport, skill level, and event requirements.
-    Limited to MAX_AUTOSQUAD_GENERATIONS per day.
+    Limited to MAX_AUTOSQUAD_GENERATIONS (5) per user per day.
     """
-    data = await ai_squad_service.generate(user["id"], payload)
-    return {"success": True, "data": data}
+    try:
+        data = await ai_squad_service.generate(user["id"], payload)
+        return {"success": True, "data": data}
+    except ValueError as val_err:
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail=str(val_err)
+        )
 
 
 @router.get("/history")

@@ -62,9 +62,8 @@ export interface ProfileSummary {
 function docToProfile(doc: AppwriteDocument): UserProfile {
   let fileUrl = doc.profile_image_url || doc.avatar_url || null;
   if (doc.profile_image_file_id) {
-    try {
-      fileUrl = storage.getFileView(MEDIA_BUCKET_ID, doc.profile_image_file_id).toString();
-    } catch { /* use fallback */ }
+    const resolved = getMediaFileUrl(doc.profile_image_file_id, fileUrl);
+    if (resolved) fileUrl = resolved;
   }
 
   return {
@@ -152,8 +151,82 @@ export async function getProfile(uid: string): Promise<UserProfile | null> {
   }
 }
 
+/**
+ * Ensures experience_level strictly conforms to Appwrite enum values:
+ * ('beginner', 'amateur', 'semi_pro', 'pro', 'elite')
+ */
+export function sanitizeExperienceLevel(level?: string): string {
+  if (!level) return 'amateur';
+  const val = level.toLowerCase().trim().replace('-', '_');
+  if (val === 'professional' || val === 'pro') return 'pro';
+  if (val === 'semi_pro' || val === 'semipro' || val === 'semi-pro') return 'semi_pro';
+  if (['beginner', 'amateur', 'semi_pro', 'pro', 'elite'].includes(val)) {
+    return val;
+  }
+  return 'amateur';
+}
+
 /** Alias — semantically clearer when fetching your own profile */
 export const getMyProfile = getProfile;
+
+/**
+ * Idempotently guarantee that an Appwrite profile document exists for the authenticated user.
+ * If found, returns existing UserProfile. If missing, creates exactly one profile with uid as document ID.
+ */
+export async function ensureUserProfile(appwriteAcc: {
+  $id?: string;
+  id?: string;
+  email: string;
+  name?: string;
+}): Promise<UserProfile> {
+  const uid = appwriteAcc.$id || appwriteAcc.id;
+  if (!uid) throw new Error('ensureUserProfile requires a valid user ID.');
+
+  const existing = await getProfile(uid);
+  if (existing) return existing;
+
+  const now = new Date().toISOString();
+  const emailPrefix = appwriteAcc.email ? appwriteAcc.email.split('@')[0] : 'athlete';
+  const cleanName = appwriteAcc.name && appwriteAcc.name.trim() ? appwriteAcc.name.trim() : emailPrefix;
+  const cleanUsername = (cleanName.toLowerCase().replace(/[^a-z0-9]/g, '_').slice(0, 20) || `user_${uid.slice(0, 6)}`);
+
+  const newDocData = {
+    full_name: cleanName,
+    username: cleanUsername,
+    email: appwriteAcc.email || '',
+    role: 'athlete',
+    sport: 'Multi-Sport',
+    sports: [],
+    experience_level: 'amateur',
+    location: '',
+    avatar_url: null,
+    bio: '',
+    is_open_to_recruit: false,
+    is_active: true,
+    is_onboarding_complete: false,
+    pulse_score: 100,
+    level: 1,
+    coins_balance: 0,
+    login_streak: 0,
+    created_at: now,
+    updated_at: now,
+  };
+
+  try {
+    const doc = await databases.createDocument(
+      DATABASE_ID,
+      COLLECTIONS.PROFILES,
+      uid,
+      newDocData
+    );
+    return docToProfile(doc as AppwriteDocument);
+  } catch (err: any) {
+    const retryDoc = await getProfile(uid);
+    if (retryDoc) return retryDoc;
+    console.error('[profileService] ensureUserProfile error:', err);
+    throw err;
+  }
+}
 
 /**
  * Fetch a profile by username (unique field lookup).
@@ -402,7 +475,8 @@ export function profileToUserShape(profile: UserProfile): Record<string, any> {
     name:                profile.full_name,
     username:            profile.username,
     email:               profile.email,
-    avatar:              avatarUrl || `https://i.pravatar.cc/150?u=${profile.id}`,
+    avatar:              avatarUrl || undefined,
+    avatar_url:          avatarUrl || undefined,
     coverImage:          undefined,
     role:                profile.role,
     sport:               profile.sport,

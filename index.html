@@ -50,6 +50,25 @@
     }
     </script>
 
+    <!-- Early Theme & Motion Initialization Script (Prevents FOUC) -->
+    <script>
+      (function() {
+        try {
+          var theme = localStorage.getItem('sportix-theme') || 'system';
+          var isDark = theme === 'dark' || (theme === 'system' && window.matchMedia('(prefers-color-scheme: dark)').matches);
+          if (!isDark) {
+            document.documentElement.classList.add('light');
+          } else {
+            document.documentElement.classList.remove('light');
+          }
+          var reduceMotion = localStorage.getItem('sportix-reduce-motion') === 'true';
+          if (reduceMotion) {
+            document.documentElement.setAttribute('data-reduce-motion', 'true');
+          }
+        } catch (e) {}
+      })();
+    </script>
+
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=Urbanist:ital,wght@0,100..900;1,100..900&display=swap" rel="stylesheet" />

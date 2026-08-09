@@ -45,21 +45,21 @@ export const Sidebar: React.FC<SidebarProps> = ({ className = '' }) => {
         width: expanded ? '240px' : '68px',
         transition: 'width 220ms cubic-bezier(0.4, 0, 0.2, 1)',
         willChange: 'width',
-        background: 'rgba(10, 10, 14, 0.95)',
+        background: 'var(--bg-surface)',
         backdropFilter: 'blur(24px)',
-        borderRight: '1px solid rgba(255, 255, 255, 0.08)',
-        boxShadow: expanded ? '10px 0 30px rgba(0, 0, 0, 0.5)' : 'none',
+        borderRight: '1px solid var(--border)',
+        boxShadow: expanded ? '10px 0 30px rgba(0, 0, 0, 0.15)' : 'none',
       }}
     >
       {/* ── Ambient Top Cyber Glow ── */}
       <div
         className="absolute top-0 left-0 right-0 h-44 pointer-events-none"
-        style={{ background: 'radial-gradient(ellipse at 50% 0%, rgba(204, 255, 0, 0.12) 0%, transparent 75%)' }}
+        style={{ background: 'radial-gradient(ellipse at 50% 0%, rgba(204, 255, 0, 0.08) 0%, transparent 75%)' }}
       />
       
       {/* ── Subtle Background Grid Lines ── */}
       <div
-        className="absolute inset-0 pointer-events-none opacity-15"
+        className="absolute inset-0 pointer-events-none opacity-10"
         style={{
           backgroundImage: 'linear-gradient(rgba(204, 255, 0, 0.05) 1px, transparent 1px), linear-gradient(90deg, rgba(204, 255, 0, 0.05) 1px, transparent 1px)',
           backgroundSize: '24px 24px',
@@ -67,15 +67,15 @@ export const Sidebar: React.FC<SidebarProps> = ({ className = '' }) => {
       />
 
       {/* ═══════════════════════ LOGO HEADER ═══════════════════════ */}
-      <div className="relative flex items-center gap-3 px-4 py-4 min-h-[72px] border-b border-white/10 overflow-hidden">
+      <div className="relative flex items-center gap-3 px-4 py-4 min-h-[72px] border-b border-border-muted overflow-hidden">
         <motion.div
           whileHover={{ scale: 1.08, rotate: 3 }}
           whileTap={{ scale: 0.92 }}
           onClick={() => navigate('/app/feed')}
-          className="flex-shrink-0 w-10 h-10 rounded-2xl overflow-hidden cursor-pointer relative border border-[#CCFF00]/40 shadow-[0_0_20px_rgba(204,255,0,0.3)] bg-black flex items-center justify-center"
+          className="flex-shrink-0 w-10 h-10 rounded-2xl overflow-hidden cursor-pointer relative border border-[#CCFF00]/40 shadow-[0_0_20px_rgba(204,255,0,0.3)] bg-surface flex items-center justify-center"
         >
           <img src="/logo.png" alt="SportiX" className="w-full h-full object-cover" />
-          <span className="absolute bottom-0.5 right-0.5 w-2.5 h-2.5 rounded-full bg-[#CCFF00] ring-2 ring-black" />
+          <span className="absolute bottom-0.5 right-0.5 w-2.5 h-2.5 rounded-full bg-[#CCFF00] ring-2 ring-surface" />
         </motion.div>
 
         <div
@@ -89,7 +89,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ className = '' }) => {
             whiteSpace: 'nowrap',
           }}
         >
-          <span className="font-sans text-xl font-black text-white tracking-widest leading-none flex items-center gap-1">
+          <span className="font-sans text-xl font-black text-text-primary tracking-widest leading-none flex items-center gap-1">
             SPORT<span className="text-[#CCFF00]">IX</span>
           </span>
           <span className="font-mono text-[9px] text-[#CCFF00] font-bold tracking-wider mt-0.5 flex items-center gap-1">
@@ -114,8 +114,8 @@ export const Sidebar: React.FC<SidebarProps> = ({ className = '' }) => {
                 <div
                   className={`relative flex items-center gap-3 cursor-pointer rounded-2xl py-2.5 px-2.5 transition-all duration-200 group ${
                     isActive 
-                      ? 'bg-white/10 border border-white/15 shadow-[0_0_20px_rgba(0,0,0,0.4)]' 
-                      : 'hover:bg-white/5 border border-transparent'
+                      ? 'bg-elevated border border-border-muted shadow-md' 
+                      : 'hover:bg-elevated/50 border border-transparent'
                   }`}
                 >
                   {/* Active Indicator Bar */}
@@ -131,12 +131,12 @@ export const Sidebar: React.FC<SidebarProps> = ({ className = '' }) => {
                   <div
                     className="relative flex-shrink-0 flex items-center justify-center rounded-xl w-9 h-9 transition-all duration-200"
                     style={{
-                      background: isActive ? `${accent}25` : 'rgba(255, 255, 255, 0.05)',
-                      border: `1px solid ${isActive ? `${accent}66` : 'rgba(255, 255, 255, 0.08)'}`,
+                      background: isActive ? `${accent}25` : 'var(--bg-elevated)',
+                      border: `1px solid ${isActive ? `${accent}66` : 'var(--border)'}`,
                       boxShadow: isActive ? `0 0 16px ${accent}33` : 'none',
                     }}
                   >
-                    <Icon size={18} style={{ color: isActive ? accent : '#A1A1AA' }} />
+                    <Icon size={18} style={{ color: isActive ? accent : 'var(--text-secondary)' }} />
                     {badge && (
                       <span
                         className="absolute -top-1 -right-1 min-w-[15px] h-4 rounded-full flex items-center justify-center bg-[#FF3B00] text-white text-[9px] font-bold font-mono px-1 shadow-[0_0_8px_rgba(255,59,0,0.8)]"
@@ -159,8 +159,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ className = '' }) => {
                     }}
                   >
                     <span 
-                      className="font-sans font-bold text-sm tracking-wide transition-colors"
-                      style={{ color: isActive ? '#FFFFFF' : '#A1A1AA' }}
+                      className={`font-sans font-bold text-sm tracking-wide transition-colors ${isActive ? 'text-text-primary font-black' : 'text-text-secondary group-hover:text-text-primary'}`}
                     >
                       {label}
                     </span>
@@ -176,7 +175,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ className = '' }) => {
       </nav>
 
       {/* ═══════════════════════ USER PROFILE FOOTER ═══════════════════════ */}
-      <div className="mt-auto flex-shrink-0 relative border-t border-white/10 p-3">
+      <div className="mt-auto flex-shrink-0 relative border-t border-border-muted p-3">
         {user && (
           <div className="relative">
             
@@ -203,7 +202,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ className = '' }) => {
                     className="w-full h-full object-cover" 
                   />
                 </div>
-                <span className="absolute -bottom-0.5 -right-0.5 w-3.5 h-3.5 rounded-full bg-[#CCFF00] ring-2 ring-black flex items-center justify-center text-[8px] font-black text-black">
+                <span className="absolute -bottom-0.5 -right-0.5 w-3.5 h-3.5 rounded-full bg-[#CCFF00] ring-2 ring-surface flex items-center justify-center text-[8px] font-black text-black">
                   ✓
                 </span>
               </div>
@@ -211,7 +210,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ className = '' }) => {
 
             {/* Expanded Full Profile Card */}
             <div
-              className="rounded-2xl overflow-hidden bg-surface border border-white/10 p-3 space-y-3 shadow-xl transition-all duration-200"
+              className="rounded-2xl overflow-hidden bg-surface border border-border-muted p-3 space-y-3 shadow-xl transition-all duration-200"
               style={{
                 opacity: expanded ? 1 : 0,
                 transform: expanded ? 'translateY(0) scale(1)' : 'translateY(8px) scale(0.95)',
@@ -231,12 +230,12 @@ export const Sidebar: React.FC<SidebarProps> = ({ className = '' }) => {
                     alt={user?.name || 'Athlete'} 
                     className="w-10 h-10 rounded-2xl object-cover border border-[#CCFF00]/50 shadow-md bg-elevated"
                   />
-                  <span className="absolute -bottom-1 -right-1 w-3.5 h-3.5 rounded-full bg-[#CCFF00] ring-2 ring-black flex items-center justify-center text-[8px] font-black text-black">
+                  <span className="absolute -bottom-1 -right-1 w-3.5 h-3.5 rounded-full bg-[#CCFF00] ring-2 ring-surface flex items-center justify-center text-[8px] font-black text-black">
                     ✓
                   </span>
                 </div>
                 <div className="flex-1 min-w-0">
-                  <h3 className="font-sans font-bold text-sm text-white truncate leading-snug group-hover:text-[#CCFF00] transition-colors">
+                  <h3 className="font-sans font-bold text-sm text-text-primary truncate leading-snug group-hover:text-[#CCFF00] transition-colors">
                     {user?.name || 'Athlete'}
                   </h3>
                   <div className="flex items-center gap-1 font-mono text-[9px] text-[#CCFF00]">
@@ -248,10 +247,10 @@ export const Sidebar: React.FC<SidebarProps> = ({ className = '' }) => {
               </div>
 
               {/* Action Buttons */}
-              <div className="grid grid-cols-2 gap-2 pt-2 border-t border-white/5">
+              <div className="grid grid-cols-2 gap-2 pt-2 border-t border-border-muted">
                 <button
                   onClick={() => navigate('/app/settings')}
-                  className="py-2 rounded-xl bg-elevated border border-white/10 hover:border-[#CCFF00]/40 font-mono text-[10px] font-bold text-white uppercase tracking-wider flex items-center justify-center gap-1.5 transition-all"
+                  className="py-2 rounded-xl bg-elevated border border-border-muted hover:border-[#CCFF00]/40 font-mono text-[10px] font-bold text-text-primary uppercase tracking-wider flex items-center justify-center gap-1.5 transition-all"
                 >
                   <Settings size={12} /> Edit
                 </button>

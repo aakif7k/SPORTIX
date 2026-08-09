@@ -9,7 +9,7 @@ export const databases = new Databases(client);
 export const storage = new Storage(client);
 
 export const DATABASE_ID = import.meta.env.VITE_APPWRITE_DATABASE_ID || '6a5faf43003e0b2d9f34';
-export const BUCKET_ID = import.meta.env.VITE_APPWRITE_STORAGE_BUCKET_ID || '6a5faf1a000b5d9156b5';
+export const BUCKET_ID = import.meta.env.VITE_APPWRITE_STORAGE_BUCKET_ID || 'sportix-media';
 
 export const COLLECTIONS = {
   PROFILES: 'profiles',
@@ -39,6 +39,8 @@ export const COLLECTIONS = {
   CONVERSATION_MEMBERS: 'conversation_members',
   MESSAGES: 'messages',
   USER_BADGES: 'user_badges',
+  GENERATED_SQUAD: 'generated_squads',
+  AUTOSQUAD_REQUESTS: 'autosquad_requests',
 };
 
 export { ID, Query };

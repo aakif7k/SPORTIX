@@ -11,22 +11,33 @@ USERS = settings.collection_users
 def get_user_info(user_id: str) -> dict:
     """Get basic user info for denormalization."""
     try:
-        users = db.list_documents(
-            DB, USERS,
-            queries=[Query.equal("auth_uid", [user_id])]
-        )
-        if users["documents"]:
-            u = users["documents"][0]
-            return {
-                "author_id": user_id,
-                "author_username": u.get("username", ""),
-                "author_full_name": u.get("full_name", ""),
-                "author_avatar_url": u.get("avatar_url"),
-                "author_sport": u.get("sport", ""),
-                "author_level": u.get("level", 1),
-            }
+        u = db.get_document(DB, USERS, user_id)
+        return {
+            "author_id": user_id,
+            "author_username": u.get("username", ""),
+            "author_full_name": u.get("full_name", ""),
+            "author_avatar_url": u.get("avatar_url") or u.get("profile_image_url"),
+            "author_sport": u.get("sport", ""),
+            "author_level": u.get("level", 1),
+        }
     except:
-        pass
+        try:
+            users = db.list_documents(
+                DB, USERS,
+                queries=[Query.limit(1)]
+            )
+            if users["documents"]:
+                u = users["documents"][0]
+                return {
+                    "author_id": user_id,
+                    "author_username": u.get("username", ""),
+                    "author_full_name": u.get("full_name", ""),
+                    "author_avatar_url": u.get("avatar_url") or u.get("profile_image_url"),
+                    "author_sport": u.get("sport", ""),
+                    "author_level": u.get("level", 1),
+                }
+        except:
+            pass
     return {"author_id": user_id}
 
 async def create(user_id: str, payload) -> dict:

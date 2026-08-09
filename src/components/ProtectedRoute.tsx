@@ -1,3 +1,4 @@
+import React from 'react';
 import { Navigate } from 'react-router-dom';
 import { useAuth } from '@/context/AuthContext';
 
@@ -40,26 +41,60 @@ function LoadingScreen() {
   );
 }
 
+/**
+ * Route guard for main app pages (/app/*, /pulse/*).
+ * Requires authenticated user AND completed onboarding.
+ * If user has not completed onboarding, redirects to /onboarding.
+ */
 export function ProtectedRoute({
   children
 }: {
   children: React.ReactNode
 }) {
-  const { isAuthenticated, authLoading } = useAuth();
+  const { isAuthenticated, authLoading, profile } = useAuth();
 
   if (authLoading) return <LoadingScreen />;
   if (!isAuthenticated) return <Navigate to="/login" replace />;
+  if (profile && !profile.is_onboarding_complete) return <Navigate to="/onboarding" replace />;
   return <>{children}</>;
 }
 
+/**
+ * Dedicated route guard for /onboarding page.
+ * Requires authenticated user.
+ * If onboarding is ALREADY complete, redirects to /app/feed.
+ */
+export function OnboardingRoute({
+  children
+}: {
+  children: React.ReactNode
+}) {
+  const { isAuthenticated, authLoading, profile } = useAuth();
+
+  if (authLoading) return <LoadingScreen />;
+  if (!isAuthenticated) return <Navigate to="/login" replace />;
+  if (profile && profile.is_onboarding_complete) return <Navigate to="/app/feed" replace />;
+  return <>{children}</>;
+}
+
+/**
+ * Route guard for login/signup public pages.
+ * If user is authenticated AND onboarding is incomplete, redirects to /onboarding.
+ * If user is authenticated AND onboarding is complete, redirects to /app/feed.
+ */
 export function PublicRoute({
   children
 }: {
   children: React.ReactNode
 }) {
-  const { isAuthenticated, authLoading } = useAuth();
+  const { isAuthenticated, authLoading, profile } = useAuth();
 
   if (authLoading) return <LoadingScreen />;
-  if (isAuthenticated) return <Navigate to="/home" replace />;
+  if (isAuthenticated) {
+    if (profile && !profile.is_onboarding_complete) {
+      return <Navigate to="/onboarding" replace />;
+    }
+    return <Navigate to="/app/feed" replace />;
+  }
   return <>{children}</>;
 }

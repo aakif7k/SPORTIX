@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, Query
 from typing import Optional
 from app.core.dependencies import get_current_user
 from app.schemas.event import EventCreate, EventUpdate
-from app.services import event_service
+from app.services import event_service, event_readiness_service
 
 router = APIRouter()
 
@@ -49,6 +49,12 @@ async def get_event(event_id: str, user=Depends(get_current_user)):
     return {"success": True, "data": data}
 
 
+@router.get("/{event_id}/readiness")
+async def get_event_readiness(event_id: str, user=Depends(get_current_user)):
+    data = await event_readiness_service.get_event_readiness(event_id, user["id"])
+    return {"success": True, "data": data}
+
+
 @router.put("/{event_id}")
 async def update_event(event_id: str, payload: EventUpdate, user=Depends(get_current_user)):
     data = await event_service.update(event_id, user["id"], payload.model_dump(exclude_none=True))
@@ -69,6 +75,8 @@ async def join_event(
     user=Depends(get_current_user),
 ):
     data = await event_service.join(event_id, user["id"], squad_id, entry_type)
+    # Check & trigger 10-athlete AutoSquad readiness notification
+    await event_readiness_service.check_and_notify_event_readiness(event_id)
     return {"success": True, "data": data}
 
 
