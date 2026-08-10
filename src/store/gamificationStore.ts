@@ -1,5 +1,4 @@
 import { create } from 'zustand';
-import { getMissions, getBadges } from '../services/gamificationService';
 import { useAuthStore } from './authStore';
 
 // ─── TYPES ──────────────────────────────────────────────────────────────────
@@ -21,7 +20,7 @@ export interface GamificationState {
   // Actions
   loadGamificationData: () => Promise<void>;
   addPulse: (amount: number) => void;
-  claimDailyReward: (day: number) => void;
+  claimDailyReward: (day: number) => Promise<void>;
   completeMission: (id: string) => void;
   claimMissionReward: (id: string) => void;
   updateMissionProgress: (id: string, progress: number) => void;
@@ -79,45 +78,20 @@ export const getLevelProgress = (pulse: number) => {
   };
 };
 
-// ─── INITIAL DATA ───────────────────────────────────────────────────────────
-const INITIAL_MISSIONS: Mission[] = [
-  { id: 'm1', title: 'Upload a Highlight', description: 'Share 1 sports highlight to your feed', icon: '🎥', category: 'daily', target: 1, current: 0, reward: 20, xpReward: 50, completed: false, claimed: false },
-  { id: 'm2', title: 'Join an Event', description: 'Register for 1 upcoming event', icon: '🏟️', category: 'daily', target: 1, current: 1, reward: 30, xpReward: 75, completed: true, claimed: false },
-  { id: 'm3', title: 'React to Posts', description: 'Like or react to 5 posts in the feed', icon: '⚡', category: 'daily', target: 5, current: 3, reward: 15, xpReward: 30, completed: false, claimed: false },
-  { id: 'm4', title: 'Complete a Match', description: 'Finish 1 full match in PULSE mode', icon: '🥊', category: 'daily', target: 1, current: 0, reward: 40, xpReward: 100, completed: false, claimed: false },
-  { id: 'm5', title: 'Message Teammates', description: 'Send messages to 3 teammates', icon: '💬', category: 'daily', target: 3, current: 2, reward: 10, xpReward: 25, completed: false, claimed: false },
-  { id: 'm6', title: 'Earn 50 Pulse', description: 'Accumulate 50 Pulse from any activities', icon: '🔋', category: 'daily', target: 50, current: 35, reward: 25, xpReward: 60, completed: false, claimed: false },
-  { id: 'm7', title: 'Win 3 Matches', description: 'Win 3 matches this week', icon: '🏆', category: 'weekly', target: 3, current: 1, reward: 100, xpReward: 250, completed: false, claimed: false },
-  { id: 'm8', title: 'Build a Full Squad', description: 'Form a complete team this week', icon: '👥', category: 'weekly', target: 1, current: 0, reward: 80, xpReward: 200, completed: false, claimed: false },
-];
+// ─── INITIAL DATA TEMPLATES ──────────────────────────────────────────────────
+import { NEW_USER_MISSIONS, NEW_USER_REWARDS, NEW_USER_BADGES, getUserSportiXState, claimDailyRewardIdempotent, getLocalDateStr } from '../services/userStateService';
+import { toast as hotToast } from 'react-hot-toast';
 
-const INITIAL_REWARDS: DailyReward[] = [
-  { day: 1, label: 'Day 1',  pulseReward: 10,  icon: '⚡', claimed: true,  isToday: false, isLocked: false, isBonusDay: false },
-  { day: 2, label: 'Day 2',  pulseReward: 15,  icon: '⚡', claimed: true,  isToday: false, isLocked: false, isBonusDay: false },
-  { day: 3, label: 'Day 3',  pulseReward: 20,  icon: '🔋', claimed: true,  isToday: false, isLocked: false, isBonusDay: false },
-  { day: 4, label: 'Day 4',  pulseReward: 25,  icon: '🎯', claimed: false, isToday: true,  isLocked: false, isBonusDay: false },
-  { day: 5, label: 'Day 5',  pulseReward: 30,  xpBooster: 1.5, icon: '🚀', claimed: false, isToday: false, isLocked: true, isBonusDay: false },
-  { day: 6, label: 'Day 6',  pulseReward: 40,  icon: '💎', claimed: false, isToday: false, isLocked: true, isBonusDay: false },
-  { day: 7, label: 'BONUS',  pulseReward: 100, xpBooster: 2, icon: '👑', claimed: false, isToday: false, isLocked: true, isBonusDay: true },
-];
-
-const INITIAL_BADGES: Badge[] = [
-  { id: 'b1', title: 'MVP', description: 'Rated Most Valuable Player in a match', icon: '🏆', rarity: 'legendary', color: '#FFD700', unlocked: true, unlockedAt: '2025-05-10' },
-  { id: 'b2', title: 'Team Captain', description: 'Led a full squad to victory', icon: '⚡', rarity: 'epic', color: '#CCFF00', unlocked: true, unlockedAt: '2025-05-08' },
-  { id: 'b3', title: 'Event Champion', description: 'Won a competitive tournament', icon: '🥇', rarity: 'legendary', color: '#FF3B00', unlocked: false, progress: 1, maxProgress: 1 },
-  { id: 'b4', title: 'Winning Streak', description: 'Win 5 matches in a row', icon: '🔥', rarity: 'epic', color: '#f97316', unlocked: false, progress: 3, maxProgress: 5 },
-  { id: 'b5', title: 'Rising Athlete', description: 'Reach Level 3 on SPORTiX', icon: '📈', rarity: 'rare', color: '#3b82f6', unlocked: true, unlockedAt: '2025-05-01' },
-  { id: 'b6', title: 'Elite Performer', description: 'Maintain 90%+ rating for 30 days', icon: '💎', rarity: 'rare', color: '#a855f7', unlocked: false, progress: 12, maxProgress: 30 },
-  { id: 'b7', title: 'Social Pulse', description: 'Connect with 50 athletes', icon: '🤝', rarity: 'common', color: '#22c55e', unlocked: true, unlockedAt: '2025-04-28' },
-  { id: 'b8', title: 'First Blood', description: 'Win your very first match', icon: '🩸', rarity: 'common', color: '#ef4444', unlocked: true, unlockedAt: '2025-04-20' },
-];
+const INITIAL_MISSIONS: Mission[] = NEW_USER_MISSIONS;
+const INITIAL_REWARDS: DailyReward[] = NEW_USER_REWARDS;
+const INITIAL_BADGES: Badge[] = NEW_USER_BADGES;
 
 // ─── STORE ───────────────────────────────────────────────────────────────────
-export const useGamificationStore = create<GamificationState>((set) => ({
-  currentPulse: 2450,
-  totalXP: 3800,
-  currentLevel: 25,
-  streakDays: 3,
+export const useGamificationStore = create<GamificationState>((set, get) => ({
+  currentPulse: 100,
+  totalXP: 0,
+  currentLevel: 1,
+  streakDays: 0,
   lastCheckin: null,
   missions: INITIAL_MISSIONS,
   dailyRewards: INITIAL_REWARDS,
@@ -126,18 +100,67 @@ export const useGamificationStore = create<GamificationState>((set) => ({
   loadGamificationData: async () => {
     const user = useAuthStore.getState().user;
     if (!user) return;
-    const [fetchedMissions, fetchedBadges] = await Promise.all([
-      getMissions(user.id, INITIAL_MISSIONS),
-      getBadges(user.id, INITIAL_BADGES)
-    ]);
-    const pulse = (user as any).pulse_score || (user.stats?.rating ? user.stats.rating * 25 : 2450);
-    const lvl = user.level || Math.max(1, Math.floor(pulse / 100));
-    set({
-      missions: fetchedMissions,
-      badges: fetchedBadges,
-      currentPulse: pulse,
-      currentLevel: lvl,
-    });
+
+    try {
+      const userState = await getUserSportiXState(user.id);
+      const todayStr = getLocalDateStr();
+      const lastClaimKey = `sportix_last_daily_claim_date_${user.id}`;
+      const lastClaimDate = localStorage.getItem(lastClaimKey);
+      const hasClaimedToday = lastClaimDate === todayStr;
+
+      let claimedDays = userState.claimedRewardDays;
+      let maxClaimedDay = claimedDays.length > 0 ? Math.max(...claimedDays) : 0;
+
+      // If user completed full 7-day cycle and it's a new day after 12:00 AM, reset cycle
+      if (maxClaimedDay >= 7 && !hasClaimedToday) {
+        claimedDays = [];
+        maxClaimedDay = 0;
+        localStorage.setItem(`sportix_claimed_rewards_${user.id}`, JSON.stringify([]));
+      }
+
+      // Hydrate daily rewards for this user ID with 12:00 AM Reset Locking
+      const updatedRewards = INITIAL_REWARDS.map(r => {
+        const isClaimed = claimedDays.includes(r.day);
+        
+        // If user already claimed today, ALL future days (including maxClaimedDay + 1) are locked until 12:00 AM!
+        // If user hasn't claimed today, day (maxClaimedDay + 1) is unlocked for today!
+        const isToday = !hasClaimedToday && r.day === maxClaimedDay + 1;
+        const isLocked = !isClaimed && !isToday;
+
+        return {
+          ...r,
+          claimed: isClaimed,
+          isToday,
+          isLocked,
+        };
+      });
+
+      // Hydrate missions from user localStorage
+      let userMissions = INITIAL_MISSIONS;
+      try {
+        const rawM = localStorage.getItem(`sportix_missions_${user.id}`);
+        if (rawM) userMissions = JSON.parse(rawM);
+      } catch {}
+
+      // Hydrate badges from user localStorage
+      let userBadges = INITIAL_BADGES;
+      try {
+        const rawB = localStorage.getItem(`sportix_badges_${user.id}`);
+        if (rawB) userBadges = JSON.parse(rawB);
+      } catch {}
+
+      set({
+        currentPulse: userState.pulse,
+        currentLevel: userState.level,
+        totalXP: userState.totalXP,
+        streakDays: userState.streakDays,
+        dailyRewards: updatedRewards,
+        missions: userMissions,
+        badges: userBadges,
+      });
+    } catch (err) {
+      console.warn('[gamificationStore] Failed to load user state:', err);
+    }
   },
 
   addPulse: (amount) => set((state) => {
@@ -146,38 +169,95 @@ export const useGamificationStore = create<GamificationState>((set) => ({
     return { currentPulse: newPulse, currentLevel: levelInfo.level };
   }),
 
-  claimDailyReward: (day) => set((state) => {
-    const rewards = state.dailyRewards.map(r =>
-      r.day === day ? { ...r, claimed: true } : r
-    );
-    const reward = state.dailyRewards.find(r => r.day === day);
-    return {
-      dailyRewards: rewards,
-      currentPulse: state.currentPulse + (reward?.pulseReward || 0),
-      streakDays: state.streakDays + 1,
-    };
-  }),
+  claimDailyReward: async (day) => {
+    const user = useAuthStore.getState().user;
+    if (!user) return;
+    const currentState = get();
+    const reward = currentState.dailyRewards.find(r => r.day === day);
+    
+    // STRICT RULE: Cannot claim if already claimed, locked, or not today's active reward
+    if (!reward || reward.claimed) {
+      hotToast.error(`Day ${day} reward is already collected.`);
+      return;
+    }
 
-  completeMission: (id) => set((state) => ({
-    missions: state.missions.map(m =>
+    if (reward.isLocked || !reward.isToday) {
+      hotToast.error("This reward is locked! You can only collect 1 reward per day. Next reward unlocks tomorrow at 12:00 AM (Midnight).");
+      return;
+    }
+
+    const claimRes = await claimDailyRewardIdempotent(user.id, day, reward.pulseReward || 10);
+    if (!claimRes.success) {
+      hotToast.error(claimRes.message);
+      return;
+    }
+
+    hotToast.success(claimRes.message);
+    const newPulse = claimRes.newPulse || (currentState.currentPulse + (reward.pulseReward || 10));
+    const levelInfo = getLevelInfo(newPulse);
+
+    set(state => {
+      const claimedDays = [...state.dailyRewards.filter(r => r.claimed).map(r => r.day), day];
+      
+      // Update state: today's reward is now claimed, ALL remaining days are LOCKED until 12:00 AM tomorrow!
+      const updatedRewards = state.dailyRewards.map(r => {
+        const isClaimed = claimedDays.includes(r.day);
+        return {
+          ...r,
+          claimed: isClaimed,
+          isToday: false,
+          isLocked: !isClaimed,
+        };
+      });
+
+      return {
+        dailyRewards: updatedRewards,
+        currentPulse: newPulse,
+        currentLevel: levelInfo.level,
+      };
+    });
+  },
+
+  completeMission: (id) => set((state) => {
+    const user = useAuthStore.getState().user;
+    const userId = user?.id || 'guest';
+    const updated = state.missions.map(m =>
       m.id === id ? { ...m, completed: true, current: m.target } : m
-    ),
-  })),
+    );
+    try { localStorage.setItem(`sportix_missions_${userId}`, JSON.stringify(updated)); } catch {}
+    return { missions: updated };
+  }),
 
   claimMissionReward: (id) => set((state) => {
+    const user = useAuthStore.getState().user;
+    const userId = user?.id || 'guest';
     const mission = state.missions.find(m => m.id === id);
+    if (!mission || mission.claimed) return state;
+
+    const updated = state.missions.map(m => m.id === id ? { ...m, claimed: true } : m);
+    try { localStorage.setItem(`sportix_missions_${userId}`, JSON.stringify(updated)); } catch {}
+
+    const addedPulse = mission.reward || 0;
+    const newPulse = state.currentPulse + addedPulse;
+    const levelInfo = getLevelInfo(newPulse);
+
     return {
-      missions: state.missions.map(m => m.id === id ? { ...m, claimed: true } : m),
-      currentPulse: state.currentPulse + (mission?.reward || 0),
-      totalXP: state.totalXP + (mission?.xpReward || 0),
+      missions: updated,
+      currentPulse: newPulse,
+      currentLevel: levelInfo.level,
+      totalXP: state.totalXP + (mission.xpReward || 0),
     };
   }),
 
-  updateMissionProgress: (id, progress) => set((state) => ({
-    missions: state.missions.map(m =>
+  updateMissionProgress: (id, progress) => set((state) => {
+    const user = useAuthStore.getState().user;
+    const userId = user?.id || 'guest';
+    const updated = state.missions.map(m =>
       m.id === id ? { ...m, current: Math.min(m.target, progress), completed: progress >= m.target } : m
-    ),
-  })),
+    );
+    try { localStorage.setItem(`sportix_missions_${userId}`, JSON.stringify(updated)); } catch {}
+    return { missions: updated };
+  }),
 
   checkIn: () => set((state) => ({
     lastCheckin: new Date().toISOString(),
@@ -186,7 +266,7 @@ export const useGamificationStore = create<GamificationState>((set) => ({
   })),
 
   reset: () => set({
-    currentPulse: 0,
+    currentPulse: 100,
     totalXP: 0,
     currentLevel: 1,
     streakDays: 0,

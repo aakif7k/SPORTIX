@@ -12,6 +12,9 @@ import { BadgeIcon } from '../../components/gamification/BadgeIcon';
 import type { Event } from '../../types';
 import type { Athlete } from '../../types/pulse.types';
 
+import { getEventLifecycleState } from '../../services/eventLifecycleService';
+import toast from 'react-hot-toast';
+
 interface EventJoinModalProps {
   isOpen: boolean;
   onClose: () => void;
@@ -51,12 +54,18 @@ export const EventJoinModal: React.FC<EventJoinModalProps> = ({ isOpen, onClose,
   // Reset state & fetch readiness when opened
   useEffect(() => {
     if (isOpen) {
+      const lifecycle = getEventLifecycleState(event);
+      if (lifecycle.isEnded || !lifecycle.canJoin) {
+        toast.error('This event has ended and is no longer accepting registrations.');
+        onClose();
+        return;
+      }
       setStep('choice');
       setLogs([]);
       setGeneratedSquad(null);
       getEventReadiness(event.id).then(setReadiness).catch(() => null);
     }
-  }, [isOpen, event.id]);
+  }, [isOpen, event]);
 
   // Auto-scroll logs
   useEffect(() => {

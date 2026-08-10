@@ -86,7 +86,6 @@ export async function registerUser(data: RegisterData): Promise<AuthUser> {
 
   // 3. Create profile document in Appwrite Database (graceful fallback if collection is pending)
   try {
-    const now = new Date().toISOString();
     await databases.createDocument(
       DATABASE_ID,
       COLLECTIONS.PROFILES,
@@ -109,8 +108,6 @@ export async function registerUser(data: RegisterData): Promise<AuthUser> {
         level:                  1,
         coins_balance:          0,
         login_streak:           0,
-        created_at:             now,
-        updated_at:             now,
       },
     );
   } catch (err: any) {
@@ -191,11 +188,12 @@ export async function updateUserProfile(
   updates: Partial<UserProfile>,
 ): Promise<UserProfile | null> {
   try {
+    const { id, created_at, updated_at, ...cleanUpdates } = updates as any;
     const doc = await databases.updateDocument(
       DATABASE_ID,
       COLLECTIONS.PROFILES,
       uid,
-      { ...updates, updated_at: new Date().toISOString() },
+      cleanUpdates,
     );
     return docToProfile(doc);
   } catch (err) {

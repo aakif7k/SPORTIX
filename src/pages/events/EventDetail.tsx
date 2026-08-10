@@ -4,7 +4,7 @@ import { motion, AnimatePresence, useScroll, useTransform } from 'framer-motion'
 import {
   Calendar, MapPin, Users, Zap, Bell, BellOff,
   Trophy, Activity, Clock, Star, ArrowRight, ArrowLeft, UserPlus,
-  BarChart3, CheckCircle2, Swords, Timer,
+  BarChart3, CheckCircle2, Check, Timer,
   Hash, Share2, Settings
 } from 'lucide-react';
 import { useEventStore } from '../../store/eventStore';
@@ -18,6 +18,14 @@ import type { BracketRound } from '../../types';
 import { Avatar } from '../../components/ui/Avatar';
 import { BadgeIcon } from '../../components/gamification/BadgeIcon';
 import { EventJoinModal } from './EventJoinModal';
+import { getEventLifecycleState } from '../../services/eventLifecycleService';
+import { EventStatusBadge } from '../../components/events/EventStatusBadge';
+import {
+  getEventAnnouncements,
+  getEventSchedule,
+  type EventAnnouncement,
+  type EventScheduleItem,
+} from '../../services/announcementService';
 
 // ─── Particle canvas background ──────────────────────────────────────────────
 const ParticleField: React.FC = () => {
@@ -137,14 +145,6 @@ const LIVE_ACTIVITIES = [
   { id: 5, user: 'Zaid Al-Hassan','action': 'registered a team', time: '31m',      avatar: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=80',   color: '#CCFF00' },
 ];
 
-const MATCH_SCHEDULE = [
-  { id: 'm1', label: 'Opening Match', time: '10:00 AM', teams: ['Team Alpha', 'Beta Squad'], status: 'upcoming' },
-  { id: 'm2', label: 'Group Stage A', time: '12:30 PM', teams: ['Iron Pulse FC', 'Neon Falcons'], status: 'upcoming' },
-  { id: 'm3', label: 'Group Stage B', time: '02:00 PM', teams: ['Red Wolves', 'Cyber Strikers'], status: 'upcoming' },
-  { id: 'm4', label: 'Semifinals',    time: '04:30 PM', teams: ['TBD', 'TBD'], status: 'tbd' },
-  { id: 'm5', label: 'Grand Final',   time: '06:00 PM', teams: ['TBD', 'TBD'], status: 'tbd' },
-];
-
 const stagger = { visible: { transition: { staggerChildren: 0.06 } } };
 const fadeUp  = { hidden: { opacity: 0, y: 18 }, visible: { opacity: 1, y: 0, transition: { duration: 0.4, ease: 'easeOut' as any } } };
 
@@ -169,6 +169,16 @@ export const EventDetail: React.FC = () => {
   const [shared, setShared]             = useState(false);
   const [loadingEvent, setLoadingEvent] = useState(false);
   const [readiness, setReadiness]       = useState<EventReadinessData | null>(null);
+  const [announcements, setAnnouncements] = useState<EventAnnouncement[]>([]);
+  const [scheduleItems, setScheduleItems] = useState<EventScheduleItem[]>([]);
+
+  // Real-time ticker state to auto-update event status live
+  const [nowDate, setNowDate] = useState<Date>(new Date());
+
+  useEffect(() => {
+    const timer = setInterval(() => setNowDate(new Date()), 30000);
+    return () => clearInterval(timer);
+  }, []);
 
   // Appwrite event_participants (Source of Truth)
   const [dbParticipants, setDbParticipants] = useState<DbEventParticipant[]>([]);
@@ -183,6 +193,13 @@ export const EventDetail: React.FC = () => {
     setReadiness(data);
   };
 
+  const fetchAnnouncementsAndSchedule = async (eventId: string) => {
+    const ann = await getEventAnnouncements(eventId);
+    setAnnouncements(ann);
+    const sch = await getEventSchedule(eventId);
+    setScheduleItems(sch);
+  };
+
   // ── Realtime & initial load ──────────────────────────────────────────────
   useEffect(() => {
     if (!id) return;
@@ -190,6 +207,7 @@ export const EventDetail: React.FC = () => {
     loadEvent(id).finally(() => setLoadingEvent(false));
     fetchParticipants(id);
     fetchReadiness(id);
+    fetchAnnouncementsAndSchedule(id);
 
     // Appwrite Realtime subscription for event_participants
     const channel = `databases.${DATABASE_ID}.collections.${COLLECTIONS.EVENT_PARTICIPANTS}.documents`;
@@ -241,6 +259,7 @@ export const EventDetail: React.FC = () => {
     : null;
 
   const sportData = SPORT_CATEGORIES.find(s => s.id === effectiveEvent?.sport);
+  const lifecycle = effectiveEvent ? getEventLifecycleState(effectiveEvent, nowDate) : null;
 
   useEffect(() => {
     if (effectiveEvent) {
@@ -256,6 +275,14 @@ export const EventDetail: React.FC = () => {
   const handleToggleJoin = async () => {
     if (!currentUserId) {
       toast.error('Please sign in to join events.');
+      return;
+    }
+    if (lifecycle?.isEnded) {
+      toast.error('This event has ended and is no longer accepting registrations.');
+      return;
+    }
+    if (!lifecycle?.canJoin && !isJoined) {
+      toast.error(lifecycle?.badgeSubtext || 'Registration is currently closed for this event.');
       return;
     }
     if (isJoined) {
@@ -274,6 +301,14 @@ export const EventDetail: React.FC = () => {
     }
   };
 
+  const handleAutoSquadClick = () => {
+    if (lifecycle?.isEnded) {
+      toast.error('AutoSquad is unavailable because this event has ended.');
+      return;
+    }
+    navigate('/pulse/matchmaking');
+  };
+
   if (loadingEvent && !rawEvent) {
     return (
       <div className="flex items-center justify-center min-h-[60vh]">
@@ -285,7 +320,7 @@ export const EventDetail: React.FC = () => {
     );
   }
 
-  if (!effectiveEvent) return null;
+  if (!effectiveEvent || !lifecycle) return null;
   const event = effectiveEvent;
 
   const TABS = [
@@ -297,6 +332,52 @@ export const EventDetail: React.FC = () => {
 
   return (
     <div className="max-w-2xl mx-auto pb-28" style={{ color: 'var(--text-primary)' }}>
+
+      {/* ══════════════════════════════════════════════════════
+          COMPLETED / CANCELLED TOP BANNER (if event ended)
+      ══════════════════════════════════════════════════════ */}
+      {lifecycle.isEnded && (
+        <motion.div
+          initial={{ opacity: 0, y: -10 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="rounded-2xl p-4 mb-5 border backdrop-blur-md flex items-center justify-between gap-4 shadow-xl"
+          style={{
+            background: lifecycle.isCancelled
+              ? 'rgba(239,68,68,0.12)'
+              : 'rgba(30,41,59,0.85)',
+            borderColor: lifecycle.isCancelled
+              ? 'rgba(239,68,68,0.4)'
+              : 'rgba(71,85,105,0.6)',
+          }}
+        >
+          <div className="flex items-center gap-3">
+            <div
+              className="w-10 h-10 rounded-xl flex items-center justify-center font-bold text-base shadow-inner"
+              style={{
+                background: lifecycle.isCancelled ? '#DC2626' : '#475569',
+                color: '#FFFFFF',
+              }}
+            >
+              {lifecycle.isCancelled ? '✕' : '✓'}
+            </div>
+            <div>
+              <div className="font-mono text-xs font-bold text-white uppercase tracking-wider">
+                {lifecycle.isCancelled ? 'EVENT CANCELLED' : 'EVENT COMPLETED'}
+              </div>
+              <div className="font-mono text-[11px] text-slate-300">
+                {isOrganizer
+                  ? `Your event has finished. Final participation: ${filledSlots}/${maxSlots}`
+                  : 'Event has finished. Thanks to all participants!'}
+              </div>
+            </div>
+          </div>
+          {isJoined && (
+            <span className="px-3 py-1 rounded-full bg-emerald-500/20 border border-emerald-500/40 font-mono text-[10px] font-bold text-emerald-400 uppercase tracking-wider whitespace-nowrap">
+              ✓ YOU PARTICIPATED
+            </span>
+          )}
+        </motion.div>
+      )}
 
       {/* ══════════════════════════════════════════════════════
           HERO SECTION — cinematic parallax banner
@@ -312,7 +393,8 @@ export const EventDetail: React.FC = () => {
                     ? 'center 20%' 
                     : event.bannerAlignment === 'bottom' 
                     ? 'center 80%' 
-                    : 'center 50%' 
+                    : 'center 50%',
+                  filter: lifecycle.isEnded ? 'brightness(0.7) contrast(1.1)' : 'none',
                 }} />
             : <div className="w-full h-full min-h-[300px] rounded-[28px]"
                 style={{ background: 'linear-gradient(135deg, var(--volt-dim) 0%, var(--bg-elevated) 60%, var(--bg-base) 100%)' }} />
@@ -350,21 +432,19 @@ export const EventDetail: React.FC = () => {
                 <span className="text-[14px]">{sportData?.emoji}</span>
                 {event.sport.toUpperCase()}
               </motion.div>
-              {event.status === 'live' && (
-                <motion.div initial={{ opacity: 0, scale: 0.8 }} animate={{ opacity: 1, scale: 1 }}
-                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-full font-mono text-[10px] font-bold backdrop-blur-md"
-                  style={{ background: 'rgba(255,59,0,0.35)', border: '1px solid rgba(255,59,0,0.5)', color: '#fff' }}>
-                  <span className="w-1.5 h-1.5 rounded-full bg-red-400 animate-pulse" />
-                  LIVE NOW
+
+              {/* Reusable Event Status Badge */}
+              <EventStatusBadge event={event} size="md" />
+
+              {!lifecycle.isEnded && (
+                <motion.div initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: 0.1 }}
+                  className="px-3 py-1.5 rounded-full font-mono text-[10px] font-bold backdrop-blur-md"
+                  style={{ background: 'rgba(204,255,0,0.2)', border: '1px solid rgba(204,255,0,0.4)', color: '#CCFF00' }}>
+                  AI POWERED
                 </motion.div>
               )}
-              <motion.div initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: 0.1 }}
-                className="px-3 py-1.5 rounded-full font-mono text-[10px] font-bold backdrop-blur-md"
-                style={{ background: 'rgba(204,255,0,0.2)', border: '1px solid rgba(204,255,0,0.4)', color: '#CCFF00' }}>
-                AI POWERED
-              </motion.div>
 
-              {readiness && (
+              {!lifecycle.isEnded && readiness && (
                 <motion.div initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: 0.12 }}
                   className="px-3 py-1.5 rounded-full font-mono text-[10px] font-bold backdrop-blur-md flex items-center gap-1.5"
                   style={{
@@ -413,7 +493,7 @@ export const EventDetail: React.FC = () => {
               className="flex flex-wrap items-center gap-4">
               <span className="flex items-center gap-1.5 font-mono text-[11px] text-white/80 backdrop-blur-sm">
                 <Calendar size={12} className="opacity-70" />
-                {new Date(event.date).toLocaleDateString('en', { weekday: 'long', month: 'long', day: 'numeric' })}
+                {lifecycle.startsAtDate.toLocaleDateString('en', { weekday: 'long', month: 'long', day: 'numeric' })}
               </span>
               <span className="flex items-center gap-1.5 font-mono text-[11px] text-white/80">
                 <MapPin size={12} className="opacity-70" />
@@ -432,11 +512,14 @@ export const EventDetail: React.FC = () => {
                     style={{ borderColor: 'var(--bg-surface)', zIndex: 5 - i }} />
                 ))}
               <span className="font-mono text-[10px] text-white/70">
-                <strong className="text-white">{filledSlots}</strong>/{maxSlots} registered
+                <strong className="text-white">{filledSlots}</strong>/{maxSlots} {lifecycle.isEnded ? 'participated' : 'registered'}
               </span>
               <span className="ml-auto font-mono text-[10px] font-bold px-2 py-1 rounded-full"
-                style={{ background: pctFull > 80 ? 'rgba(255,59,0,0.4)' : 'rgba(204,255,0,0.25)', color: pctFull > 80 ? '#FF6B35' : '#CCFF00' }}>
-                {pctFull}% FULL
+                style={{
+                  background: lifecycle.isEnded ? 'rgba(148,163,184,0.25)' : pctFull > 80 ? 'rgba(255,59,0,0.4)' : 'rgba(204,255,0,0.25)',
+                  color: lifecycle.isEnded ? '#CBD5E1' : pctFull > 80 ? '#FF6B35' : '#CCFF00',
+                }}>
+                {lifecycle.isEnded ? 'FINAL' : `${pctFull}% FULL`}
               </span>
             </motion.div>
           </div>
@@ -502,13 +585,13 @@ export const EventDetail: React.FC = () => {
 
           <div className="grid grid-cols-3 gap-3">
             {[
-              { label: 'Teams Joined', val: teamsJoined },
-              { label: 'Solo Players', val: soloPlayers },
-              { label: 'Open Slots',  val: openSlots },
+              { label: 'Teams Joined', val: teamsJoined, raw: false },
+              { label: 'Solo Players', val: soloPlayers, raw: false },
+              { label: lifecycle.isEnded ? 'Registration' : 'Open Slots', val: lifecycle.isEnded ? 'Closed' : openSlots, raw: lifecycle.isEnded },
             ].map((s, i) => (
               <div key={i} className="text-center">
                 <div className="font-display text-[20px] leading-none" style={{ color: 'var(--text-primary)' }}>
-                  <CountUp to={s.val} />
+                  {s.raw ? s.val : <CountUp to={s.val as number} />}
                 </div>
                 <div className="font-mono text-[8px] uppercase tracking-wider mt-0.5" style={{ color: 'var(--text-muted)' }}>{s.label}</div>
               </div>
@@ -557,43 +640,49 @@ export const EventDetail: React.FC = () => {
             </motion.button>
           ) : (
             <motion.button
-              whileHover={{ scale: 1.03, y: -4 }}
-              whileTap={{ scale: 0.97 }}
+              whileHover={{ scale: lifecycle.isEnded && !isJoined ? 1 : 1.03, y: lifecycle.isEnded && !isJoined ? 0 : -4 }}
+              whileTap={{ scale: lifecycle.isEnded && !isJoined ? 1 : 0.97 }}
               onClick={handleToggleJoin}
+              disabled={lifecycle.isEnded && !isJoined}
               className="w-full rounded-[22px] p-5 text-left relative overflow-hidden group transition-all"
               style={{
                 background: isJoined
                   ? 'linear-gradient(135deg, rgba(204,255,0,0.08) 0%, rgba(136,255,0,0.04) 100%)'
+                  : lifecycle.isEnded
+                  ? 'rgba(30,41,59,0.7)'
                   : 'linear-gradient(135deg, #CCFF00 0%, #88FF00 100%)',
-                border: isJoined ? '1px solid rgba(204,255,0,0.3)' : 'none',
-                boxShadow: isJoined ? 'none' : '0 8px 32px rgba(204,255,0,0.35)',
+                border: isJoined
+                  ? '1px solid rgba(204,255,0,0.3)'
+                  : lifecycle.isEnded
+                  ? '1px solid rgba(71,85,105,0.4)'
+                  : 'none',
+                boxShadow: isJoined || lifecycle.isEnded ? 'none' : '0 8px 32px rgba(204,255,0,0.35)',
+                cursor: lifecycle.isEnded && !isJoined ? 'not-allowed' : 'pointer',
               }}
             >
-              {!isJoined && (
+              {!isJoined && !lifecycle.isEnded && (
                 <div className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity"
                   style={{ background: 'linear-gradient(135deg, rgba(255,255,255,0.2) 0%, transparent 60%)' }} />
               )}
-              <div className="absolute top-3 left-3 w-4 h-4 border-t-2 border-l-2 rounded-tl-sm opacity-40"
-                style={{ borderColor: isJoined ? 'var(--accent)' : 'rgba(0,0,0,0.3)' }} />
-              <div className="absolute bottom-3 right-3 w-4 h-4 border-b-2 border-r-2 rounded-br-sm opacity-40"
-                style={{ borderColor: isJoined ? 'var(--accent)' : 'rgba(0,0,0,0.3)' }} />
 
-              <div className={`w-10 h-10 rounded-[14px] mb-4 flex items-center justify-center ${isJoined ? '' : 'bg-black/15'}`}
-                style={isJoined ? { background: 'var(--accent-surface)', color: 'var(--accent-text)' } : {}}>
+              <div className={`w-10 h-10 rounded-[14px] mb-4 flex items-center justify-center ${isJoined || lifecycle.isEnded ? '' : 'bg-black/15'}`}
+                style={isJoined ? { background: 'var(--accent-surface)', color: 'var(--accent-text)' } : lifecycle.isEnded ? { background: 'rgba(71,85,105,0.3)', color: '#94A3B8' } : {}}>
                 {isJoined
                   ? <CheckCircle2 size={20} style={{ color: 'var(--accent-text)' }} />
+                  : lifecycle.isEnded
+                  ? <Check size={20} className="text-slate-400" />
                   : <Zap size={20} className="text-black" />
                 }
               </div>
-              <div className={`font-display text-[17px] tracking-wide leading-tight ${isJoined ? '' : 'text-black'}`}
+              <div className={`font-display text-[17px] tracking-wide leading-tight ${isJoined ? '' : lifecycle.isEnded ? 'text-slate-300' : 'text-black'}`}
                 style={isJoined ? { color: 'var(--accent-text)' } : {}}>
-                {isJoined ? 'JOINED ✓' : 'JOIN EVENT'}
+                {isJoined ? 'YOU PARTICIPATED ✓' : lifecycle.isEnded ? 'EVENT ENDED' : 'JOIN EVENT'}
               </div>
-              <div className={`font-mono text-[9px] mt-1 ${isJoined ? '' : 'text-black/65'}`}
+              <div className={`font-mono text-[9px] mt-1 ${isJoined ? '' : lifecycle.isEnded ? 'text-slate-400' : 'text-black/65'}`}
                 style={isJoined ? { color: 'var(--text-muted)' } : {}}>
-                {isJoined ? 'Registration confirmed (Click to leave)' : 'AI AutoSquad ready'}
+                {isJoined ? 'Registration confirmed (Click to leave)' : lifecycle.isEnded ? 'Registration is closed' : 'AI AutoSquad ready'}
               </div>
-              {!isJoined && (
+              {!isJoined && !lifecycle.isEnded && (
                 <div className="absolute bottom-4 right-4 flex items-center gap-1">
                   <ArrowRight size={14} className="text-black/60 group-hover:translate-x-1 transition-transform" />
                 </div>
@@ -602,7 +691,7 @@ export const EventDetail: React.FC = () => {
           )}
         </motion.div>
 
-        {/* ── JOIN WITH CREW ── */}
+        {/* ── JOIN WITH CREW / VIEW CREW ── */}
         <motion.div variants={fadeUp}>
           <motion.button
             whileHover={{ scale: 1.03, y: -4 }}
@@ -616,10 +705,10 @@ export const EventDetail: React.FC = () => {
               <Users size={20} />
             </div>
             <div className="font-display text-[17px] tracking-wide leading-tight" style={{ color: 'var(--text-primary)' }}>
-              JOIN WITH CREW
+              {lifecycle.isEnded ? 'VIEW CREW' : 'JOIN WITH CREW'}
             </div>
             <div className="font-mono text-[9px] mt-1" style={{ color: 'var(--text-muted)' }}>
-              Manage your crew
+              {lifecycle.isEnded ? 'Event crew roster' : 'Manage your crew'}
             </div>
             <div className="absolute bottom-4 right-4 flex items-center gap-1">
               <ArrowRight size={14} className="group-hover:translate-x-1 transition-transform" style={{ color: 'var(--text-muted)' }} />
@@ -630,25 +719,27 @@ export const EventDetail: React.FC = () => {
         {/* ── AI SQUAD LAB ── */}
         <motion.div variants={fadeUp}>
           <motion.button
-            whileHover={{ scale: 1.03, y: -4 }}
-            whileTap={{ scale: 0.97 }}
-            onClick={() => navigate(`/pulse/matchmaking`)}
+            whileHover={{ scale: lifecycle.isEnded ? 1 : 1.03, y: lifecycle.isEnded ? 0 : -4 }}
+            whileTap={{ scale: lifecycle.isEnded ? 1 : 0.97 }}
+            onClick={handleAutoSquadClick}
             className="w-full rounded-[22px] p-5 text-left relative overflow-hidden group transition-all premium-card"
-            style={{ minHeight: 150 }}
+            style={{ minHeight: 150, opacity: lifecycle.isEnded ? 0.6 : 1, cursor: lifecycle.isEnded ? 'not-allowed' : 'pointer' }}
           >
             <div className="w-10 h-10 rounded-[14px] mb-4 flex items-center justify-center"
-              style={{ background: 'rgba(191,95,255,0.15)', color: '#BF5FFF' }}>
+              style={{ background: lifecycle.isEnded ? 'rgba(148,163,184,0.15)' : 'rgba(191,95,255,0.15)', color: lifecycle.isEnded ? '#94A3B8' : '#BF5FFF' }}>
               <Zap size={20} />
             </div>
             <div className="font-display text-[17px] tracking-wide leading-tight" style={{ color: 'var(--text-primary)' }}>
-              AUTOSQUAD LAB
+              {lifecycle.isEnded ? 'AUTOSQUAD ENDED' : 'AUTOSQUAD LAB'}
             </div>
             <div className="font-mono text-[9px] mt-1" style={{ color: 'var(--text-muted)' }}>
-              Matchmaking engine
+              {lifecycle.isEnded ? 'Matchmaking disabled for completed event' : 'Matchmaking engine'}
             </div>
-            <div className="absolute bottom-4 right-4 flex items-center gap-1">
-              <ArrowRight size={14} className="group-hover:translate-x-1 transition-transform" style={{ color: 'var(--text-muted)' }} />
-            </div>
+            {!lifecycle.isEnded && (
+              <div className="absolute bottom-4 right-4 flex items-center gap-1">
+                <ArrowRight size={14} className="group-hover:translate-x-1 transition-transform" style={{ color: 'var(--text-muted)' }} />
+              </div>
+            )}
           </motion.button>
         </motion.div>
       </motion.div>
@@ -679,6 +770,59 @@ export const EventDetail: React.FC = () => {
           {/* ─── OVERVIEW ───────────────────────────────────────── */}
           {activeTab === 'overview' && (
             <motion.div key="overview" variants={stagger} initial="hidden" animate="visible" className="space-y-6">
+              
+              {/* ANNOUNCEMENTS SECTION (ONLY rendered if announcements exist or if organizer) */}
+              {announcements.length > 0 && (
+                <motion.div variants={fadeUp} className="premium-card rounded-[22px] p-6 space-y-4 relative overflow-hidden border"
+                  style={{ borderColor: 'var(--accent-border)' }}>
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <span className="font-display text-[16px] tracking-wider uppercase flex items-center gap-2" style={{ color: 'var(--text-primary)' }}>
+                        📢 ANNOUNCEMENTS ({announcements.length})
+                      </span>
+                    </div>
+                    {isOrganizer && (
+                      <button
+                        onClick={() => navigate(`/app/events/${event.id}/manage`)}
+                        className="font-mono text-[10px] font-bold px-2.5 py-1 rounded-full uppercase tracking-wider transition-all"
+                        style={{ background: 'var(--accent-surface)', color: 'var(--accent-text)', border: '1px solid var(--accent-border)' }}
+                      >
+                        + Manage
+                      </button>
+                    )}
+                  </div>
+
+                  <div className="space-y-3">
+                    {announcements.map((ann) => (
+                      <div key={ann.id} className="p-4 rounded-xl space-y-2 relative"
+                        style={{ background: 'var(--bg-elevated)', border: '1px solid var(--border)' }}>
+                        <div className="flex items-center justify-between gap-2">
+                          <span className="px-2 py-0.5 rounded-md font-mono text-[9px] font-bold uppercase tracking-wider"
+                            style={{
+                              background: ann.category === 'IMPORTANT' ? 'rgba(239,68,68,0.2)' : 'rgba(204,255,0,0.2)',
+                              color: ann.category === 'IMPORTANT' ? '#EF4444' : 'var(--accent-text)',
+                            }}>
+                            {ann.category}
+                          </span>
+                          <span className="font-mono text-[9px]" style={{ color: 'var(--text-muted)' }}>
+                            {new Date(ann.createdAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                          </span>
+                        </div>
+                        <h4 className="font-sans font-bold text-sm" style={{ color: 'var(--text-primary)' }}>
+                          {ann.title}
+                        </h4>
+                        <p className="font-mono text-[11px] leading-relaxed" style={{ color: 'var(--text-secondary)' }}>
+                          {ann.message}
+                        </p>
+                        <div className="font-mono text-[9px] pt-1" style={{ color: 'var(--text-muted)' }}>
+                          Posted by <strong style={{ color: 'var(--text-primary)' }}>{ann.authorName}</strong>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </motion.div>
+              )}
+
               {/* Description card */}
               <motion.div variants={fadeUp} className="premium-card rounded-[22px] p-6 space-y-3">
                 <h3 className="font-display text-[16px] tracking-wider uppercase" style={{ color: 'var(--text-primary)' }}>
@@ -730,53 +874,59 @@ export const EventDetail: React.FC = () => {
           {/* ─── SCHEDULE ─────────────────────────────────────── */}
           {activeTab === 'schedule' && (
             <motion.div key="schedule" variants={stagger} initial="hidden" animate="visible" className="space-y-3">
-              <motion.div variants={fadeUp} className="flex items-center gap-2 mb-4">
-                <Timer size={14} style={{ color: 'var(--accent-text)' }} />
-                <h2 className="font-display text-[18px] tracking-wider uppercase" style={{ color: 'var(--text-primary)' }}>
-                  Match Schedule
-                </h2>
+              <motion.div variants={fadeUp} className="flex items-center justify-between mb-4">
+                <div className="flex items-center gap-2">
+                  <Timer size={14} style={{ color: 'var(--accent-text)' }} />
+                  <h2 className="font-display text-[18px] tracking-wider uppercase" style={{ color: 'var(--text-primary)' }}>
+                    Event Schedule
+                  </h2>
+                </div>
+                {isOrganizer && (
+                  <button
+                    onClick={() => navigate(`/app/events/${event.id}/manage`)}
+                    className="font-mono text-[10px] font-bold px-3 py-1 rounded-full uppercase tracking-wider"
+                    style={{ background: 'var(--accent-surface)', color: 'var(--accent-text)', border: '1px solid var(--accent-border)' }}
+                  >
+                    Manage Schedule
+                  </button>
+                )}
               </motion.div>
-              {MATCH_SCHEDULE.map((match) => (
-                <motion.div key={match.id} variants={fadeUp}
-                  whileHover={{ x: 4 }}
-                  className="flex items-center gap-4 rounded-[18px] p-4 relative overflow-hidden transition-all cursor-default"
-                  style={{
-                    background: match.status === 'tbd' ? 'var(--bg-surface)' : 'var(--bg-elevated)',
-                    border: `1px solid ${match.status === 'tbd' ? 'var(--border)' : 'var(--accent-border)'}`,
-                  }}>
-                  {match.status !== 'tbd' && (
-                    <div className="absolute left-0 top-0 bottom-0 w-1 rounded-l-[18px]"
-                      style={{ background: 'linear-gradient(180deg, var(--accent), #88FF00)' }} />
-                  )}
-                  <div className="flex flex-col items-center justify-center w-16 flex-shrink-0 pl-2">
-                    <span className="font-mono text-[9px] uppercase" style={{ color: 'var(--text-muted)' }}>
-                      {match.time.split(' ')[1]}
-                    </span>
-                    <span className="font-display text-[18px] leading-none" style={{ color: 'var(--accent-text)' }}>
-                      {match.time.split(' ')[0]}
-                    </span>
-                  </div>
-                  <div className="w-px self-stretch" style={{ background: 'var(--border)' }} />
-                  <div className="flex-1 min-w-0">
-                    <span className="font-mono text-[9px] uppercase tracking-wider block mb-0.5" style={{ color: 'var(--text-muted)' }}>
-                      {match.label}
-                    </span>
-                    <div className="font-display text-[14px] flex items-center gap-2" style={{ color: 'var(--text-primary)' }}>
-                      {match.teams[0]}
-                      <Swords size={11} style={{ color: 'var(--text-muted)' }} />
-                      {match.teams[1]}
-                    </div>
-                  </div>
-                  <span className="px-2.5 py-1 rounded-full font-mono text-[8px] font-bold flex-shrink-0"
-                    style={{
-                      background: match.status === 'tbd' ? 'var(--bg-elevated)' : 'var(--accent-surface)',
-                      border: `1px solid ${match.status === 'tbd' ? 'var(--border)' : 'var(--accent-border)'}`,
-                      color: match.status === 'tbd' ? 'var(--text-muted)' : 'var(--accent-text)',
-                    }}>
-                    {match.status === 'tbd' ? 'TBD' : 'SET'}
-                  </span>
+
+              {scheduleItems.length === 0 ? (
+                <motion.div variants={fadeUp} className="premium-card rounded-[22px] p-8 text-center space-y-2">
+                  <Timer size={28} className="mx-auto opacity-40" style={{ color: 'var(--accent-text)' }} />
+                  <p className="font-mono text-xs uppercase" style={{ color: 'var(--text-muted)' }}>
+                    No schedule posted yet.
+                  </p>
                 </motion.div>
-              ))}
+              ) : (
+                scheduleItems.map((item) => (
+                  <motion.div key={item.id} variants={fadeUp}
+                    whileHover={{ x: 4 }}
+                    className="flex items-center gap-4 rounded-[18px] p-4 relative overflow-hidden transition-all cursor-default"
+                    style={{
+                      background: 'var(--bg-elevated)',
+                      border: '1px solid var(--border)',
+                    }}>
+                    <div className="flex flex-col items-center justify-center w-20 flex-shrink-0 pl-2">
+                      <span className="font-display text-[16px] font-bold leading-none" style={{ color: 'var(--accent-text)' }}>
+                        {item.time}
+                      </span>
+                    </div>
+                    <div className="w-px self-stretch" style={{ background: 'var(--border)' }} />
+                    <div className="flex-1 min-w-0">
+                      <span className="font-sans font-bold text-sm block" style={{ color: 'var(--text-primary)' }}>
+                        {item.title}
+                      </span>
+                      {item.description && (
+                        <span className="font-mono text-[10px] block mt-0.5" style={{ color: 'var(--text-muted)' }}>
+                          {item.description}
+                        </span>
+                      )}
+                    </div>
+                  </motion.div>
+                ))
+              )}
             </motion.div>
           )}
 
@@ -794,24 +944,40 @@ export const EventDetail: React.FC = () => {
                 </span>
               </motion.div>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                {dbParticipants.map((p, i) => (
-                  <motion.div key={p.$id || i} variants={fadeUp}
-                    whileHover={{ y: -3, scale: 1.01 }}
-                    className="flex items-center gap-3 rounded-[18px] p-3.5 cursor-default premium-card relative overflow-hidden">
-                    <div className="absolute top-2.5 right-3 font-mono text-[9px] font-bold"
-                      style={{ color: 'var(--text-muted)' }}>#{i + 1}</div>
-                    <div className="relative flex-shrink-0">
-                      <Avatar src={`https://i.pravatar.cc/150?u=${p.user_id}`} name="Athlete" sport={event.sport} size="sm" />
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <span className="font-mono text-[12px] font-bold block truncate" style={{ color: 'var(--text-primary)' }}>
-                        {p.user_id === currentUserId ? 'You (Athlete)' : `Athlete (${p.entry_type})`}
-                      </span>
-                      <span className="font-mono text-[9px]" style={{ color: 'var(--text-muted)' }}>{event.sport} · {p.status}</span>
-                    </div>
-                    <BadgeIcon level={25} size={18} animate={false} glow={false} />
-                  </motion.div>
-                ))}
+                {dbParticipants.map((p, i) => {
+                  const isHost = p.user_id === currentUserId;
+                  const fullName = p.profile?.full_name || (isHost ? 'You' : `Athlete`);
+                  const rawUsername = p.profile?.username || `user_${p.user_id.slice(0, 6)}`;
+                  const username = rawUsername.startsWith('@') ? rawUsername : `@${rawUsername}`;
+                  const avatarUrl = p.profile?.avatar_url || `https://i.pravatar.cc/150?u=${p.user_id}`;
+                  const displayTitle = isHost ? `${fullName} (Host)` : fullName;
+
+                  return (
+                    <motion.div key={p.$id || i} variants={fadeUp}
+                      whileHover={{ y: -3, scale: 1.01 }}
+                      className="flex items-center gap-3 rounded-[18px] p-3.5 cursor-default premium-card relative overflow-hidden">
+                      <div className="absolute top-2.5 right-3 font-mono text-[9px] font-bold"
+                        style={{ color: 'var(--text-muted)' }}>#{i + 1}</div>
+                      <div className="relative flex-shrink-0">
+                        <Avatar src={avatarUrl} name={fullName} sport={event.sport} size="sm" />
+                      </div>
+                      <div className="flex-1 min-w-0 pr-6">
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          <span className="font-mono text-[12px] font-bold truncate block" style={{ color: 'var(--text-primary)' }}>
+                            {displayTitle}
+                          </span>
+                          <span className="font-mono text-[10px] font-semibold text-accent px-1.5 py-0.5 rounded-md bg-accent/10 border border-accent/20">
+                            {username}
+                          </span>
+                        </div>
+                        <span className="font-mono text-[9px] block mt-0.5" style={{ color: 'var(--text-muted)' }}>
+                          {event.sport} · {p.entry_type} · {p.status}
+                        </span>
+                      </div>
+                      <BadgeIcon level={25} size={18} animate={false} glow={false} />
+                    </motion.div>
+                  );
+                })}
                 {Array.from({ length: Math.min(4, openSlots) }).map((_, i) => (
                   <motion.div key={`slot${i}`} variants={fadeUp}
                     className="flex items-center justify-center rounded-[18px] p-3.5 font-mono text-[10px]"

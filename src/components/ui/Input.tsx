@@ -9,13 +9,16 @@ interface InputProps extends React.InputHTMLAttributes<HTMLInputElement> {
 }
 
 export const Input = React.forwardRef<HTMLInputElement, InputProps>(
-  ({ label, error, icon, rightIcon, className = '', id, ...props }, ref) => {
+  ({ label, error, icon, rightIcon, className = '', id, required, ...props }, ref) => {
     const inputId = id || label?.toLowerCase().replace(/\s/g, '-');
+    const isRequired = required || label?.includes('*');
+    const cleanLabel = label?.replace(/\*/g, '').trim();
+
     return (
       <div className="w-full">
         {label && (
           <label htmlFor={inputId} className="block text-xs font-label font-medium text-text-secondary uppercase tracking-widest mb-2">
-            {label}
+            {cleanLabel} {isRequired && <span className="text-red-500 font-bold ml-0.5">*</span>}
           </label>
         )}
         <div className="relative">
@@ -23,6 +26,7 @@ export const Input = React.forwardRef<HTMLInputElement, InputProps>(
           <input
             ref={ref}
             id={inputId}
+            required={required}
             className={[
               'w-full bg-elevated border rounded-lg font-mono text-sm text-text-primary placeholder-text-muted',
               'transition-all duration-200 outline-none',
@@ -30,14 +34,14 @@ export const Input = React.forwardRef<HTMLInputElement, InputProps>(
               icon ? 'pl-10' : 'pl-4',
               rightIcon ? 'pr-10' : 'pr-4',
               'py-3',
-              error ? 'border-hot/50 focus:border-hot focus:shadow-[0_0_0_3px_rgba(255,59,0,0.08)]' : '',
+              error ? 'border-red-500/80 focus:border-red-500 focus:shadow-[0_0_0_3px_rgba(239,68,68,0.15)]' : '',
               className,
             ].join(' ')}
             {...props}
           />
           {rightIcon && <span className="absolute right-3 top-1/2 -translate-y-1/2 text-text-secondary">{rightIcon}</span>}
         </div>
-        {error && <p className="mt-1.5 text-xs text-hot font-label">{error}</p>}
+        {error && <p className="mt-1.5 text-xs text-red-500 font-label">{error}</p>}
       </div>
     );
   }
@@ -50,17 +54,30 @@ interface TextareaProps extends React.TextareaHTMLAttributes<HTMLTextAreaElement
   error?: string;
 }
 export const Textarea = React.forwardRef<HTMLTextAreaElement, TextareaProps>(
-  ({ label, error, className = '', id, ...props }, ref) => {
+  ({ label, error, className = '', id, required, ...props }, ref) => {
     const inputId = id || label?.toLowerCase().replace(/\s/g, '-');
+    const isRequired = required || label?.includes('*');
+    const cleanLabel = label?.replace(/\*/g, '').trim();
+
     return (
       <div className="w-full">
-        {label && <label htmlFor={inputId} className="block text-xs font-label font-medium text-text-secondary uppercase tracking-widest mb-2">{label}</label>}
+        {label && (
+          <label htmlFor={inputId} className="block text-xs font-label font-medium text-text-secondary uppercase tracking-widest mb-2">
+            {cleanLabel} {isRequired && <span className="text-red-500 font-bold ml-0.5">*</span>}
+          </label>
+        )}
         <textarea
-          ref={ref} id={inputId}
-          className={['w-full bg-elevated border border-border-muted rounded-lg font-mono text-sm text-text-primary placeholder-text-muted px-4 py-3 resize-none transition-all duration-200 outline-none focus:border-volt/50 focus:shadow-[0_0_0_3px_rgba(204,255,0,0.08)]', className].join(' ')}
+          ref={ref}
+          id={inputId}
+          required={required}
+          className={[
+            'w-full bg-elevated border border-border-muted rounded-lg font-mono text-sm text-text-primary placeholder-text-muted px-4 py-3 resize-none transition-all duration-200 outline-none focus:border-volt/50 focus:shadow-[0_0_0_3px_rgba(204,255,0,0.08)]',
+            error ? 'border-red-500/80 focus:border-red-500' : '',
+            className
+          ].join(' ')}
           {...props}
         />
-        {error && <p className="mt-1.5 text-xs text-hot font-label">{error}</p>}
+        {error && <p className="mt-1.5 text-xs text-red-500 font-label">{error}</p>}
       </div>
     );
   }
@@ -73,19 +90,31 @@ interface SelectProps extends React.SelectHTMLAttributes<HTMLSelectElement> {
   error?: string;
   options: { value: string; label: string }[];
 }
-export const Select: React.FC<SelectProps> = ({ label, error, options, className = '', id, ...props }) => {
+export const Select: React.FC<SelectProps> = ({ label, error, options, className = '', id, required, ...props }) => {
   const inputId = id || label?.toLowerCase().replace(/\s/g, '-');
+  const isRequired = required || label?.includes('*');
+  const cleanLabel = label?.replace(/\*/g, '').trim();
+
   return (
     <div className="w-full">
-      {label && <label htmlFor={inputId} className="block text-xs font-label font-medium text-text-secondary uppercase tracking-widest mb-2">{label}</label>}
+      {label && (
+        <label htmlFor={inputId} className="block text-xs font-label font-medium text-text-secondary uppercase tracking-widest mb-2">
+          {cleanLabel} {isRequired && <span className="text-red-500 font-bold ml-0.5">*</span>}
+        </label>
+      )}
       <select
         id={inputId}
-        className={['w-full bg-elevated border border-border-muted rounded-lg font-mono text-sm text-text-primary px-4 py-3 outline-none transition-all duration-200 focus:border-volt/50', className].join(' ')}
+        required={required}
+        className={[
+          'w-full bg-elevated border border-border-muted rounded-lg font-mono text-sm text-text-primary px-4 py-3 outline-none transition-all duration-200 focus:border-volt/50',
+          error ? 'border-red-500/80 focus:border-red-500' : '',
+          className
+        ].join(' ')}
         {...props}
       >
         {options.map(o => <option key={o.value} value={o.value} className="bg-elevated">{o.label}</option>)}
       </select>
-      {error && <p className="mt-1.5 text-xs text-hot font-label">{error}</p>}
+      {error && <p className="mt-1.5 text-xs text-red-500 font-label">{error}</p>}
     </div>
   );
 };

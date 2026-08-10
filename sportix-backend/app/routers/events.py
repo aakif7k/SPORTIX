@@ -74,10 +74,14 @@ async def join_event(
     entry_type: str = "solo",
     user=Depends(get_current_user),
 ):
-    data = await event_service.join(event_id, user["id"], squad_id, entry_type)
-    # Check & trigger 10-athlete AutoSquad readiness notification
-    await event_readiness_service.check_and_notify_event_readiness(event_id)
-    return {"success": True, "data": data}
+    try:
+        data = await event_service.join(event_id, user["id"], squad_id, entry_type)
+        # Check & trigger 10-athlete AutoSquad readiness notification
+        await event_readiness_service.check_and_notify_event_readiness(event_id)
+        return {"success": True, "data": data}
+    except ValueError as val_err:
+        from fastapi import HTTPException
+        raise HTTPException(status_code=400, detail=str(val_err))
 
 
 @router.delete("/{event_id}/join")

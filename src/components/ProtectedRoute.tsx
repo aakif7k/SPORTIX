@@ -44,7 +44,10 @@ function LoadingScreen() {
 /**
  * Route guard for main app pages (/app/*, /pulse/*).
  * Requires authenticated user AND completed onboarding.
- * If user has not completed onboarding, redirects to /onboarding.
+ *
+ * IMPORTANT: profile=null means the profile hasn't loaded OR failed to load.
+ * We treat it as "onboarding incomplete" so users can't bypass onboarding
+ * if the profile load fails. This is the correct conservative default.
  */
 export function ProtectedRoute({
   children
@@ -55,7 +58,13 @@ export function ProtectedRoute({
 
   if (authLoading) return <LoadingScreen />;
   if (!isAuthenticated) return <Navigate to="/login" replace />;
-  if (profile && !profile.is_onboarding_complete) return <Navigate to="/onboarding" replace />;
+
+  // FIXED: profile=null → onboarding required (not bypassed)
+  // Previously: `profile && !profile.is_onboarding_complete` — when profile was null,
+  // the condition was false (null && ... = false) so the guard was skipped entirely,
+  // letting users without a persisted profile through to the app.
+  if (!profile || !profile.is_onboarding_complete) return <Navigate to="/onboarding" replace />;
+
   return <>{children}</>;
 }
 
@@ -63,6 +72,7 @@ export function ProtectedRoute({
  * Dedicated route guard for /onboarding page.
  * Requires authenticated user.
  * If onboarding is ALREADY complete, redirects to /app/feed.
+ * If profile is null (not loaded), stay on onboarding — don't redirect to feed.
  */
 export function OnboardingRoute({
   children
@@ -73,14 +83,17 @@ export function OnboardingRoute({
 
   if (authLoading) return <LoadingScreen />;
   if (!isAuthenticated) return <Navigate to="/login" replace />;
+
+  // Only redirect to feed if profile is loaded AND onboarding is confirmed complete
   if (profile && profile.is_onboarding_complete) return <Navigate to="/app/feed" replace />;
+
   return <>{children}</>;
 }
 
 /**
  * Route guard for login/signup public pages.
- * If user is authenticated AND onboarding is incomplete, redirects to /onboarding.
  * If user is authenticated AND onboarding is complete, redirects to /app/feed.
+ * If user is authenticated AND onboarding is incomplete (or profile=null), redirects to /onboarding.
  */
 export function PublicRoute({
   children
@@ -91,7 +104,8 @@ export function PublicRoute({
 
   if (authLoading) return <LoadingScreen />;
   if (isAuthenticated) {
-    if (profile && !profile.is_onboarding_complete) {
+    // FIXED: profile=null means not yet loaded — go to onboarding, not feed
+    if (!profile || !profile.is_onboarding_complete) {
       return <Navigate to="/onboarding" replace />;
     }
     return <Navigate to="/app/feed" replace />;

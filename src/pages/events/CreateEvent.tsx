@@ -9,6 +9,7 @@ import { useAuthStore } from '../../store/authStore';
 import { uploadEventBannerImage } from '../../services/storageService';
 import { SPORT_CATEGORIES } from '../../services/mockData';
 import type { Event, SportCategory, EventFormat, ExperienceLevel } from '../../types';
+import { MissingFieldsModal } from '../../components/ui/MissingFieldsModal';
 
 const STEPS = ['Basics', 'Rules & Fees', 'Teams', 'Review & Host'];
 
@@ -18,6 +19,8 @@ export const CreateEvent: React.FC = () => {
   const currentUser = useAuthStore(state => state.user);
   const [isPublishing, setIsPublishing] = useState(false);
   const [bannerFile, setBannerFile] = useState<File | null>(null);
+  const [showMissingModal, setShowMissingModal] = useState(false);
+  const [missingFields, setMissingFields] = useState<string[]>([]);
 
   const [step, setStep] = useState(0);
   const [form, setForm] = useState({
@@ -52,7 +55,23 @@ export const CreateEvent: React.FC = () => {
     reader.readAsDataURL(file);
   };
 
+  const validateForm = (): boolean => {
+    const missing: string[] = [];
+    if (!form.title.trim()) missing.push('Tournament Title');
+    if (!form.date) missing.push('Match Date');
+    if (!form.venue.trim()) missing.push('Venue / Field Name');
+    if (!form.location.trim()) missing.push('City / Location');
+
+    if (missing.length > 0) {
+      setMissingFields(missing);
+      setShowMissingModal(true);
+      return false;
+    }
+    return true;
+  };
+
   const publish = async () => {
+    if (!validateForm()) return;
     if (isPublishing) return;
     setIsPublishing(true);
     
@@ -165,7 +184,9 @@ export const CreateEvent: React.FC = () => {
               </h2>
 
               <div className="space-y-1.5">
-                <label className="font-mono text-xs font-bold text-text-muted uppercase">Tournament Title *</label>
+                <label className="font-mono text-xs font-bold text-text-muted uppercase">
+                  Tournament Title <span className="text-red-500 font-bold ml-0.5">*</span>
+                </label>
                 <input
                   type="text"
                   placeholder="e.g. Summer Champions League 5v5"
@@ -177,7 +198,9 @@ export const CreateEvent: React.FC = () => {
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div className="space-y-1.5">
-                  <label className="font-mono text-xs font-bold text-text-muted uppercase">Sport Category</label>
+                  <label className="font-mono text-xs font-bold text-text-muted uppercase">
+                    Sport Category <span className="text-red-500 font-bold ml-0.5">*</span>
+                  </label>
                   <select
                     value={form.sport}
                     onChange={e => update('sport', e.target.value)}
@@ -190,7 +213,9 @@ export const CreateEvent: React.FC = () => {
                 </div>
 
                 <div className="space-y-1.5">
-                  <label className="font-mono text-xs font-bold text-text-muted uppercase">Match Date</label>
+                  <label className="font-mono text-xs font-bold text-text-muted uppercase">
+                    Match Date <span className="text-red-500 font-bold ml-0.5">*</span>
+                  </label>
                   <input
                     type="date"
                     value={form.date}
@@ -202,7 +227,9 @@ export const CreateEvent: React.FC = () => {
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div className="space-y-1.5">
-                  <label className="font-mono text-xs font-bold text-text-muted uppercase">Venue / Field Name</label>
+                  <label className="font-mono text-xs font-bold text-text-muted uppercase">
+                    Venue / Field Name <span className="text-red-500 font-bold ml-0.5">*</span>
+                  </label>
                   <input
                     type="text"
                     placeholder="e.g. Olympic Turf Arena"
@@ -213,7 +240,9 @@ export const CreateEvent: React.FC = () => {
                 </div>
 
                 <div className="space-y-1.5">
-                  <label className="font-mono text-xs font-bold text-text-muted uppercase">City / Location</label>
+                  <label className="font-mono text-xs font-bold text-text-muted uppercase">
+                    City / Location <span className="text-red-500 font-bold ml-0.5">*</span>
+                  </label>
                   <input
                     type="text"
                     placeholder="e.g. London, UK"
@@ -349,6 +378,12 @@ export const CreateEvent: React.FC = () => {
           )}
         </div>
       </div>
+
+      <MissingFieldsModal
+        isOpen={showMissingModal}
+        onClose={() => setShowMissingModal(false)}
+        missingFields={missingFields}
+      />
 
     </div>
   );

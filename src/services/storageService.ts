@@ -7,7 +7,7 @@
 
 import { storage, ID, BUCKET_ID } from '@/lib/appwrite';
 import { api } from '@/lib/api';
-import { updateProfile } from './profileService';
+import { updateProfile, ensureUserProfile } from './profileService';
 import { updateEvent } from './eventService';
 import toast from 'react-hot-toast';
 
@@ -119,7 +119,7 @@ export function getMediaFileUrl(
 
 /**
  * Upload profile avatar image to Appwrite Storage bucket and update user's document in `profiles` collection.
- * Stores `profile_image_file_id` and `profile_image_url`.
+ * Stores `avatar_url`.
  */
 export async function uploadProfilePicture(
   userId: string,
@@ -129,11 +129,11 @@ export async function uploadProfilePicture(
   if (!upload) return null;
 
   try {
+    await ensureUserProfile({ id: userId, email: '' });
+
     const updated = await updateProfile(userId, {
-      profile_image_file_id: upload.fileId,
-      profile_image_url: upload.fileUrl,
       avatar_url: upload.fileUrl,
-    } as any);
+    });
 
     if (updated) {
       toast.success('Profile picture updated successfully!');

@@ -9,6 +9,9 @@ import { useEventStore } from '../../store/eventStore';
 import { SPORT_CATEGORIES } from '../../services/mockData';
 import { PendingReportBanner } from '../../components/performance/PendingReportBanner';
 
+import { getEventLifecycleState } from '../../services/eventLifecycleService';
+import { EventStatusBadge } from '../../components/events/EventStatusBadge';
+
 export const EventBrowse: React.FC = () => {
   const navigate = useNavigate();
   const { events, loadEvents } = useEventStore();
@@ -20,7 +23,7 @@ export const EventBrowse: React.FC = () => {
 
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedSport, setSelectedSport] = useState<string>('all');
-  const [filterTab, setFilterTab] = useState<'all' | 'live' | 'featured'>('all');
+  const [filterTab, setFilterTab] = useState<'all' | 'upcoming' | 'live' | 'completed'>('all');
 
   const filteredEvents = events.filter(event => {
     const matchesSearch = event.title.toLowerCase().includes(searchQuery.toLowerCase()) || 
@@ -28,8 +31,11 @@ export const EventBrowse: React.FC = () => {
     const matchesSport = selectedSport === 'all' || event.sport.toLowerCase() === selectedSport.toLowerCase();
     
     if (!matchesSearch || !matchesSport) return false;
-    if (filterTab === 'live') return event.status === 'live';
-    if (filterTab === 'featured') return (event as any).isFeatured;
+
+    const lifecycle = getEventLifecycleState(event);
+    if (filterTab === 'upcoming') return !lifecycle.isEnded && !lifecycle.isLive && !lifecycle.isCancelled;
+    if (filterTab === 'live') return lifecycle.isLive;
+    if (filterTab === 'completed') return lifecycle.isEnded;
     return true;
   });
 
@@ -105,11 +111,7 @@ export const EventBrowse: React.FC = () => {
               <span className="px-3 py-1 rounded-full bg-[#FF6B00] text-black font-mono text-[10px] font-bold uppercase tracking-wider shadow-lg">
                 FEATURED CHAMPIONSHIP
               </span>
-              {featuredEvent.status === 'live' && (
-                <span className="px-3 py-1 rounded-full bg-red-600 text-white font-mono text-[10px] font-bold uppercase tracking-wider flex items-center gap-1">
-                  <span className="w-1.5 h-1.5 rounded-full bg-white animate-pulse" /> LIVE NOW
-                </span>
-              )}
+              <EventStatusBadge event={featuredEvent} size="sm" />
             </div>
 
             {/* Bottom Event Info */}
@@ -133,7 +135,7 @@ export const EventBrowse: React.FC = () => {
                   </div>
                 </div>
                 <span className="font-mono text-xs font-bold text-[#FF6B00] flex items-center gap-1 group-hover:translate-x-1 transition-transform">
-                  Enter Tournament <ArrowRight size={14} />
+                  View Details <ArrowRight size={14} />
                 </span>
               </div>
             </div>
@@ -160,13 +162,14 @@ export const EventBrowse: React.FC = () => {
           <div className="flex items-center gap-1 bg-surface p-1 rounded-2xl border border-border-muted w-full sm:w-auto">
             {[
               { id: 'all', label: 'All Events' },
+              { id: 'upcoming', label: 'Upcoming' },
               { id: 'live', label: 'Live' },
-              { id: 'featured', label: 'Featured' },
+              { id: 'completed', label: 'Completed' },
             ].map(tab => (
               <button
                 key={tab.id}
                 onClick={() => setFilterTab(tab.id as any)}
-                className={`flex-1 sm:flex-initial px-4 py-2 rounded-xl text-xs font-mono font-bold uppercase transition-all ${
+                className={`flex-1 sm:flex-initial px-3.5 py-2 rounded-xl text-xs font-mono font-bold uppercase transition-all ${
                   filterTab === tab.id
                     ? 'bg-[#FF6B00] text-black shadow-sm'
                     : 'text-text-muted hover:text-text-primary'
@@ -209,6 +212,7 @@ export const EventBrowse: React.FC = () => {
       {/* ── TOURNAMENT CARDS GRID ────────────────────────────────────────── */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
         {filteredEvents.map(event => {
+          const lifecycle = getEventLifecycleState(event);
           const pctFull = Math.round((event.participants.length / event.maxParticipants) * 100);
           return (
             <motion.div
@@ -224,20 +228,13 @@ export const EventBrowse: React.FC = () => {
                     src={event.bannerImage || 'https://images.unsplash.com/photo-1574629810360-7efbbe195018?w=800&q=80'} 
                     alt={event.title} 
                     className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
+                    style={{ filter: lifecycle.isEnded ? 'brightness(0.75)' : 'none' }}
                   />
                   <div className="absolute inset-0 bg-gradient-to-t from-surface via-transparent to-transparent" />
                   
                   {/* Status Tag */}
                   <div className="absolute top-3 left-3 flex items-center gap-1.5">
-                    {event.status === 'live' ? (
-                      <span className="px-2.5 py-0.5 rounded-full bg-red-600 font-mono text-[9px] font-bold text-white uppercase tracking-wider flex items-center gap-1">
-                        <span className="w-1.5 h-1.5 rounded-full bg-white animate-pulse" /> LIVE
-                      </span>
-                    ) : (
-                      <span className="px-2.5 py-0.5 rounded-full bg-surface/80 backdrop-blur border border-border-muted font-mono text-[9px] font-bold text-[#CCFF00] uppercase tracking-wider">
-                        {event.sport}
-                      </span>
-                    )}
+                    <EventStatusBadge event={event} size="sm" />
                   </div>
                 </div>
 
@@ -245,7 +242,7 @@ export const EventBrowse: React.FC = () => {
                 <div className="p-5 space-y-3">
                   <div className="flex items-center gap-2 text-[11px] font-mono text-text-muted">
                     <Calendar size={12} className="text-[#FF6B00]" />
-                    <span>{new Date(event.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</span>
+                    <span>{lifecycle.startsAtDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</span>
                     <span>•</span>
                     <MapPin size={12} className="text-text-muted" />
                     <span className="truncate">{event.location}</span>
@@ -265,11 +262,21 @@ export const EventBrowse: React.FC = () => {
               <div className="p-5 pt-0">
                 <div className="pt-3 border-t border-border-muted space-y-2">
                   <div className="flex items-center justify-between text-[11px] font-mono">
-                    <span className="text-text-muted">Filled: {pctFull}%</span>
-                    <span className="text-[#FF6B00] font-bold">{event.participants.length}/{event.maxParticipants}</span>
+                    <span className="text-text-muted">
+                      {lifecycle.isEnded ? 'Final Participation' : `Filled: ${pctFull}%`}
+                    </span>
+                    <span className="text-[#FF6B00] font-bold">
+                      {event.participants.length}/{event.maxParticipants} {lifecycle.isEnded ? 'Athletes' : ''}
+                    </span>
                   </div>
                   <div className="w-full h-1.5 rounded-full bg-elevated overflow-hidden border border-border-muted">
-                    <div className="h-full bg-[#FF6B00] rounded-full transition-all" style={{ width: `${pctFull}%` }} />
+                    <div
+                      className="h-full rounded-full transition-all"
+                      style={{
+                        width: `${pctFull}%`,
+                        background: lifecycle.isEnded ? '#64748B' : '#FF6B00',
+                      }}
+                    />
                   </div>
                 </div>
               </div>

@@ -185,7 +185,6 @@ export async function ensureUserProfile(appwriteAcc: {
   const existing = await getProfile(uid);
   if (existing) return existing;
 
-  const now = new Date().toISOString();
   const emailPrefix = appwriteAcc.email ? appwriteAcc.email.split('@')[0] : 'athlete';
   const cleanName = appwriteAcc.name && appwriteAcc.name.trim() ? appwriteAcc.name.trim() : emailPrefix;
   const cleanUsername = (cleanName.toLowerCase().replace(/[^a-z0-9]/g, '_').slice(0, 20) || `user_${uid.slice(0, 6)}`);
@@ -208,8 +207,6 @@ export async function ensureUserProfile(appwriteAcc: {
     level: 1,
     coins_balance: 0,
     login_streak: 0,
-    created_at: now,
-    updated_at: now,
   };
 
   try {
@@ -393,12 +390,12 @@ export async function createProfile(
   data: ProfileWriteData,
 ): Promise<UserProfile | null> {
   try {
-    const now = new Date().toISOString();
+    const { id, created_at, updated_at, ...cleanData } = data as any;
     const doc = await databases.createDocument(
       DATABASE_ID,
       COLLECTIONS.PROFILES,
       uid,
-      { ...data, created_at: now, updated_at: now },
+      cleanData,
     );
     return docToProfile(doc as AppwriteDocument);
   } catch (err: any) {
@@ -413,7 +410,6 @@ export async function createProfile(
 
 /**
  * Update an existing profile document.
- * Always stamps updated_at automatically.
  * Returns the fresh UserProfile on success, null on failure.
  */
 export async function updateProfile(
@@ -421,11 +417,12 @@ export async function updateProfile(
   updates: ProfileWriteData,
 ): Promise<UserProfile | null> {
   try {
+    const { id, created_at, updated_at, ...cleanUpdates } = updates as any;
     const doc = await databases.updateDocument(
       DATABASE_ID,
       COLLECTIONS.PROFILES,
       uid,
-      { ...updates, updated_at: new Date().toISOString() },
+      cleanUpdates,
     );
     return docToProfile(doc as AppwriteDocument);
   } catch (err: any) {

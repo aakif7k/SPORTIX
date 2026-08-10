@@ -3,6 +3,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { Zap, Mail, Lock, Eye, EyeOff, AlertTriangle, AlertCircle, Loader2, ArrowRight, ShieldCheck } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
+import { MissingFieldsModal } from '../../components/ui/MissingFieldsModal';
 import toast from 'react-hot-toast';
 
 export const LoginPage: React.FC = () => {
@@ -12,18 +13,46 @@ export const LoginPage: React.FC = () => {
   const [error, setError]               = useState('');
   const [noAccount, setNoAccount]       = useState(false);
   const [isLoading, setIsLoading]       = useState(false);
+  const [showMissingModal, setShowMissingModal] = useState(false);
+  const [missingFields, setMissingFields]       = useState<string[]>([]);
   const { login } = useAuth();
   const navigate = useNavigate();
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
+
+    const missing: string[] = [];
+    if (!email.trim()) missing.push('Email Address');
+    if (!password.trim()) missing.push('Password');
+
+    if (missing.length > 0) {
+      setMissingFields(missing);
+      setShowMissingModal(true);
+      return;
+    }
+
     setIsLoading(true);
     setError('');
     setNoAccount(false);
     try {
       await login(email, password);
+      // AuthContext.login() → checkSession() → loadProfileFromAppwrite()
+      // BUT: React state updates from checkSession are batched and won't be visible
+      // in this closure synchronously. We fetch the fresh profile directly from Appwrite
+      // for our routing decision, then let route guards confirm it.
+      const { getUserProfile, getCurrentUser } = await import('@/lib/authService');
+      const freshUser = await getCurrentUser();
+      let freshProfile = null;
+      if (freshUser?.id) {
+        freshProfile = await getUserProfile(freshUser.id);
+      }
+      console.log('[AUTH TRACE] Login success | user=', freshUser?.id, '| is_onboarding_complete=', freshProfile?.is_onboarding_complete);
       toast.success('Welcome back to SPORTiX! ⚡');
-      navigate('/app/feed');
+      if (freshProfile && freshProfile.is_onboarding_complete) {
+        navigate('/app/feed', { replace: true });
+      } else {
+        navigate('/onboarding', { replace: true });
+      }
     } catch (err: any) {
       const raw: string = err?.message || '';
       const isNotFound =
@@ -49,6 +78,7 @@ export const LoginPage: React.FC = () => {
       setError('Google sign-in unavailable');
     }
   };
+
 
   return (
     <div className="min-h-screen bg-[#060606] flex items-center justify-center p-4 sm:p-6 relative overflow-hidden font-sans">
@@ -111,7 +141,9 @@ export const LoginPage: React.FC = () => {
           <form className="space-y-4" onSubmit={handleLogin}>
             {/* Email Field */}
             <div className="space-y-1.5">
-              <label className="text-xs font-mono text-text-secondary uppercase tracking-wider block">Email Address</label>
+              <label className="text-xs font-mono text-text-secondary uppercase tracking-wider block">
+                Email Address <span className="text-red-500 font-bold ml-0.5">*</span>
+              </label>
               <div className="relative">
                 <input
                   type="email"
@@ -129,7 +161,9 @@ export const LoginPage: React.FC = () => {
             {/* Password Field */}
             <div className="space-y-1.5">
               <div className="flex justify-between items-center">
-                <label className="text-xs font-mono text-text-secondary uppercase tracking-wider block">Password</label>
+                <label className="text-xs font-mono text-text-secondary uppercase tracking-wider block">
+                  Password <span className="text-red-500 font-bold ml-0.5">*</span>
+                </label>
                 <Link to="/forgot-password" className="text-[11px] font-mono text-[#CCFF00] hover:underline">
                   Forgot password?
                 </Link>
@@ -261,6 +295,12 @@ export const LoginPage: React.FC = () => {
             Secured by Appwrite Cloud Authentication
           </span>
         </div>
+
+        <MissingFieldsModal
+          isOpen={showMissingModal}
+          onClose={() => setShowMissingModal(false)}
+          missingFields={missingFields}
+        />
       </div>
     </div>
   );

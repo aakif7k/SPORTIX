@@ -7,15 +7,19 @@ import {
 } from 'lucide-react';
 import { useEventStore } from '../../store/eventStore';
 import { useAuthStore } from '../../store/authStore';
+import { deleteEventByOrganizer } from '../../services/eventService';
+import toast from 'react-hot-toast';
 
 export const ManageEventsDashboard: React.FC = () => {
-  const { events, deleteEvent } = useEventStore();
+  const { events, deleteEvent, loadEvents } = useEventStore();
   const { user } = useAuthStore();
   const navigate = useNavigate();
   const [searchQuery, setSearchQuery] = useState('');
 
+  const currentUserId = user?.id || (user as any)?.$id || (user as any)?.uid || '';
+
   // Filter events created by the authenticated organizer
-  const myEvents = events.filter(e => e.organizerId === user?.id || !user);
+  const myEvents = events.filter(e => e.organizerId === currentUserId || !currentUserId);
 
   const filteredEvents = myEvents.filter(e => 
     !searchQuery || 
@@ -23,11 +27,16 @@ export const ManageEventsDashboard: React.FC = () => {
     e.location.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
-  const handleDelete = (e: React.MouseEvent, id: string) => {
+  const handleDelete = async (e: React.MouseEvent, id: string) => {
     e.stopPropagation();
     if (window.confirm('Are you sure you want to delete this event? This action cannot be undone.')) {
-      if (deleteEvent) {
-        deleteEvent(id);
+      const ok = await deleteEventByOrganizer(id);
+      if (ok) {
+        toast.success('Event deleted successfully.');
+        if (deleteEvent) deleteEvent(id);
+        loadEvents();
+      } else {
+        toast.error('Failed to delete event from Appwrite.');
       }
     }
   };
@@ -40,12 +49,12 @@ export const ManageEventsDashboard: React.FC = () => {
         <div className="flex items-center gap-4">
           <button
             onClick={() => navigate('/app/events')}
-            className="w-11 h-11 rounded-2xl bg-elevated border border-border-muted hover:border-[#CCFF00]/40 flex items-center justify-center text-text-primary transition-all"
+            className="w-11 h-11 rounded-2xl bg-elevated border border-border-muted hover:border-accent flex items-center justify-center text-text-primary transition-all"
           >
             <ArrowLeft size={18} />
           </button>
           <div>
-            <div className="inline-flex items-center gap-1.5 font-mono text-[10px] font-bold text-[#CCFF00] uppercase tracking-widest">
+            <div className="inline-flex items-center gap-1.5 font-mono text-[10px] font-bold text-accent uppercase tracking-widest">
               <Settings size={12} /> ORGANIZER DASHBOARD
             </div>
             <h1 className="text-2xl sm:text-4xl font-black text-text-primary uppercase tracking-tight">Manage My Events</h1>
@@ -71,7 +80,7 @@ export const ManageEventsDashboard: React.FC = () => {
           value={searchQuery}
           onChange={e => setSearchQuery(e.target.value)}
           placeholder="Search your tournaments by title or location..."
-          className="w-full pl-10 pr-4 py-3 rounded-2xl bg-surface border border-border-muted text-xs text-text-primary placeholder:text-text-muted focus:outline-none focus:border-[#CCFF00]/40 font-mono transition-all"
+          className="w-full pl-10 pr-4 py-3 rounded-2xl bg-surface border border-border-muted text-xs text-text-primary placeholder:text-text-muted focus:outline-none focus:border-accent font-mono transition-all"
         />
       </div>
 
@@ -83,7 +92,7 @@ export const ManageEventsDashboard: React.FC = () => {
               key={event.id}
               whileHover={{ y: -4 }}
               onClick={() => navigate(`/app/events/${event.id}/manage`)}
-              className="rounded-3xl overflow-hidden bg-surface border border-border-muted cursor-pointer group flex flex-col justify-between shadow-xl transition-all hover:border-[#CCFF00]/40"
+              className="rounded-3xl overflow-hidden bg-surface border border-border-muted cursor-pointer group flex flex-col justify-between shadow-xl transition-all hover:border-accent"
             >
               <div>
                 {/* Banner Header */}
@@ -99,7 +108,7 @@ export const ManageEventsDashboard: React.FC = () => {
                   <div className="absolute top-3 right-3 flex items-center gap-2">
                     <button
                       onClick={(e) => { e.stopPropagation(); navigate(`/app/events/${event.id}/manage`); }}
-                      className="p-2 rounded-xl bg-surface/80 backdrop-blur border border-border-muted hover:bg-[#CCFF00] hover:text-black text-text-primary transition-all"
+                      className="p-2 rounded-xl bg-surface/80 backdrop-blur border border-border-muted hover:bg-accent hover:text-black text-text-primary transition-all"
                       title="Edit Event"
                     >
                       <Edit size={14} />
@@ -117,20 +126,20 @@ export const ManageEventsDashboard: React.FC = () => {
                 {/* Content */}
                 <div className="p-5 space-y-3">
                   <div className="flex items-center gap-2 text-[11px] font-mono text-text-muted">
-                    <Calendar size={12} className="text-[#CCFF00]" />
+                    <Calendar size={12} className="text-accent" />
                     <span>{new Date(event.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</span>
                     <span>•</span>
                     <MapPin size={12} className="text-text-muted" />
                     <span className="truncate">{event.location}</span>
                   </div>
 
-                  <h3 className="font-sans font-bold text-base text-text-primary uppercase tracking-tight group-hover:text-[#CCFF00] transition-colors line-clamp-1">
+                  <h3 className="font-sans font-bold text-base text-text-primary uppercase tracking-tight group-hover:text-accent transition-colors line-clamp-1">
                     {event.title}
                   </h3>
 
                   <div className="flex items-center justify-between text-xs font-mono text-text-muted pt-2 border-t border-border-muted">
                     <span>Format: {event.format}</span>
-                    <span className="text-[#CCFF00] font-bold">Prize: {event.prizePool || 'TBD'}</span>
+                    <span className="text-accent font-bold">Prize: {event.prizePool || 'TBD'}</span>
                   </div>
                 </div>
               </div>
@@ -139,7 +148,7 @@ export const ManageEventsDashboard: React.FC = () => {
               <div className="p-5 pt-0">
                 <button
                   onClick={() => navigate(`/app/events/${event.id}/manage`)}
-                  className="w-full py-2.5 rounded-xl bg-elevated border border-border-muted hover:border-[#CCFF00]/40 text-[#CCFF00] font-mono text-xs font-bold uppercase tracking-wider flex items-center justify-center gap-1 transition-all"
+                  className="w-full py-2.5 rounded-xl bg-elevated border border-border-muted hover:border-accent text-accent font-mono text-xs font-bold uppercase tracking-wider flex items-center justify-center gap-1 transition-all"
                 >
                   Manage Event Settings <ChevronRight size={14} />
                 </button>
@@ -148,7 +157,6 @@ export const ManageEventsDashboard: React.FC = () => {
           );
         })}
       </div>
-
     </div>
   );
 };

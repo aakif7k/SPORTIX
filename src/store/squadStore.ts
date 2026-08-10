@@ -41,7 +41,7 @@ interface SquadStoreState {
   reset: () => void;
 }
 
-const mockAthletes: Athlete[] = [
+export const mockAthletes: Athlete[] = [
   { uid: 'u1', name: 'Marcus Reid', avatar: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=150', sport: 'Football', position: 'ST', pulseScore: 847, tier: 'ELITE', compatibility: 94, role: 'member', readiness: 'Ready', level: 84, distance: 1.2 },
   { uid: 'u2', name: 'Zaid Al-Hassan', avatar: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=150', sport: 'Football', position: 'CM', pulseScore: 793, tier: 'ELITE', compatibility: 91, role: 'strategist', readiness: 'Ready', level: 79, distance: 4.5 },
   { uid: 'u3', name: 'Priya Nair', avatar: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=150', sport: 'Football', position: 'GK', pulseScore: 721, tier: 'CONTENDER', compatibility: 85, role: 'member', readiness: 'Maybe', level: 72, distance: 6.1 },
@@ -50,7 +50,7 @@ const mockAthletes: Athlete[] = [
   { uid: 'cu1', name: 'Alex Rivera (You)', avatar: 'https://images.pexels.com/photos/1486064/pexels-photo-1486064.jpeg?cs=srgb&dl=pexels-nkhajotia-1486064.jpg&fm=jpg', sport: 'Football', position: 'RW', pulseScore: 721, tier: 'CONTENDER', compatibility: 100, role: 'captain', readiness: 'Ready', level: 24, distance: 0 }
 ];
 
-const mockMatchHistory: any[] = [
+export const mockMatchHistory: any[] = [
   {
     matchId: 'm1',
     squadId: 'squad-1',
@@ -83,7 +83,7 @@ const mockMatchHistory: any[] = [
   }
 ];
 
-const mockAchievements = [
+export const mockAchievements = [
   { id: 'a1', name: '5 Match Win Streak', icon: 'Trophy', description: 'Win 5 matches in a row', unlocked: true },
   { id: 'a2', name: 'Chemistry 90%+', icon: 'Zap', description: 'Reach overall team chemistry above 90%', unlocked: false },
   { id: 'a3', name: 'Zero Disputes', icon: 'Shield', description: 'Complete 10 matches with no post-match validation disputes', unlocked: true },
@@ -190,66 +190,8 @@ const saveToLocalStorage = (key: string, value: any) => {
 const localState = loadLocalState();
 
 export const useSquadStore = create<SquadStoreState>((set) => ({
-  squads: localState.squads || [
-    {
-      squadId: 'squad-1',
-      name: 'Iron Pulse FC',
-      sport: 'Football',
-      captainId: 'cu1',
-      members: mockAthletes,
-      chemistry: { overall: 87, trust: 91, coordination: 78, communication: 83, retentionScore: 89, activityScore: 78, consistencyScore: 92, approvalScore: 88 },
-      pulseAvg: 779,
-      winRate: 74,
-      matchHistory: mockMatchHistory,
-      achievements: mockAchievements,
-      formation: '4-3-3',
-      tacticalNotes: 'Use overlapping wingers and maintain defensive low-block.',
-      createdAt: '2026-05-01',
-      lastActive: '2026-05-19',
-      tournamentIds: ['t-1'],
-      events: [
-        { eventId: 'e-1', title: 'VS Rapid XI Match', date: '2026-05-22T18:00:00Z', type: 'match', status: 'confirmed', votes: {} },
-        { eventId: 'e-2', title: 'Squad Practice Session', date: '2026-05-24T16:30:00Z', type: 'practice', status: 'pending', votes: { 'cu1': 'yes' } }
-      ],
-      posts: [
-        {
-          postId: 'post-1',
-          authorId: 'u2',
-          authorName: 'Zaid Al-Hassan',
-          authorAvatar: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=150',
-          content: 'Finished today\'s tactical sprint. Feeling strong and ready for the Rapid XI showdown! Let\'s go!',
-          timestamp: '2026-05-19T10:00:00Z',
-          likes: ['cu1', 'u1']
-        }
-      ],
-      xpBoostActive: false,
-      streakMultiplier: 1.0
-    },
-    {
-      squadId: 'squad-2',
-      name: 'Neon Hawks',
-      sport: 'Basketball',
-      captainId: 'u7',
-      members: [
-        { uid: 'u7', name: 'Serena Jax', avatar: 'https://images.unsplash.com/photo-1544005313-94ddf0286df2?w=150', sport: 'Basketball', position: 'PG', pulseScore: 901, tier: 'PULSE ELITE', role: 'captain', readiness: 'Ready', level: 90, distance: 3.4 }
-      ],
-      chemistry: { overall: 92, trust: 94, coordination: 90, communication: 92 },
-      pulseAvg: 901,
-      winRate: 81,
-      matchHistory: [],
-      achievements: [],
-      formation: 'Motion',
-      tacticalNotes: 'High-pace fastbreaks and active perimeter switching.',
-      createdAt: '2026-05-05',
-      lastActive: '2026-05-19',
-      tournamentIds: [],
-      events: [],
-      posts: [],
-      xpBoostActive: false,
-      streakMultiplier: 1.0
-    }
-  ],
-  activeSquadId: 'squad-1',
+  squads: localState.squads || [],
+  activeSquadId: localState.squads?.[0]?.squadId || null,
   chats: localState.chats || initialChats,
   tournaments: mockTournaments,
   generatedSquads: localState.generatedSquads,

@@ -88,6 +88,26 @@ async def cancel(event_id: str, user_id: str):
 
 
 async def join(event_id: str, user_id: str, squad_id: Optional[str], entry_type: str) -> dict:
+    e = db.get_document(DB_ID, settings.collection_events, event_id)
+    status = str(e.get("status", "upcoming")).lower()
+    if status in ["completed", "cancelled", "archived"]:
+        raise ValueError("This event has ended and is no longer accepting registrations.")
+
+    import datetime
+    raw_date = e.get("ends_at") or e.get("endDate") or e.get("starts_at") or e.get("eventDate")
+    if raw_date:
+        try:
+            dt = datetime.datetime.fromisoformat(str(raw_date).replace('Z', '+00:00'))
+            if "T" not in str(raw_date):
+                dt = dt + datetime.timedelta(days=1)
+            if datetime.datetime.now(datetime.timezone.utc) > dt:
+                raise ValueError("This event has ended and is no longer accepting registrations.")
+        except ValueError as date_val_err:
+            if "This event has ended" in str(date_val_err):
+                raise date_val_err
+        except Exception:
+            pass
+
     # Check not already joined
     existing = db.list_documents(
         DB_ID, settings.collection_event_participants,
@@ -107,7 +127,6 @@ async def join(event_id: str, user_id: str, squad_id: Optional[str], entry_type:
         },
     )
     # Bump participants count
-    e = db.get_document(DB_ID, settings.collection_events, event_id)
     db.update_document(DB_ID, settings.collection_events, event_id,
                        {"participantsCount": e.get("participantsCount", 0) + 1})
     return doc

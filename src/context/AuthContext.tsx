@@ -7,6 +7,7 @@ import { account } from '@/lib/appwrite';
 import { useAuthStore } from '@/store/authStore';
 import { ensureUserProfile, profileToUserShape } from '@/services/profileService';
 import type { UserProfile } from '@/services/profileService';
+import { evaluateDailyLogin } from '@/services/userStateService';
 
 // Appwrite SDK v26+ removed the Models namespace — use inline type
 type AppwriteUser = {
@@ -75,6 +76,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const loadProfileFromAppwrite = useCallback(async (_uid: string, appwriteAcc: AppwriteUser) => {
     try {
       const appwriteProfile = await ensureUserProfile(appwriteAcc);
+      try {
+        const loginEval = await evaluateDailyLogin(appwriteProfile.id);
+        appwriteProfile.login_streak = loginEval.streak;
+      } catch {}
+
+      // [AUTH TRACE] — visible in browser DevTools console
+      console.log(
+        '[AUTH TRACE] Profile loaded',
+        '| user=' + appwriteAcc.$id,
+        '| profile=' + appwriteProfile.id,
+        '| is_onboarding_complete=' + appwriteProfile.is_onboarding_complete,
+        '| path=' + window.location.pathname
+      );
+
       const richUser: AuthUser = {
         id: appwriteProfile.id,
         email: appwriteProfile.email || appwriteAcc.email,
@@ -91,7 +106,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setProfile(appwriteProfile);
       useAuthStore.getState().setUser(profileToUserShape(appwriteProfile) as any);
     } catch (err) {
-      console.error('[AuthContext] Profile load/creation error:', err);
+      console.error('[AuthContext] Profile load/creation error — profile set to null. User will be routed to onboarding:', err);
+      console.warn('[AUTH TRACE] Profile load FAILED | user=' + appwriteAcc.$id + ' | profile=null | is_onboarding_complete=unknown');
       const basicUser: AuthUser = {
         id: appwriteAcc.$id,
         email: appwriteAcc.email,

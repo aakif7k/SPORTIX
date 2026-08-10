@@ -130,22 +130,25 @@ export const AthleteProfile: React.FC = () => {
 
   const userStatsAny = (profileUser.stats || {}) as any;
 
+  const userMatches = userStatsAny.matches || 0;
+  const userWinRate = userMatches > 0 ? `${userStatsAny.winRate || 0}%` : 'N/A';
+  const userRank = userStatsAny.rank ? `#${userStatsAny.rank}` : 'Unranked';
+  const userSSR = userMatches > 0 ? (userStatsAny.ssr || 'Rated') : 'Provisional';
+
+  const hasPerformanceData = userMatches > 0;
+
   const radarData = [
-    { subject: 'Pace', A: userStatsAny.pace || 88, fullMark: 100 },
-    { subject: 'Shooting', A: userStatsAny.shooting || 82, fullMark: 100 },
-    { subject: 'Passing', A: userStatsAny.passing || 85, fullMark: 100 },
-    { subject: 'Dribbling', A: userStatsAny.dribbling || 90, fullMark: 100 },
-    { subject: 'Defense', A: userStatsAny.defense || 74, fullMark: 100 },
-    { subject: 'Physical', A: userStatsAny.physicality || 86, fullMark: 100 },
+    { subject: 'Pace', A: hasPerformanceData ? (userStatsAny.pace || 0) : 0, fullMark: 100 },
+    { subject: 'Shooting', A: hasPerformanceData ? (userStatsAny.shooting || 0) : 0, fullMark: 100 },
+    { subject: 'Passing', A: hasPerformanceData ? (userStatsAny.passing || 0) : 0, fullMark: 100 },
+    { subject: 'Dribbling', A: hasPerformanceData ? (userStatsAny.dribbling || 0) : 0, fullMark: 100 },
+    { subject: 'Defense', A: hasPerformanceData ? (userStatsAny.defense || 0) : 0, fullMark: 100 },
+    { subject: 'Physical', A: hasPerformanceData ? (userStatsAny.physicality || 0) : 0, fullMark: 100 },
   ];
 
-  const matchPerformanceData = [
-    { match: 'VS Titans', rating: 8.8 },
-    { match: 'VS Apex', rating: 9.2 },
-    { match: 'VS Phantom', rating: 8.5 },
-    { match: 'VS Velocity', rating: 9.5 },
-    { match: 'VS Knights', rating: 9.0 },
-  ];
+  const matchPerformanceData = hasPerformanceData ? [
+    { match: 'Match 1', rating: userStatsAny.rating || 7.0 },
+  ] : [];
 
   return (
     <article className="max-w-4xl mx-auto space-y-6 pb-20 text-text-primary">
@@ -164,7 +167,7 @@ export const AthleteProfile: React.FC = () => {
           {/* Top Right Badges */}
           <div className="absolute top-4 right-4 flex items-center gap-2">
             <span className="px-3 py-1 rounded-full bg-accent/10 border border-accent/30 font-mono text-[10px] font-bold text-accent backdrop-blur flex items-center gap-1">
-              <Zap size={12} /> SSR: 94.8 PEAK
+              <Zap size={12} /> SSR: {userSSR}
             </span>
           </div>
         </div>
@@ -248,19 +251,19 @@ export const AthleteProfile: React.FC = () => {
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 p-4 rounded-2xl bg-elevated border border-border-muted">
             <div>
               <p className="font-mono text-[10px] text-text-muted uppercase tracking-wider">Matches Played</p>
-              <p className="text-xl font-black text-text-primary">{profileUser.stats?.matches || 48}</p>
+              <p className="text-xl font-black text-text-primary">{userMatches}</p>
             </div>
             <div>
               <p className="font-mono text-[10px] text-text-muted uppercase tracking-wider">Win Rate</p>
-              <p className="text-xl font-black text-accent">78%</p>
+              <p className="text-xl font-black text-accent">{userWinRate}</p>
             </div>
             <div>
               <p className="font-mono text-[10px] text-text-muted uppercase tracking-wider">Pulse Level</p>
-              <p className="text-xl font-black text-accent">Level {profileUser.level || 41}</p>
+              <p className="text-xl font-black text-accent">Level {profileUser.level || 1}</p>
             </div>
             <div>
               <p className="font-mono text-[10px] text-text-muted uppercase tracking-wider">Global Rank</p>
-              <p className="text-xl font-black text-text-primary">#142</p>
+              <p className="text-xl font-black text-text-primary">{userRank}</p>
             </div>
           </div>
         </div>
@@ -320,22 +323,22 @@ export const AthleteProfile: React.FC = () => {
                     <Activity size={16} className="text-accent" /> Athlete Bio & Scouting Profile
                   </h2>
                   <p className="text-xs text-text-secondary leading-relaxed font-sans">
-                    {profileUser.bio || 'Versatile striker & offensive playmaker specializing in fast break execution, tactical pressing, and set-piece creation. Looking for competitive squad opportunities.'}
+                    {profileUser.bio || 'No bio provided yet.'}
                   </p>
 
                   {/* Physical Specs Grid */}
                   <div className="grid grid-cols-3 gap-3 pt-2">
                     <div className="p-3 rounded-xl bg-elevated border border-border-muted">
                       <p className="font-mono text-[9px] text-text-muted uppercase">Height</p>
-                      <p className="font-mono text-xs font-bold text-text-primary">185 cm</p>
+                      <p className="font-mono text-xs font-bold text-text-primary">{(profileUser as any).height ? `${(profileUser as any).height} cm` : 'Not set'}</p>
                     </div>
                     <div className="p-3 rounded-xl bg-elevated border border-border-muted">
                       <p className="font-mono text-[9px] text-text-muted uppercase">Weight</p>
-                      <p className="font-mono text-xs font-bold text-text-primary">78 kg</p>
+                      <p className="font-mono text-xs font-bold text-text-primary">{(profileUser as any).weight ? `${(profileUser as any).weight} kg` : 'Not set'}</p>
                     </div>
                     <div className="p-3 rounded-xl bg-elevated border border-border-muted">
                       <p className="font-mono text-[9px] text-text-muted uppercase">Foot</p>
-                      <p className="font-mono text-xs font-bold text-accent">Right</p>
+                      <p className="font-mono text-xs font-bold text-accent">{(profileUser as any).preferred_foot || 'Not set'}</p>
                     </div>
                   </div>
                 </div>

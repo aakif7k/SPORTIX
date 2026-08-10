@@ -146,12 +146,15 @@ export const EventDetailScreen = ({ route, navigation }: any) => {
         <Text style={styles.sectionTitle}>CONFIRMED ATHLETES ({participants.length})</Text>
         <View style={styles.rosterGrid}>
           {participants.map((p, idx) => (
-            <View key={p.$id || idx} style={styles.rosterItem}>
+            <View key={p.$id || idx} style={styles.rosterCard}>
               <Image
                 source={{ uri: p.user_avatar || `https://i.pravatar.cc/100?u=${p.user_id}` }}
                 style={styles.rosterAvatar}
               />
-              <Text style={styles.rosterName} numberOfLines={1}>{p.user_name}</Text>
+              <View style={styles.rosterMeta}>
+                <Text style={styles.rosterName} numberOfLines={1}>{p.user_name}</Text>
+                <Text style={styles.rosterUsername} numberOfLines={1}>{p.username || `@user_${p.user_id.slice(0,6)}`}</Text>
+              </View>
             </View>
           ))}
         </View>
@@ -198,55 +201,62 @@ const styles = StyleSheet.create({
     gap: 6,
     backgroundColor: 'rgba(0, 212, 255, 0.1)',
     alignSelf: 'flex-start',
-    paddingHorizontal: 10,
+    paddingHorizontal: 8,
     paddingVertical: 4,
-    borderRadius: 10,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: 'rgba(0, 212, 255, 0.3)',
   },
   badgeText: {
     color: '#00D4FF',
-    fontSize: 9,
+    fontSize: 10,
     fontWeight: 'bold',
+    letterSpacing: 1,
   },
   title: {
     color: '#FFF',
     fontSize: 22,
     fontWeight: '900',
+    letterSpacing: 0.5,
   },
   infoRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
+    gap: 8,
   },
   infoText: {
-    color: '#AAA',
-    fontSize: 13,
+    color: '#CCC',
+    fontSize: 12,
   },
   sectionTitle: {
-    color: '#888',
-    fontSize: 10,
+    color: '#CCFF00',
+    fontSize: 12,
     fontWeight: 'bold',
-    letterSpacing: 1,
+    letterSpacing: 1.5,
+    marginTop: 8,
   },
   matrixCard: {
-    gap: 10,
+    gap: 12,
   },
   matrixHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
+    alignItems: 'center',
   },
   matrixTitle: {
-    color: '#CCFF00',
-    fontSize: 10,
+    color: '#FFF',
+    fontSize: 11,
     fontWeight: 'bold',
+    letterSpacing: 1,
   },
   matrixPct: {
-    color: '#00D4FF',
+    color: '#CCFF00',
     fontSize: 11,
     fontWeight: 'bold',
   },
   progressBg: {
     height: 8,
-    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+    backgroundColor: 'rgba(255, 255, 255, 0.08)',
     borderRadius: 4,
     overflow: 'hidden',
   },
@@ -257,13 +267,11 @@ const styles = StyleSheet.create({
   },
   matrixStats: {
     flexDirection: 'row',
+    justifyContent: 'space-around',
     alignItems: 'center',
-    backgroundColor: 'rgba(0,0,0,0.3)',
-    borderRadius: 12,
-    paddingVertical: 10,
+    paddingTop: 4,
   },
   mStatItem: {
-    flex: 1,
     alignItems: 'center',
   },
   mStatVal: {
@@ -273,26 +281,32 @@ const styles = StyleSheet.create({
   },
   mStatTag: {
     color: '#666',
-    fontSize: 8,
+    fontSize: 9,
     fontWeight: 'bold',
-    marginTop: 2,
+    letterSpacing: 0.5,
   },
   mDivider: {
     width: 1,
-    height: 20,
+    height: 24,
     backgroundColor: 'rgba(255, 255, 255, 0.1)',
   },
   joinBtn: {
     backgroundColor: '#CCFF00',
-    height: 50,
+    paddingVertical: 14,
     borderRadius: 14,
     alignItems: 'center',
     justifyContent: 'center',
+    shadowColor: '#CCFF00',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 10,
+    elevation: 4,
   },
   joinedBtn: {
     backgroundColor: 'rgba(204, 255, 0, 0.15)',
     borderWidth: 1,
     borderColor: '#CCFF00',
+    shadowOpacity: 0,
   },
   joinBtnText: {
     color: '#000',
@@ -304,24 +318,37 @@ const styles = StyleSheet.create({
     color: '#CCFF00',
   },
   rosterGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 12,
+    gap: 8,
   },
-  rosterItem: {
+  rosterCard: {
+    flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
-    width: 60,
+    gap: 10,
+    backgroundColor: 'rgba(255, 255, 255, 0.04)',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.08)',
+    padding: 10,
+    borderRadius: 14,
   },
   rosterAvatar: {
-    width: 44,
-    height: 44,
-    borderRadius: 14,
+    width: 40,
+    height: 40,
+    borderRadius: 12,
     borderWidth: 1,
     borderColor: '#00D4FF',
   },
+  rosterMeta: {
+    flex: 1,
+    gap: 2,
+  },
   rosterName: {
-    color: '#888',
-    fontSize: 10,
+    color: '#FFF',
+    fontSize: 13,
+    fontWeight: 'bold',
+  },
+  rosterUsername: {
+    color: '#CCFF00',
+    fontSize: 11,
+    fontWeight: '600',
   },
 });

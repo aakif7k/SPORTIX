@@ -38,6 +38,14 @@ export interface DbEventParticipant {
   status: 'registered' | 'confirmed' | 'withdrawn';
   entry_type: 'solo' | 'team' | 'squad' | 'crew';
   team_id?: string | null;
+  crew_id?: string | null;
+  squad_id?: string | null;
+  profile?: {
+    full_name?: string;
+    username?: string;
+    avatar_url?: string;
+    sport?: string;
+  };
 }
 
 // Valid Appwrite enum values
@@ -72,10 +80,11 @@ function docToEvent(doc: AppwriteDocument): Event {
 
   const participantCount = doc.current_participants || 0;
 
-  let bannerUrl = doc.banner_image_url || doc.banner_url || undefined;
-  if (doc.banner_image_file_id) {
+  let bannerUrl = doc.banner_url || doc.banner_image_url || undefined;
+  const fileId = doc.banner_file_id || doc.banner_image_file_id;
+  if (fileId) {
     try {
-      bannerUrl = storage.getFileView(MEDIA_BUCKET_ID, doc.banner_image_file_id).toString();
+      bannerUrl = storage.getFileView(MEDIA_BUCKET_ID, fileId).toString();
     } catch { /* fallback */ }
   }
 
@@ -143,12 +152,9 @@ function eventToDoc(event: Partial<Event>): Record<string, any> {
   if (event.location            !== undefined) doc.location              = event.location;
   if (event.maxParticipants     !== undefined) doc.max_participants      = event.maxParticipants;
   if (event.status              !== undefined) doc.status                = event.status;
-  if (event.banner_image_file_id!== undefined) doc.banner_image_file_id = event.banner_image_file_id;
-  if (event.banner_image_url    !== undefined) doc.banner_image_url     = event.banner_image_url;
-  if (event.bannerImage         !== undefined) {
-    doc.banner_url       = event.bannerImage;
-    doc.banner_image_url = event.bannerImage;
-  }
+  if (event.banner_image_file_id!== undefined) doc.banner_file_id       = event.banner_image_file_id;
+  if (event.banner_image_url    !== undefined) doc.banner_url           = event.banner_image_url;
+  if (event.bannerImage         !== undefined) doc.banner_url           = event.bannerImage;
   if (event.prizePool           !== undefined) doc.prize_pool            = event.prizePool;
   if (event.entryFee            !== undefined) doc.entry_fee             = event.entryFee;
   if (event.rules               !== undefined) doc.rules                 = event.rules;
@@ -240,7 +246,7 @@ export async function getEventParticipants(
       COLLECTIONS.EVENT_PARTICIPANTS,
       [Query.equal('event_id', eventId), Query.orderAsc('joined_at'), Query.limit(200)]
     );
-    const docs = res.documents.map(d => ({
+    const docs: DbEventParticipant[] = res.documents.map(d => ({
       $id:        d.$id,
       event_id:   d.event_id,
       user_id:    d.user_id,
@@ -250,7 +256,40 @@ export async function getEventParticipants(
       entry_type: d.entry_type || d.registration_type || 'solo',
       team_id:    d.team_id || d.squad_id || d.crew_id || null,
     }));
-    return docs.filter(d => isActiveParticipant(d.status));
+    const activeDocs = docs.filter(d => isActiveParticipant(d.status));
+
+    // Load profile info for each participant user_id
+    if (activeDocs.length > 0) {
+      const userIds = Array.from(new Set(activeDocs.map(d => d.user_id).filter(Boolean)));
+      if (userIds.length > 0) {
+        try {
+          const profileDocs = await Promise.all(
+            userIds.map(uid =>
+              databases.getDocument(DATABASE_ID, COLLECTIONS.PROFILES, uid).catch(() => null)
+            )
+          );
+          const profileMap = new Map<string, any>();
+          profileDocs.forEach(p => {
+            if (p && p.$id) profileMap.set(p.$id, p);
+          });
+          activeDocs.forEach(d => {
+            const p = profileMap.get(d.user_id);
+            if (p) {
+              d.profile = {
+                full_name: p.full_name,
+                username: p.username,
+                avatar_url: p.avatar_url,
+                sport: p.sport,
+              };
+            }
+          });
+        } catch (profileErr) {
+          console.warn('[eventService] Could not load participant profiles:', profileErr);
+        }
+      }
+    }
+
+    return activeDocs;
   } catch (err: any) {
     console.error('[eventService] getEventParticipants failed:', err?.message ?? err);
     return [];
@@ -499,3 +538,159 @@ export async function leaveEvent(
     return { success: false, message: err?.message || 'Could not leave event.' };
   }
 }
+
+/**
+ * Organizer action to remove an athlete from an event and update database participant counts
+ */
+export async function removeParticipantByOrganizer(
+  eventId: string,
+  participantIdOrUserId: string
+): Promise<{ success: boolean; message: string }> {
+  try {
+    // Check if passed string is participant document ID or user_id
+    const directDoc = await databases.listDocuments(
+      DATABASE_ID,
+      COLLECTIONS.EVENT_PARTICIPANTS,
+      [Query.equal('event_id', eventId), Query.equal('user_id', participantIdOrUserId), Query.limit(10)]
+    );
+
+    if (directDoc.documents.length > 0) {
+      for (const doc of directDoc.documents) {
+        await databases.deleteDocument(DATABASE_ID, COLLECTIONS.EVENT_PARTICIPANTS, doc.$id);
+      }
+    } else {
+      try {
+        await databases.deleteDocument(DATABASE_ID, COLLECTIONS.EVENT_PARTICIPANTS, participantIdOrUserId);
+      } catch {
+        return { success: false, message: 'Participant record not found.' };
+      }
+    }
+
+    // Sync current_participants count on event document
+    const remaining = await databases.listDocuments(
+      DATABASE_ID,
+      COLLECTIONS.EVENT_PARTICIPANTS,
+      [Query.equal('event_id', eventId), Query.limit(300)]
+    );
+    await databases.updateDocument(DATABASE_ID, COLLECTIONS.EVENTS, eventId, {
+      current_participants: remaining.documents.length,
+    });
+
+    return { success: true, message: 'Athlete removed from event.' };
+  } catch (err: any) {
+    console.error('[eventService] removeParticipantByOrganizer failed:', err);
+    return { success: false, message: err?.message || 'Failed to remove athlete.' };
+  }
+}
+
+/**
+ * Organizer action to add an athlete by searching Appwrite profiles
+ */
+export async function addParticipantByOrganizer(
+  eventId: string,
+  targetUserId: string,
+  entryType: 'solo' | 'team' | 'squad' | 'crew' = 'solo'
+): Promise<{ success: boolean; message: string }> {
+  try {
+    const existing = await databases.listDocuments(
+      DATABASE_ID,
+      COLLECTIONS.EVENT_PARTICIPANTS,
+      [Query.equal('event_id', eventId), Query.equal('user_id', targetUserId), Query.limit(1)]
+    );
+
+    if (existing.documents.length > 0) {
+      return { success: false, message: 'Athlete is already registered for this event.' };
+    }
+
+    await databases.createDocument(
+      DATABASE_ID,
+      COLLECTIONS.EVENT_PARTICIPANTS,
+      ID.unique(),
+      {
+        event_id: eventId,
+        user_id: targetUserId,
+        joined_at: new Date().toISOString(),
+        created_at: new Date().toISOString(),
+        status: 'registered',
+        entry_type: entryType,
+      }
+    );
+
+    const remaining = await databases.listDocuments(
+      DATABASE_ID,
+      COLLECTIONS.EVENT_PARTICIPANTS,
+      [Query.equal('event_id', eventId), Query.limit(300)]
+    );
+    await databases.updateDocument(DATABASE_ID, COLLECTIONS.EVENTS, eventId, {
+      current_participants: remaining.documents.length,
+    });
+
+    return { success: true, message: 'Athlete registered successfully.' };
+  } catch (err: any) {
+    console.error('[eventService] addParticipantByOrganizer failed:', err);
+    return { success: false, message: err?.message || 'Failed to add athlete.' };
+  }
+}
+
+/**
+ * Search Appwrite profiles by name, username, or sport
+ */
+export async function searchProfilesForOrganizer(queryStr: string): Promise<any[]> {
+  if (!queryStr || queryStr.trim().length === 0) return [];
+  try {
+    const res = await databases.listDocuments(
+      DATABASE_ID,
+      COLLECTIONS.PROFILES,
+      [
+        Query.limit(20),
+        Query.orderDesc('$createdAt'),
+      ]
+    );
+
+    const q = queryStr.toLowerCase();
+    return res.documents
+      .map((d: any) => ({
+        id: d.$id,
+        full_name: d.full_name || 'Athlete',
+        username: d.username || 'user',
+        avatar_url: d.avatar_url,
+        sport: d.sport || 'football',
+        position: d.position || 'Player',
+        experience_level: d.experience_level || 'amateur',
+        city: d.city || 'Berlin',
+      }))
+      .filter((p: any) => 
+        p.full_name.toLowerCase().includes(q) ||
+        p.username.toLowerCase().includes(q) ||
+        p.sport.toLowerCase().includes(q) ||
+        p.position.toLowerCase().includes(q)
+      );
+  } catch (err) {
+    console.error('[eventService] searchProfilesForOrganizer failed:', err);
+    return [];
+  }
+}
+
+/**
+ * Delete an event document and its participants from Appwrite
+ */
+export async function deleteEventByOrganizer(eventId: string): Promise<boolean> {
+  try {
+    await databases.deleteDocument(DATABASE_ID, COLLECTIONS.EVENTS, eventId);
+    
+    // Delete associated participant records asynchronously
+    const res = await databases.listDocuments(
+      DATABASE_ID,
+      COLLECTIONS.EVENT_PARTICIPANTS,
+      [Query.equal('event_id', eventId), Query.limit(200)]
+    );
+    for (const doc of res.documents) {
+      await databases.deleteDocument(DATABASE_ID, COLLECTIONS.EVENT_PARTICIPANTS, doc.$id).catch(() => null);
+    }
+    return true;
+  } catch (err) {
+    console.error('[eventService] deleteEventByOrganizer failed:', err);
+    return false;
+  }
+}
+

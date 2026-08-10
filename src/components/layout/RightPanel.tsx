@@ -60,9 +60,9 @@ const DailyRewardsPanel: React.FC = () => {
             <Gift size={14} /> Claim Day {todayReward.day}
           </motion.button>
         )}
-        {todayReward?.claimed && (
-          <div className="w-full py-2.5 rounded-[12px] font-mono text-[10px] text-center" style={{ background: 'var(--accent-surface)', color: 'var(--accent-text)', border: '1px solid var(--accent-border)' }}>
-            Claimed for today
+        {(!todayReward || todayReward.claimed || dailyRewards.every(r => r.claimed || r.isLocked)) && (
+          <div className="w-full py-2.5 rounded-[12px] font-mono text-[10px] text-center flex items-center justify-center gap-1.5" style={{ background: 'var(--accent-surface)', color: 'var(--accent-text)', border: '1px solid var(--accent-border)' }}>
+            <Lock size={12} /> Claimed today · Next reward unlocks at 12:00 AM
           </div>
         )}
       </div>

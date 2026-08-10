@@ -10,10 +10,10 @@ import { GLOBAL_SPORTS } from '../../services/mockData';
 import { Button } from '../../components/ui/Button';
 import { databases, DATABASE_ID, COLLECTIONS } from '@/lib/appwrite';
 import { useAuth } from '@/context/AuthContext';
-import { useAuthStore } from '@/store/authStore';
 import { ensureUserProfile, sanitizeExperienceLevel } from '@/services/profileService';
 import { checkUsernameAvailable, getUserProfile } from '@/lib/authService';
 import { uploadProfilePicture } from '@/services/storageService';
+import { MissingFieldsModal } from '../../components/ui/MissingFieldsModal';
 import toast from 'react-hot-toast';
 import type { UserRole } from '@/types';
 
@@ -194,37 +194,7 @@ export const OnboardingPage: React.FC = () => {
     }
   }, [currentUser]);
 
-  /* ── Instant Skip Handler ── */
-  const handleSkipOnboarding = async () => {
-    if (!currentUser) {
-      navigate('/login', { replace: true });
-      return;
-    }
-    setIsLoading(true);
-    try {
-      await ensureUserProfile({
-        $id: currentUser.id,
-        email: currentUser.email || '',
-        name: fullName || currentUser.name || 'Athlete',
-      });
-      await databases.updateDocument(
-        DATABASE_ID,
-        COLLECTIONS.PROFILES,
-        currentUser.id,
-        {
-          is_onboarding_complete: true,
-          updated_at: new Date().toISOString(),
-        }
-      );
-    } catch (err: any) {
-      console.warn('Skip onboarding update failed:', err?.message);
-    } finally {
-      setIsLoading(false);
-      try { await refreshUser(); } catch {}
-      toast.success("Welcome to SPORTiX ⚡");
-      navigate('/app/feed', { replace: true });
-    }
-  };
+
 
   /* ── Username debounce ── */
   useEffect(() => {
@@ -312,40 +282,42 @@ export const OnboardingPage: React.FC = () => {
     return GLOBAL_SPORTS.slice(0, 12);
   }, [sportSearch]);
 
+  const [showMissingModal, setShowMissingModal] = useState(false);
+  const [missingFields, setMissingFields] = useState<string[]>([]);
+
   /* ── Save to Appwrite ── */
   const handleCompleteOnboarding = async () => {
     if (!currentUser) return;
+
+    // Validate mandatory profile fields
+    const missing: string[] = [];
+    if (!fullName.trim()) missing.push('Full Name');
+    if (!username.trim()) missing.push('Username / Handle');
+    if (!primarySport) missing.push('Primary Sport');
+
+    if (missing.length > 0) {
+      setMissingFields(missing);
+      setShowMissingModal(true);
+      return;
+    }
+
     setIsLoading(true);
 
     let uploadedUrl = photoPreview || null;
-    let uploadedFileId: string | null = null;
 
     if (photoFile) {
-      const uploadRes = await uploadProfilePicture(currentUser.id, photoFile);
-      if (uploadRes) {
-        uploadedFileId = uploadRes.fileId;
-        uploadedUrl = uploadRes.fileUrl;
+      try {
+        const uploadRes = await uploadProfilePicture(currentUser.id, photoFile);
+        if (uploadRes) {
+          uploadedUrl = uploadRes.fileUrl;
+        }
+      } catch (uploadErr: any) {
+        console.warn('[OnboardingPage] Photo upload failed (non-fatal):', uploadErr?.message);
       }
     }
 
-    const updatedUser = {
-      ...currentUser,
-      name: fullName,
-      username: username.toLowerCase().trim(),
-      role: role as any,
-      sport: primarySport as any,
-      sports: [primarySport, ...interestedSports].filter(Boolean) as any,
-      experienceLevel: level as any,
-      location,
-      bio,
-      avatar: uploadedUrl || (currentUser as any)?.avatar_url || (currentUser as any)?.avatar || '',
-      isOnboardingComplete: true,
-    };
-
-    // Update local Zustand auth store immediately
-    useAuthStore.getState().updateProfile(updatedUser);
-
     try {
+      // Ensure the profile document exists before updating it
       await ensureUserProfile({
         $id: currentUser.id,
         email: currentUser.email || '',
@@ -354,6 +326,9 @@ export const OnboardingPage: React.FC = () => {
 
       const sanitizedLevel = sanitizeExperienceLevel(level);
 
+      // MUST succeed before navigating — this is the authoritative persistence
+      // Only include attributes defined in the Appwrite 'profiles' collection schema:
+      // (full_name, username, email, role, sport, sports, experience_level, location, avatar_url, bio, is_onboarding_complete)
       await databases.updateDocument(
         DATABASE_ID,
         COLLECTIONS.PROFILES,
@@ -368,21 +343,25 @@ export const OnboardingPage: React.FC = () => {
           sports:           [primarySport, ...interestedSports].filter(Boolean),
           experience_level: sanitizedLevel,
           avatar_url:       uploadedUrl,
-          profile_image_file_id: uploadedFileId,
-          profile_image_url:     uploadedUrl,
           is_onboarding_complete: true,
-          updated_at: new Date().toISOString(),
         },
       );
+
+      // Appwrite write confirmed — now refresh AuthContext with the fresh profile
+      console.log('[AUTH TRACE] Onboarding write SUCCESS — is_onboarding_complete=true');
+      try { await refreshUser(); } catch {}
+
+      toast.success('Profile set up! Welcome to SPORTiX ⚡');
+      navigate('/app/feed', { replace: true });
+
     } catch (err: any) {
-      console.warn('Onboarding update failed, attempting profile creation fallback:', err?.message);
+      // Appwrite write FAILED — do NOT navigate; keep user on onboarding
+      console.error('[AUTH TRACE] Onboarding write FAILED — NOT navigating:', err?.message, err);
+      toast.error(
+        err?.message || 'Could not save your profile. Please check your connection and try again.',
+      );
     } finally {
       setIsLoading(false);
-      try {
-        await refreshUser();
-      } catch {}
-      toast.success("Profile set up! Welcome to SPORTiX ⚡");
-      navigate('/app/feed', { replace: true });
     }
   };
 
@@ -403,7 +382,7 @@ export const OnboardingPage: React.FC = () => {
       <div className="absolute inset-0 pointer-events-none" style={{ background: 'radial-gradient(ellipse at 50% 20%, rgba(204,255,0,0.07) 0%, transparent 60%)' }} />
 
       <div className="w-full max-w-xl relative z-10 py-8">
-        {/* Top Header with Logo and Skip to Feed */}
+        {/* Top Header with Logo */}
         <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="flex items-center justify-between gap-2 mb-6">
           <div className="flex items-center gap-2">
             <div className="w-8 h-8 bg-volt rounded-lg flex items-center justify-center">
@@ -411,16 +390,9 @@ export const OnboardingPage: React.FC = () => {
             </div>
             <span className="font-display text-2xl text-volt tracking-widest">SPORTIX</span>
           </div>
-
-          <button
-            type="button"
-            onClick={handleSkipOnboarding}
-            disabled={isLoading}
-            className="text-xs font-mono font-bold text-volt hover:text-white px-3.5 py-1.5 rounded-xl border border-volt/30 hover:bg-volt/10 transition-all flex items-center gap-1.5 bg-elevated/80 shadow-sm"
-          >
-            {isLoading ? 'Entering…' : 'Skip to Feed ⚡'}
-            <ChevronRight size={14} />
-          </button>
+          <div className="text-xs font-mono text-text-muted">
+            PlayerDNA Setup
+          </div>
         </motion.div>
 
         {/* Progress bar */}
@@ -836,6 +808,12 @@ export const OnboardingPage: React.FC = () => {
           </AnimatePresence>
         </motion.div>
       </div>
+
+      <MissingFieldsModal
+        isOpen={showMissingModal}
+        onClose={() => setShowMissingModal(false)}
+        missingFields={missingFields}
+      />
     </div>
   );
 };
