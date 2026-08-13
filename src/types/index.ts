@@ -53,13 +53,14 @@ export interface User {
   createdAt: string;
   performanceData: PerformanceData;
   isOnboardingComplete?: boolean;
+  date_of_birth?: string | null;
   jersey?: string;
   position?: string;
   height?: string;
   weight?: string;
   nationality?: string;
   phone?: string;
-  dateOfBirth?: string;
+  dateOfBirth?: string | null;
   club?: string;
   agent?: string;
   preferredFoot?: string;

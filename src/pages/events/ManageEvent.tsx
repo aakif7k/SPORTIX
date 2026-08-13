@@ -1110,7 +1110,9 @@ export const ManageEvent: React.FC = () => {
                   {matches.length === 0 ? (
                     <div className="text-center py-12 border border-dashed border-border-muted rounded-2xl space-y-2">
                       <Trophy size={32} className="mx-auto text-accent opacity-50" />
-                      <div className="font-mono text-xs uppercase text-text-muted">Bracket not created yet.</div>
+                      <div className="font-sans font-bold text-sm text-text-primary">
+                        Play a match to build your history.
+                      </div>
                       <p className="font-mono text-[10px] text-text-secondary max-w-xs mx-auto">
                         Brackets will populate automatically when match fixtures are generated for this event.
                       </p>

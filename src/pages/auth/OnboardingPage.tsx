@@ -1,19 +1,21 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   Zap, MapPin, Camera, Check, Search, X, Info,
   Users, ChevronRight, UserCircle2, AtSign,
-  Dumbbell, Briefcase, Award, CalendarDays
+  Dumbbell, Briefcase, Award, CalendarDays,
+  LocateFixed, Loader, Sparkles, ShieldCheck
 } from 'lucide-react';
 import { GLOBAL_SPORTS } from '../../services/mockData';
 import { Button } from '../../components/ui/Button';
 import { databases, DATABASE_ID, COLLECTIONS } from '@/lib/appwrite';
 import { useAuth } from '@/context/AuthContext';
 import { ensureUserProfile, sanitizeExperienceLevel } from '@/services/profileService';
-import { checkUsernameAvailable, getUserProfile } from '@/lib/authService';
+import { getUserProfile, checkUsernameAvailable } from '@/lib/authService';
 import { uploadProfilePicture } from '@/services/storageService';
 import { MissingFieldsModal } from '../../components/ui/MissingFieldsModal';
+import { DateOfBirthPicker } from '../../components/ui/DateOfBirthPicker';
 import toast from 'react-hot-toast';
 import type { UserRole } from '@/types';
 
@@ -61,8 +63,20 @@ const NEARBY_ATHLETES = [
   { name: 'Aleksei Volkov',      role: 'Weightlifting • Pro', img: 'https://i.pravatar.cc/100?img=52', distance: '5.3 km' },
 ];
 
-const STEP_LABELS = ['Role', 'Details', 'Sports', 'Photo', 'Connect'];
-const TOTAL_STEPS = 5;
+const STEP_LABELS = ['Role', 'Identity', 'Details', 'Sports', 'Photo', 'Connect'];
+const TOTAL_STEPS = 6;
+
+// ─── Reverse-geocode coords → "City, Country" via OSM Nominatim ──────────────
+async function reverseGeocode(lat: number, lon: number): Promise<string> {
+  const url = `https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lon}&format=json&addressdetails=1`;
+  const res = await fetch(url, { headers: { 'Accept-Language': 'en' } });
+  const data = await res.json();
+  const addr = data.address || {};
+  const city =
+    addr.city || addr.town || addr.village || addr.suburb || addr.county || '';
+  const country = addr.country || '';
+  return [city, country].filter(Boolean).join(', ');
+}
 
 /* ─── Sub-components ─────────────────────────────────────────────────── */
 
@@ -127,39 +141,104 @@ export const OnboardingPage: React.FC = () => {
 
   const { user: currentUser, refreshUser } = useAuth();
 
-  /* Step */
+  /* Step: 0 to 5 */
   const [step, setStep] = useState(0);
 
   /* Step 0 – Role */
   const [role, setRole] = useState<UserRole>('athlete');
 
-  /* Step 1 – Details */
+  /* Step 1 – Identity (Full Name & Username) */
   const [fullName,  setFullName]  = useState('');
   const [username,  setUsername]  = useState('');
-  const [location,  setLocation]  = useState('');
-  const [level,     setLevel]     = useState('');
-  const [bio,       setBio]       = useState('');
-  const [isLocating, setIsLocating] = useState(false);
-  const [showLocationInfo, setShowLocationInfo] = useState(false);
-  const [usernameAvailable,  setUsernameAvailable]  = useState<boolean | null>(null);
-  const [checkingUsername,   setCheckingUsername]   = useState(false);
+  const [usernameAvailable, setUsernameAvailable] = useState<boolean | null>(null);
+  const [checkingUsername,  setCheckingUsername]  = useState(false);
 
-  /* Step 2 – Sports */
+  /* Step 2 – Details */
+  const [dateOfBirth,  setDateOfBirth]  = useState('');
+  const [location,     setLocation]     = useState('');
+  const [level,        setLevel]        = useState('');
+  const [bio,          setBio]          = useState('');
+  const [locationStatus, setLocationStatus] = useState<'idle' | 'detecting' | 'success' | 'denied'>('idle');
+  const [showLocationInfo, setShowLocationInfo] = useState(false);
+
+  /* Step 3 – Sports */
   const [primarySport,     setPrimarySport]     = useState('');
   const [interestedSports, setInterestedSports] = useState<string[]>([]);
   const [sportSearch,      setSportSearch]      = useState('');
 
-  /* Step 3 – Photo */
+  /* Step 4 – Photo */
   const [photoFile,      setPhotoFile]      = useState<File | null>(null);
   const [photoPreview,   setPhotoPreview]   = useState<string | null>(null);
   const [uploadProgress, setUploadProgress] = useState(0);
   const [isUploading,    setIsUploading]    = useState(false);
 
-  /* Step 4 – Nearby */
+  /* Step 5 – Nearby */
   const [followed, setFollowed] = useState<string[]>([]);
 
   /* Global */
   const [isLoading, setIsLoading] = useState(false);
+  const [showMissingModal, setShowMissingModal] = useState(false);
+  const [missingFields, setMissingFields] = useState<string[]>([]);
+
+  /* ── Username Debounced Availability Check ── */
+  useEffect(() => {
+    const cleanUser = username.trim().toLowerCase();
+    if (cleanUser.length < 3) {
+      setUsernameAvailable(null);
+      setCheckingUsername(false);
+      return;
+    }
+    setCheckingUsername(true);
+    const timer = setTimeout(async () => {
+      try {
+        const isAvail = await checkUsernameAvailable(cleanUser);
+        setUsernameAvailable(isAvail);
+      } catch {
+        setUsernameAvailable(true);
+      } finally {
+        setCheckingUsername(false);
+      }
+    }, 500);
+
+    return () => clearTimeout(timer);
+  }, [username]);
+
+  /* ── Automated Silent Geolocation ── */
+  const detectLocation = useCallback(() => {
+    if (!navigator.geolocation) {
+      setLocationStatus('denied');
+      return;
+    }
+    setLocationStatus('detecting');
+    navigator.geolocation.getCurrentPosition(
+      async pos => {
+        try {
+          const loc = await reverseGeocode(pos.coords.latitude, pos.coords.longitude);
+          if (loc) {
+            setLocation(loc);
+            setLocationStatus('success');
+          } else {
+            setLocation(`${pos.coords.latitude.toFixed(2)}, ${pos.coords.longitude.toFixed(2)}`);
+            setLocationStatus('success');
+          }
+        } catch {
+          setLocation(`${pos.coords.latitude.toFixed(4)}, ${pos.coords.longitude.toFixed(4)}`);
+          setLocationStatus('success');
+        }
+      },
+      () => {
+        setLocationStatus('denied');
+      },
+      { timeout: 8000, maximumAge: 3_600_000 }
+    );
+  }, []);
+
+  /* Automatically trigger location detect when arriving at Step 2 */
+  useEffect(() => {
+    if (step === 2 && locationStatus === 'idle' && (!location || location === 'New York, USA')) {
+      detectLocation();
+    }
+  }, [step, location, locationStatus, detectLocation]);
 
   /* ── Pre-populate from existing profile or auth user ── */
   useEffect(() => {
@@ -168,76 +247,33 @@ export const OnboardingPage: React.FC = () => {
       setFullName(prev => prev || defaultName);
 
       const defaultUser = (currentUser.name || currentUser.email?.split('@')[0] || 'athlete')
-        .toLowerCase().replace(/[^a-z0-9]/g, '_').slice(0, 18);
+        .toLowerCase().replace(/[^a-z0-9_]/g, '_').slice(0, 18);
       setUsername(prev => prev || defaultUser);
 
       setLevel(prev => prev || 'amateur');
       setPrimarySport(prev => prev || 'football');
-      setLocation(prev => prev || 'New York, USA');
 
       getUserProfile(currentUser.id).then(profile => {
         if (!profile) return;
         if (profile.full_name)          setFullName(profile.full_name);
-        if (profile.username)          setUsername(profile.username);
-        if (profile.role)              setRole(profile.role as UserRole);
-        if (profile.location)          setLocation(profile.location);
-        if (profile.bio)               setBio(profile.bio);
+        if (profile.username)           setUsername(profile.username);
+        if (profile.role)               setRole(profile.role as UserRole);
+        if (profile.location)           setLocation(profile.location);
+        if (profile.bio)                setBio(profile.bio);
+        if (profile.date_of_birth)      setDateOfBirth(profile.date_of_birth);
         if (profile.sports?.length) {
           setPrimarySport(profile.sports[0]);
           setInterestedSports(profile.sports.slice(1));
         } else if (profile.sport) {
           setPrimarySport(profile.sport);
         }
-        if (profile.experience_level)  setLevel(profile.experience_level);
-        if (profile.avatar_url)        setPhotoPreview(profile.avatar_url);
+        if (profile.experience_level)   setLevel(profile.experience_level);
+        if (profile.avatar_url)         setPhotoPreview(profile.avatar_url);
       });
     }
   }, [currentUser]);
 
-
-
-  /* ── Username debounce ── */
-  useEffect(() => {
-    if (username.length < 3) { setUsernameAvailable(null); return; }
-    const t = setTimeout(async () => {
-      setCheckingUsername(true);
-      const ok = await checkUsernameAvailable(username);
-      setUsernameAvailable(ok);
-      setCheckingUsername(false);
-    }, 600);
-    return () => clearTimeout(t);
-  }, [username]);
-
-  /* ── GPS ── */
-  const handleGPS = () => {
-    if (isLocating) return;
-    if (!navigator.geolocation) {
-      toast.error('Geolocation not supported by your browser.');
-      return;
-    }
-    setIsLocating(true);
-    navigator.geolocation.getCurrentPosition(
-      async pos => {
-        try {
-          const res  = await fetch(`https://nominatim.openstreetmap.org/reverse?lat=${pos.coords.latitude}&lon=${pos.coords.longitude}&format=json`);
-          const data = await res.json();
-          const city    = data.address?.city || data.address?.town || data.address?.village || '';
-          const country = data.address?.country || '';
-          setLocation(`${city}${city && country ? ', ' : ''}${country}` || `${pos.coords.latitude.toFixed(2)}, ${pos.coords.longitude.toFixed(2)}`);
-        } catch {
-          setLocation(`${pos.coords.latitude.toFixed(4)}, ${pos.coords.longitude.toFixed(4)}`);
-        }
-        setIsLocating(false);
-      },
-      () => {
-        toast.error('Could not access your location. Please type it manually.');
-        setIsLocating(false);
-      },
-      { timeout: 8000 }
-    );
-  };
-
-  /* ── Photo ── */
+  /* ── Photo Upload ── */
   const handlePhotoSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file || !currentUser) return;
@@ -282,23 +318,35 @@ export const OnboardingPage: React.FC = () => {
     return GLOBAL_SPORTS.slice(0, 12);
   }, [sportSearch]);
 
-  const [showMissingModal, setShowMissingModal] = useState(false);
-  const [missingFields, setMissingFields] = useState<string[]>([]);
-
   /* ── Save to Appwrite ── */
   const handleCompleteOnboarding = async () => {
     if (!currentUser) return;
 
+    const finalFullName = fullName.trim() || currentUser.name || (currentUser.email ? currentUser.email.split('@')[0] : '') || 'Athlete';
+    const finalUsername = (username.trim() || (currentUser as any).username || finalFullName.toLowerCase().replace(/[^a-z0-9]/g, '_').slice(0, 18)).toLowerCase().trim();
+
     // Validate mandatory profile fields
     const missing: string[] = [];
-    if (!fullName.trim()) missing.push('Full Name');
-    if (!username.trim()) missing.push('Username / Handle');
+    if (!finalFullName) missing.push('Full Name');
+    if (!finalUsername) missing.push('Username / Handle');
     if (!primarySport) missing.push('Primary Sport');
+    if (!dateOfBirth) missing.push('Date of Birth');
 
     if (missing.length > 0) {
       setMissingFields(missing);
       setShowMissingModal(true);
       return;
+    }
+
+    // Age validation check (min 13 years old)
+    if (dateOfBirth) {
+      const dob = new Date(dateOfBirth);
+      const age = Math.floor((Date.now() - dob.getTime()) / (365.25 * 24 * 3600 * 1000));
+      if (age < 13) {
+        toast.error('You must be at least 13 years old to join SPORTiX.');
+        setStep(2);
+        return;
+      }
     }
 
     setIsLoading(true);
@@ -321,33 +369,48 @@ export const OnboardingPage: React.FC = () => {
       await ensureUserProfile({
         $id: currentUser.id,
         email: currentUser.email || '',
-        name: fullName,
+        name: finalFullName,
       });
 
       const sanitizedLevel = sanitizeExperienceLevel(level);
 
-      // MUST succeed before navigating — this is the authoritative persistence
-      // Only include attributes defined in the Appwrite 'profiles' collection schema:
-      // (full_name, username, email, role, sport, sports, experience_level, location, avatar_url, bio, is_onboarding_complete)
-      await databases.updateDocument(
-        DATABASE_ID,
-        COLLECTIONS.PROFILES,
-        currentUser.id,
-        {
-          role,
-          full_name: fullName,
-          username: username.toLowerCase().trim(),
-          location,
-          bio,
-          sport:            primarySport,
-          sports:           [primarySport, ...interestedSports].filter(Boolean),
-          experience_level: sanitizedLevel,
-          avatar_url:       uploadedUrl,
-          is_onboarding_complete: true,
-        },
-      );
+      const profilePayload: Record<string, any> = {
+        role,
+        full_name: finalFullName,
+        username: finalUsername,
+        location: location.trim(),
+        bio: bio.trim(),
+        date_of_birth: dateOfBirth || null,
+        sport: primarySport,
+        sports: [primarySport, ...interestedSports].filter(Boolean),
+        experience_level: sanitizedLevel,
+        avatar_url: uploadedUrl,
+        is_onboarding_complete: true,
+      };
 
-      // Appwrite write confirmed — now refresh AuthContext with the fresh profile
+      // Save complete profile to Appwrite with fallback retry
+      try {
+        await databases.updateDocument(
+          DATABASE_ID,
+          COLLECTIONS.PROFILES,
+          currentUser.id,
+          profilePayload,
+        );
+      } catch (writeErr: any) {
+        if (writeErr?.message?.includes('date_of_birth') || writeErr?.message?.includes('Unknown attribute')) {
+          console.warn('[AUTH TRACE] Retrying update without date_of_birth...');
+          delete profilePayload.date_of_birth;
+          await databases.updateDocument(
+            DATABASE_ID,
+            COLLECTIONS.PROFILES,
+            currentUser.id,
+            profilePayload,
+          );
+        } else {
+          throw writeErr;
+        }
+      }
+
       console.log('[AUTH TRACE] Onboarding write SUCCESS — is_onboarding_complete=true');
       try { await refreshUser(); } catch {}
 
@@ -355,8 +418,7 @@ export const OnboardingPage: React.FC = () => {
       navigate('/app/feed', { replace: true });
 
     } catch (err: any) {
-      // Appwrite write FAILED — do NOT navigate; keep user on onboarding
-      console.error('[AUTH TRACE] Onboarding write FAILED — NOT navigating:', err?.message, err);
+      console.error('[AUTH TRACE] Onboarding write FAILED:', err?.message, err);
       toast.error(
         err?.message || 'Could not save your profile. Please check your connection and try again.',
       );
@@ -365,23 +427,13 @@ export const OnboardingPage: React.FC = () => {
     }
   };
 
-  /* ── Username feedback ── */
-  let usernameFeedback = null;
-  if (checkingUsername) {
-    usernameFeedback = <div className="w-4 h-4 border-2 border-volt border-t-transparent rounded-full animate-spin" />;
-  } else if (usernameAvailable === true) {
-    usernameFeedback = <span className="text-volt font-mono text-[10px] flex items-center gap-1"><Check size={12} strokeWidth={3} /> Available</span>;
-  } else if (usernameAvailable === false) {
-    usernameFeedback = <span className="text-red-400 font-mono text-[10px] flex items-center gap-1"><X size={12} strokeWidth={3} /> Taken</span>;
-  }
-
   const levelOptions = ROLE_LEVEL_LABELS[role];
 
   return (
     <div className="min-h-screen bg-base flex items-center justify-center px-4 bg-grid-sm relative overflow-hidden">
       <div className="absolute inset-0 pointer-events-none" style={{ background: 'radial-gradient(ellipse at 50% 20%, rgba(204,255,0,0.07) 0%, transparent 60%)' }} />
 
-      <div className="w-full max-w-xl relative z-10 py-8">
+      <div className="w-full max-w-2xl relative z-10 py-8">
         {/* Top Header with Logo */}
         <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="flex items-center justify-between gap-2 mb-6">
           <div className="flex items-center gap-2">
@@ -402,7 +454,7 @@ export const OnboardingPage: React.FC = () => {
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
-          className="glass rounded-2xl border border-volt/10 overflow-hidden"
+          className="glass rounded-3xl border border-volt/10 overflow-hidden"
         >
           <AnimatePresence mode="wait">
 
@@ -445,13 +497,13 @@ export const OnboardingPage: React.FC = () => {
                 </div>
 
                 <Button fullWidth size="lg" onClick={() => setStep(1)} icon={<ChevronRight size={16} />}>
-                  Continue
+                  Continue to Identity
                 </Button>
               </motion.div>
             )}
 
             {/* ══════════════════════════════════
-                STEP 1 — DETAILS
+                STEP 1 — IDENTITY (FULL NAME & USERNAME WITH LIVE AVAILABILITY CHECK)
             ══════════════════════════════════ */}
             {step === 1 && (
               <motion.div key="s1"
@@ -459,44 +511,168 @@ export const OnboardingPage: React.FC = () => {
                 className="p-6 sm:p-8"
               >
                 <button onClick={() => setStep(0)} className="text-xs text-text-secondary hover:text-volt font-label mb-4 flex items-center gap-1 transition-colors">← Back</button>
-                <h2 className="font-display text-[28px] text-white mb-1 tracking-widest">YOUR DETAILS</h2>
-                <p className="text-text-secondary font-label text-sm mb-5">Complete your profile identity</p>
+                <div className="flex items-center justify-between mb-1">
+                  <h2 className="font-display text-[28px] text-white tracking-widest">PLAYER IDENTITY</h2>
+                  <span className="text-[10px] font-mono text-volt uppercase tracking-wider px-2.5 py-1 rounded-full bg-volt/10 border border-volt/20 flex items-center gap-1">
+                    <ShieldCheck size={11} /> Step 2 of 6
+                  </span>
+                </div>
+                <p className="text-text-secondary font-label text-sm mb-6">Choose your display name and claim your unique player handle</p>
 
-                <div className="space-y-4">
+                <div className="space-y-5">
                   {/* Full Name */}
-                  <div>
-                    <label className="block text-xs font-label font-medium text-text-secondary uppercase tracking-widest mb-2">Full Name</label>
+                  <div className="space-y-1.5">
+                    <label className="block text-xs font-mono font-bold text-white uppercase tracking-wider">
+                      Full Name <span className="text-volt">*</span>
+                    </label>
                     <div className="relative">
-                      <UserCircle2 size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-text-muted pointer-events-none" />
+                      <UserCircle2 size={16} className="absolute left-4 top-1/2 -translate-y-1/2 text-text-muted pointer-events-none" />
                       <input
-                        type="text" value={fullName} onChange={e => setFullName(e.target.value)}
-                        placeholder="Marcus Thielemann"
-                        className="w-full pl-10 pr-4 py-3 rounded-xl border border-border bg-elevated text-sm text-text-primary placeholder-text-muted outline-none focus:border-volt/50 focus:shadow-[0_0_0_3px_rgba(204,255,0,0.08)] transition-all"
+                        type="text"
+                        value={fullName}
+                        onChange={e => setFullName(e.target.value)}
+                        placeholder="e.g. Alex Morgan"
+                        className="w-full pl-11 pr-4 py-3 rounded-2xl border border-white/10 bg-[#141416] text-sm text-white placeholder-text-muted outline-none focus:border-volt focus:ring-1 focus:ring-volt transition-all font-mono"
+                        required
                       />
                     </div>
                   </div>
 
-                  {/* Username */}
-                  <div>
-                    <label className="block text-xs font-label font-medium text-text-secondary uppercase tracking-widest mb-2">Username</label>
-                    <div className="relative">
-                      <AtSign size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-text-muted pointer-events-none" />
-                      <input
-                        type="text" value={username}
-                        onChange={e => setUsername(e.target.value.replace(/\s/g, '_').toLowerCase())}
-                        placeholder="marcus_thiel"
-                        className="w-full pl-10 pr-24 py-3 rounded-xl border border-border bg-elevated text-sm text-text-primary placeholder-text-muted outline-none focus:border-volt/50 focus:shadow-[0_0_0_3px_rgba(204,255,0,0.08)] transition-all"
-                      />
-                      {usernameFeedback && (
-                        <div className="absolute right-3.5 top-1/2 -translate-y-1/2">{usernameFeedback}</div>
-                      )}
+                  {/* Username with Live Debounced Availability Check */}
+                  <div className="space-y-1.5">
+                    <div className="flex items-center justify-between">
+                      <label className="block text-xs font-mono font-bold text-white uppercase tracking-wider">
+                        Username / Handle <span className="text-volt">*</span>
+                      </label>
+                      <span className="text-[10px] font-mono text-text-muted">Unique across SPORTiX</span>
                     </div>
+
+                    <div className="relative">
+                      <AtSign size={16} className="absolute left-4 top-1/2 -translate-y-1/2 text-text-muted pointer-events-none" />
+                      <input
+                        type="text"
+                        value={username}
+                        onChange={e => setUsername(e.target.value.toLowerCase().replace(/[^a-z0-9_]/g, ''))}
+                        placeholder="alex_morgan"
+                        maxLength={24}
+                        className={`w-full pl-11 pr-32 py-3 rounded-2xl border bg-[#141416] text-sm text-white placeholder-text-muted outline-none transition-all font-mono ${
+                          usernameAvailable === true
+                            ? 'border-volt focus:ring-1 focus:ring-volt'
+                            : usernameAvailable === false
+                            ? 'border-red-500 focus:ring-1 focus:ring-red-500'
+                            : 'border-white/10 focus:border-volt focus:ring-1 focus:ring-volt'
+                        }`}
+                        required
+                      />
+
+                      {/* Live feedback badge */}
+                      <div className="absolute right-3.5 top-1/2 -translate-y-1/2 flex items-center">
+                        {checkingUsername ? (
+                          <div className="flex items-center gap-1.5 px-2 py-0.5 rounded-lg bg-surface text-text-muted text-[10px] font-mono">
+                            <Loader size={12} className="animate-spin text-volt" />
+                            <span>Checking…</span>
+                          </div>
+                        ) : usernameAvailable === true ? (
+                          <motion.div
+                            initial={{ scale: 0.9, opacity: 0 }}
+                            animate={{ scale: 1, opacity: 1 }}
+                            className="flex items-center gap-1 px-2.5 py-0.5 rounded-lg bg-volt/10 text-volt border border-volt/30 text-[10px] font-mono font-bold uppercase tracking-wide"
+                          >
+                            <Check size={11} strokeWidth={3} />
+                            Available
+                          </motion.div>
+                        ) : usernameAvailable === false ? (
+                          <motion.div
+                            initial={{ scale: 0.9, opacity: 0 }}
+                            animate={{ scale: 1, opacity: 1 }}
+                            className="flex items-center gap-1 px-2.5 py-0.5 rounded-lg bg-red-500/10 text-red-400 border border-red-500/30 text-[10px] font-mono font-bold uppercase tracking-wide"
+                          >
+                            <X size={11} strokeWidth={3} />
+                            Taken
+                          </motion.div>
+                        ) : null}
+                      </div>
+                    </div>
+
+                    <p className="text-[10px] font-mono text-text-muted pl-1">
+                      Allowed characters: lowercase letters, numbers, and underscores (min 3 chars).
+                    </p>
                   </div>
 
-                  {/* Location */}
+                  {/* Micro ID Card Pass Live Preview */}
+                  {fullName.trim() && username.trim() && (
+                    <motion.div
+                      initial={{ opacity: 0, y: 8 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      className="p-4 rounded-2xl bg-[#101012] border border-volt/20 relative overflow-hidden"
+                    >
+                      <div className="absolute top-0 right-0 w-32 h-32 bg-volt/5 blur-2xl pointer-events-none rounded-full" />
+                      <div className="flex items-center justify-between text-[10px] font-mono text-text-muted uppercase tracking-widest mb-2 border-b border-white/5 pb-1.5">
+                        <span className="flex items-center gap-1 text-volt">
+                          <Zap size={11} fill="currentColor" /> SPORTIX ID PASS
+                        </span>
+                        <span className="capitalize">{role}</span>
+                      </div>
+                      <div className="flex items-center gap-3">
+                        <div className="w-10 h-10 rounded-xl bg-volt/10 border border-volt/30 flex items-center justify-center text-volt font-bold text-sm">
+                          {fullName.charAt(0).toUpperCase()}
+                        </div>
+                        <div>
+                          <p className="font-mono text-sm font-bold text-white">{fullName}</p>
+                          <p className="font-mono text-xs text-volt">@{username}</p>
+                        </div>
+                      </div>
+                    </motion.div>
+                  )}
+                </div>
+
+                <div className="mt-8 flex gap-3">
+                  <Button variant="ghost" onClick={() => setStep(0)}>← Back</Button>
+                  <Button
+                    fullWidth size="lg"
+                    disabled={fullName.trim().length < 2 || username.length < 3 || usernameAvailable === false || checkingUsername}
+                    onClick={() => setStep(2)}
+                    icon={<ChevronRight size={16} />}
+                  >
+                    Continue to Details
+                  </Button>
+                </div>
+              </motion.div>
+            )}
+
+            {/* ══════════════════════════════════
+                STEP 2 — DETAILS (DATE OF BIRTH PICKER + AUTO-LOCATION + LEVEL + BIO)
+            ══════════════════════════════════ */}
+            {step === 2 && (
+              <motion.div key="s2"
+                initial={{ opacity: 0, x: 24 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -24 }}
+                className="p-6 sm:p-8"
+              >
+                <button onClick={() => setStep(1)} className="text-xs text-text-secondary hover:text-volt font-label mb-4 flex items-center gap-1 transition-colors">← Back</button>
+                <div className="flex items-center justify-between mb-1">
+                  <h2 className="font-display text-[28px] text-white tracking-widest">YOUR DETAILS</h2>
+                  <span className="text-[10px] font-mono text-volt uppercase tracking-wider px-2.5 py-1 rounded-full bg-volt/10 border border-volt/20 flex items-center gap-1">
+                    <Sparkles size={11} /> Step 3 of 6
+                  </span>
+                </div>
+                <p className="text-text-secondary font-label text-sm mb-6">Select your birth date, location, and athletic experience</p>
+
+                <div className="space-y-6">
+                  {/* ── MINIMALIST SIMPLE DATE OF BIRTH PICKER ── */}
+                  <div className="space-y-2">
+                    <DateOfBirthPicker
+                      value={dateOfBirth}
+                      onChange={setDateOfBirth}
+                    />
+                  </div>
+
+                  {/* ── LOCATION WITH SILENT AUTO-GEOLOCATION ── */}
                   <div>
-                    <div className="flex items-center gap-1.5 mb-2">
-                      <label className="text-xs font-label font-medium text-text-secondary uppercase tracking-widest">Location</label>
+                    <div className="flex items-center justify-between gap-1.5 mb-2">
+                      <label className="text-xs font-label font-medium text-text-secondary uppercase tracking-widest flex items-center gap-1.5">
+                        <MapPin size={13} className="text-volt" />
+                        Location
+                      </label>
                       <button type="button" onClick={() => setShowLocationInfo(v => !v)} className="text-text-muted hover:text-volt transition-colors">
                         <Info size={13} />
                       </button>
@@ -514,44 +690,58 @@ export const OnboardingPage: React.FC = () => {
                       )}
                     </AnimatePresence>
                     <div className="relative flex items-center">
-                      <MapPin size={15} className={`absolute left-3.5 pointer-events-none z-10 ${isLocating ? 'text-volt animate-pulse' : 'text-text-muted'}`} />
+                      <MapPin size={15} className={`absolute left-3.5 pointer-events-none z-10 ${locationStatus === 'detecting' ? 'text-volt animate-pulse' : 'text-text-muted'}`} />
                       <input
-                        type="text" value={isLocating ? 'Locating…' : location}
-                        onChange={e => setLocation(e.target.value)}
-                        placeholder="Berlin, Germany" disabled={isLocating}
-                        className="w-full pl-10 pr-24 py-3 rounded-xl border border-border bg-elevated text-sm text-text-primary placeholder-text-muted outline-none focus:border-volt/50 focus:shadow-[0_0_0_3px_rgba(204,255,0,0.08)] transition-all font-mono"
+                        type="text"
+                        value={location}
+                        onChange={e => { setLocation(e.target.value); setLocationStatus('idle'); }}
+                        placeholder="City, Country (e.g. Madrid, Spain)"
+                        className="w-full pl-10 pr-28 py-3 rounded-2xl border border-border bg-elevated text-sm text-text-primary placeholder-text-muted outline-none focus:border-volt/50 focus:shadow-[0_0_0_3px_rgba(204,255,0,0.08)] transition-all font-mono"
                       />
                       <button
-                        type="button" onClick={handleGPS} disabled={isLocating}
-                        className="absolute right-2 flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-volt/10 hover:bg-volt/20 text-volt text-[10px] font-mono font-bold uppercase tracking-wider transition-all border border-volt/20"
+                        type="button"
+                        onClick={detectLocation}
+                        disabled={locationStatus === 'detecting'}
+                        className="absolute right-2 flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-volt/10 hover:bg-volt/20 text-volt text-[11px] font-mono font-bold uppercase tracking-wider transition-all border border-volt/20 disabled:opacity-50"
                       >
-                        {isLocating ? (
-                          <motion.div animate={{ rotate: 360 }} transition={{ duration: 1, repeat: Infinity, ease: 'linear' }}
-                            className="w-3 h-3 border-2 border-volt border-t-transparent rounded-full" />
-                        ) : <MapPin size={11} />}
-                        {isLocating ? 'Locating' : 'Use GPS'}
+                        {locationStatus === 'detecting' ? (
+                          <>
+                            <Loader size={12} className="animate-spin text-volt" />
+                            Detecting
+                          </>
+                        ) : (
+                          <>
+                            <LocateFixed size={12} />
+                            Auto-Detect
+                          </>
+                        )}
                       </button>
                     </div>
+                    {locationStatus === 'detecting' && (
+                      <p className="text-[11px] font-mono text-volt/70 mt-1.5 flex items-center gap-1">
+                        <Zap size={11} /> Auto-detecting coordinates via GPS…
+                      </p>
+                    )}
                   </div>
 
-                  {/* Level */}
+                  {/* ── PLAYER / EXPERIENCE LEVEL ── */}
                   <div>
                     <label className="block text-xs font-label font-medium text-text-secondary uppercase tracking-widest mb-2.5">
                       {role === 'athlete' ? 'Player Level' : role === 'coach' ? 'Coaching Level' : role === 'recruiter' ? 'Scouting Level' : 'Event Scale'}
                     </label>
-                    <div className="grid grid-cols-2 gap-2">
+                    <div className="grid grid-cols-2 gap-2.5">
                       {levelOptions.map(opt => {
                         const sel = level === opt.id;
                         return (
                           <motion.button
                             key={opt.id} type="button" whileTap={{ scale: 0.97 }}
                             onClick={() => setLevel(opt.id)}
-                            className={`flex items-center justify-between p-3 rounded-xl border text-left transition-all
-                              ${sel ? 'border-volt bg-volt/10 shadow-[0_0_12px_rgba(204,255,0,0.1)]' : 'border-border-muted bg-elevated hover:border-volt/25'}`}
+                            className={`flex items-center justify-between p-3.5 rounded-2xl border text-left transition-all
+                              ${sel ? 'border-volt bg-volt/10 shadow-[0_0_15px_rgba(204,255,0,0.12)]' : 'border-border-muted bg-elevated hover:border-volt/25'}`}
                           >
                             <div>
                               <p className={`font-label text-xs font-bold ${sel ? 'text-volt' : 'text-white'}`}>{opt.label}</p>
-                              <p className="text-[10px] text-text-secondary mt-0.5">{opt.desc}</p>
+                              <p className="text-[11px] text-text-secondary mt-0.5">{opt.desc}</p>
                             </div>
                             <SkillBars level={opt.id} selected={sel} />
                           </motion.button>
@@ -560,41 +750,48 @@ export const OnboardingPage: React.FC = () => {
                     </div>
                   </div>
 
-                  {/* Bio */}
+                  {/* ── BIO ── */}
                   <div>
-                    <label className="block text-xs font-label font-medium text-text-secondary uppercase tracking-widest mb-2">Bio <span className="normal-case text-text-muted">(optional)</span></label>
+                    <div className="flex justify-between items-center mb-2">
+                      <label className="text-xs font-label font-medium text-text-secondary uppercase tracking-widest">
+                        Bio / Headline <span className="normal-case text-text-muted">(optional)</span>
+                      </label>
+                      <span className="text-[11px] font-mono text-text-muted">{bio.length}/200</span>
+                    </div>
                     <textarea
-                      value={bio} onChange={e => setBio(e.target.value)}
-                      placeholder="Professional midfielder. Champions League finalist…"
+                      value={bio}
+                      onChange={e => setBio(e.target.value)}
+                      maxLength={200}
+                      placeholder="Tell the SPORTiX network about your athletic journey, position, or specialty…"
                       rows={2}
-                      className="w-full bg-elevated border border-border rounded-xl font-mono text-sm text-text-primary placeholder-text-muted px-4 py-3 resize-none outline-none focus:border-volt/50 focus:shadow-[0_0_0_3px_rgba(204,255,0,0.08)] transition-all"
+                      className="w-full bg-elevated border border-border rounded-2xl font-mono text-sm text-text-primary placeholder-text-muted px-4 py-3 resize-none outline-none focus:border-volt/50 focus:shadow-[0_0_0_3px_rgba(204,255,0,0.08)] transition-all"
                     />
                   </div>
                 </div>
 
-                <div className="mt-5 flex gap-3">
-                  <Button variant="ghost" onClick={() => setStep(0)}>← Back</Button>
+                <div className="mt-8 flex gap-3">
+                  <Button variant="ghost" onClick={() => setStep(1)}>← Back</Button>
                   <Button
                     fullWidth size="lg"
-                    disabled={!fullName.trim() || username.length < 3 || usernameAvailable === false || isLocating}
-                    onClick={() => setStep(2)}
+                    disabled={!dateOfBirth}
+                    onClick={() => setStep(3)}
                     icon={<ChevronRight size={16} />}
                   >
-                    Continue
+                    Continue to Sports
                   </Button>
                 </div>
               </motion.div>
             )}
 
             {/* ══════════════════════════════════
-                STEP 2 — SPORTS
+                STEP 3 — SPORTS
             ══════════════════════════════════ */}
-            {step === 2 && (
-              <motion.div key="s2"
+            {step === 3 && (
+              <motion.div key="s3"
                 initial={{ opacity: 0, x: 24 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -24 }}
                 className="p-6 sm:p-8"
               >
-                <button onClick={() => setStep(1)} className="text-xs text-text-secondary hover:text-volt font-label mb-4 flex items-center gap-1 transition-colors">← Back</button>
+                <button onClick={() => setStep(2)} className="text-xs text-text-secondary hover:text-volt font-label mb-4 flex items-center gap-1 transition-colors">← Back</button>
                 <h2 className="font-display text-[28px] text-white mb-1 tracking-widest">YOUR SPORTS</h2>
                 <p className="text-text-secondary font-label text-sm mb-5">Primary + up to 4 interested sports</p>
 
@@ -643,8 +840,8 @@ export const OnboardingPage: React.FC = () => {
                 </div>
 
                 <div className="flex gap-3">
-                  <Button variant="ghost" onClick={() => setStep(1)}>← Back</Button>
-                  <Button fullWidth size="lg" disabled={!primarySport} onClick={() => setStep(3)} icon={<ChevronRight size={16} />}>
+                  <Button variant="ghost" onClick={() => setStep(2)}>← Back</Button>
+                  <Button fullWidth size="lg" disabled={!primarySport} onClick={() => setStep(4)} icon={<ChevronRight size={16} />}>
                     Continue ({interestedSports.length + (primarySport ? 1 : 0)} selected)
                   </Button>
                 </div>
@@ -652,14 +849,14 @@ export const OnboardingPage: React.FC = () => {
             )}
 
             {/* ══════════════════════════════════
-                STEP 3 — PROFILE PHOTO
+                STEP 4 — PROFILE PHOTO
             ══════════════════════════════════ */}
-            {step === 3 && (
-              <motion.div key="s3"
+            {step === 4 && (
+              <motion.div key="s4"
                 initial={{ opacity: 0, x: 24 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -24 }}
                 className="p-6 sm:p-8"
               >
-                <button onClick={() => setStep(2)} className="text-xs text-text-secondary hover:text-volt font-label mb-4 flex items-center gap-1 transition-colors">← Back</button>
+                <button onClick={() => setStep(3)} className="text-xs text-text-secondary hover:text-volt font-label mb-4 flex items-center gap-1 transition-colors">← Back</button>
                 <h2 className="font-display text-[28px] text-white mb-1 tracking-widest">PROFILE PHOTO</h2>
                 <p className="text-text-secondary font-label text-sm mb-6">Upload your avatar — first impressions matter ⚡</p>
 
@@ -716,23 +913,23 @@ export const OnboardingPage: React.FC = () => {
                 <p className="text-center text-xs text-text-muted font-mono mb-5">Photo is optional — you can add one later</p>
 
                 <div className="flex gap-3">
-                  <Button variant="ghost" onClick={() => setStep(4)}>Skip</Button>
-                  <Button fullWidth size="lg" onClick={() => setStep(4)} disabled={isUploading} icon={<ChevronRight size={16} />}>
-                    Continue
+                  <Button variant="ghost" onClick={() => setStep(5)}>Skip</Button>
+                  <Button fullWidth size="lg" onClick={() => setStep(5)} disabled={isUploading} icon={<ChevronRight size={16} />}>
+                    Continue to Connect
                   </Button>
                 </div>
               </motion.div>
             )}
 
             {/* ══════════════════════════════════
-                STEP 4 — NEARBY PLAYERS
+                STEP 5 — NEARBY PLAYERS & COMPLETE
             ══════════════════════════════════ */}
-            {step === 4 && (
-              <motion.div key="s4"
+            {step === 5 && (
+              <motion.div key="s5"
                 initial={{ opacity: 0, x: 24 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -24 }}
                 className="p-6 sm:p-8"
               >
-                <button onClick={() => setStep(3)} className="text-xs text-text-secondary hover:text-volt font-label mb-4 flex items-center gap-1 transition-colors">← Back</button>
+                <button onClick={() => setStep(4)} className="text-xs text-text-secondary hover:text-volt font-label mb-4 flex items-center gap-1 transition-colors">← Back</button>
                 <div className="flex items-start justify-between mb-5">
                   <div>
                     <h2 className="font-display text-[28px] text-white tracking-widest">NEARBY</h2>

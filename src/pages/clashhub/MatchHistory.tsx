@@ -143,9 +143,23 @@ export const MatchHistory: React.FC = () => {
 
       {/* ── MATCH CARDS LIST ────────────────────────────────────────────── */}
       <div className="space-y-4">
-        {allItems.map((match, idx) => (
-          <MatchHistoryCard key={match.id} match={match} index={idx} />
-        ))}
+        {allItems.length === 0 ? (
+          <div className="p-12 rounded-3xl bg-surface border border-border-muted text-center space-y-3 shadow-xl">
+            <div className="w-12 h-12 rounded-2xl bg-elevated border border-border-muted flex items-center justify-center mx-auto text-[#CCFF00]">
+              <Trophy size={22} />
+            </div>
+            <p className="font-sans font-bold text-sm text-white">
+              Play a match to build your history.
+            </p>
+            <p className="font-mono text-xs text-text-muted">
+              Join an event or squad match to log your telemetry stats.
+            </p>
+          </div>
+        ) : (
+          allItems.map((match, idx) => (
+            <MatchHistoryCard key={match.id} match={match} index={idx} />
+          ))
+        )}
       </div>
 
     </div>

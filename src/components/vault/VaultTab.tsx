@@ -9,6 +9,8 @@ import { getUserPosts, getUserReels, deletePost, deleteReel, updatePost, updateR
 import type { DbPost, DbReel } from '@/services/socialService';
 import { useAuthStore } from '@/store/authStore';
 import toast from 'react-hot-toast';
+import { createNotification } from '@/services/notificationService';
+import { useNotificationStore } from '@/store/notificationStore';
 
 export interface VaultItem {
   id: string;
@@ -171,7 +173,27 @@ export const VaultTab: React.FC<VaultTabProps> = ({
         deletePost(deleteItem.id, authUser.id),
         deleteReel(deleteItem.id, authUser.id),
       ]);
-      toast.success('Content Deleted! Item permanently removed from VaultD.');
+
+      // Trigger Buzz Notification for Deleting a Post
+      createNotification({
+        userId: authUser.id,
+        type: 'system' as any,
+        title: 'Post Deleted 🗑️',
+        message: 'Deleted a post: Item permanently removed from feed and library.',
+        read: false,
+      }).catch(() => null);
+
+      useNotificationStore.getState().addNotification({
+        id: `notif_del_${Date.now()}`,
+        userId: authUser.id,
+        type: 'system' as any,
+        title: 'Post Deleted 🗑️',
+        message: 'Deleted a post: Item permanently removed from feed and library.',
+        timestamp: new Date().toISOString(),
+        read: false,
+      });
+
+      toast.success('Post Deleted! Item removed.');
       setItems(prev => prev.filter(i => i.id !== deleteItem.id));
       setDeleteItem(null);
     } catch (err: any) {
@@ -628,7 +650,7 @@ const VaultDetailModal: React.FC<{
   );
 };
 
-// ─── VAULT UPLOAD MODAL COMPONENT ──────────────────────────────────────────
+// ─── UNIFIED SOCIAL MEDIA POST CREATION MODAL ─────────────────────────────
 const VaultUploadModal: React.FC<{
   athleteName: string;
   athleteUsername: string;
@@ -639,11 +661,11 @@ const VaultUploadModal: React.FC<{
 }> = ({ athleteName, athleteUsername, athleteAvatar, athleteSport, onClose, onSuccess }) => {
   const authUser = useAuthStore(state => state.user);
 
-  const [contentType, setContentType] = useState<'photo' | 'video' | 'highlight' | 'post'>('photo');
   const [caption, setCaption] = useState('');
-  const [sportTag, setSportTag] = useState(athleteSport || 'Multi-Sport');
+  const [sportTag, setSportTag] = useState(athleteSport || 'Football');
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  const [isVideo, setIsVideo] = useState(false);
 
   const [uploading, setUploading] = useState(false);
   const [progress, setProgress] = useState(0);
@@ -654,24 +676,31 @@ const VaultUploadModal: React.FC<{
     if (!file) return;
 
     setSelectedFile(file);
+    setIsVideo(file.type.startsWith('video/'));
     setPreviewUrl(URL.createObjectURL(file));
+  };
+
+  const handleRemoveMedia = () => {
+    setSelectedFile(null);
+    setPreviewUrl(null);
+    setIsVideo(false);
   };
 
   const handleUploadSubmit = async () => {
     if (!authUser?.id) return;
-    if (contentType !== 'post' && !selectedFile) {
-      setErrorMessage('Please select a media file to upload.');
+    if (!caption.trim() && !selectedFile) {
+      setErrorMessage('Please add some text or attach an image/video to publish.');
       return;
     }
 
     setUploading(true);
-    setProgress(20);
+    setProgress(30);
     setErrorMessage(null);
 
     try {
-      if (contentType === 'video' && selectedFile) {
-        // Create Reel in Appwrite
-        setProgress(50);
+      if (isVideo && selectedFile) {
+        // Create Video Reel
+        setProgress(60);
         await createReel(
           authUser.id,
           athleteName,
@@ -684,12 +713,12 @@ const VaultUploadModal: React.FC<{
           sportTag
         );
       } else {
-        // Create Post in Appwrite
+        // Create Standard Post / Image
         setProgress(60);
         await createPost(authUser.id, {
           content: caption,
           files: selectedFile ? [selectedFile] : undefined,
-          post_type: contentType === 'highlight' ? 'highlight' : 'general',
+          post_type: selectedFile ? 'photo' : 'general',
           sport_tag: sportTag,
           authorName: athleteName,
           authorUsername: athleteUsername,
@@ -699,11 +728,31 @@ const VaultUploadModal: React.FC<{
       }
 
       setProgress(100);
-      toast.success('Upload Successful! ⚡ Saved in your VaultD.');
+
+      // Trigger Buzz Notification for Uploading a Post
+      createNotification({
+        userId: authUser.id,
+        type: 'post_created' as any,
+        title: 'Post Published ⚡',
+        message: `Upload a post: "${caption.slice(0, 40) || 'New Post'}" is live on SPORTiX.`,
+        read: false,
+      }).catch(() => null);
+
+      useNotificationStore.getState().addNotification({
+        id: `notif_post_${Date.now()}`,
+        userId: authUser.id,
+        type: 'post_created' as any,
+        title: 'Post Published ⚡',
+        message: `Upload a post: "${caption.slice(0, 40) || 'New Post'}" is live on SPORTiX.`,
+        timestamp: new Date().toISOString(),
+        read: false,
+      });
+
+      toast.success('Post Published! ⚡ Live on feed.');
       onSuccess();
     } catch (err: any) {
-      console.error('[VaultUploadModal] Upload error:', err);
-      setErrorMessage(err?.message || "Couldn't upload your media. Please try again.");
+      console.error('[CreatePostModal] Upload error:', err);
+      setErrorMessage(err?.message || "Couldn't publish post. Please try again.");
     } finally {
       setUploading(false);
     }
@@ -716,103 +765,96 @@ const VaultUploadModal: React.FC<{
         animate={{ scale: 1, opacity: 1 }}
         className="max-w-lg w-full bg-surface border border-border-muted rounded-3xl p-6 space-y-5 shadow-2xl"
       >
+        {/* Modal Header */}
         <div className="flex items-center justify-between border-b border-border-muted pb-3">
-          <div className="flex items-center gap-2">
-            <div className="w-8 h-8 rounded-xl bg-accent/10 border border-accent/30 flex items-center justify-center text-accent">
-              <Upload size={16} />
+          <div className="flex items-center gap-2.5">
+            <div className="w-9 h-9 rounded-xl bg-accent/10 border border-accent/30 flex items-center justify-center text-accent">
+              <Plus size={18} />
             </div>
             <h3 className="font-sans font-bold text-base text-text-primary uppercase tracking-wider">
-              CREATE VAULTD ENTRY
+              Create Post
             </h3>
           </div>
-          <button onClick={onClose} className="text-text-muted hover:text-text-primary">
+          <button onClick={onClose} className="text-text-muted hover:text-text-primary p-1 rounded-lg">
             <X size={18} />
           </button>
         </div>
 
-        {/* Content Type Selector */}
-        <div className="grid grid-cols-4 gap-2">
-          {[
-            { type: 'photo', label: 'Photo', icon: ImageIcon },
-            { type: 'video', label: 'Video', icon: Video },
-            { type: 'highlight', label: 'Highlight', icon: Trophy },
-            { type: 'post', label: 'Post', icon: FileText },
-          ].map(t => {
-            const Icon = t.icon;
-            const active = contentType === t.type;
-            return (
-              <button
-                key={t.type}
-                type="button"
-                onClick={() => setContentType(t.type as any)}
-                className={`p-3 rounded-2xl border text-center transition-all flex flex-col items-center gap-1.5 ${
-                  active
-                    ? 'border-accent bg-accent/10 text-accent font-bold shadow-md'
-                    : 'border-border-muted bg-elevated text-text-secondary hover:border-accent/40'
-                }`}
-              >
-                <Icon size={18} />
-                <span className="font-mono text-[10px] uppercase">{t.label}</span>
-              </button>
-            );
-          })}
+        {/* User Badge */}
+        <div className="flex items-center gap-3">
+          <div className="w-10 h-10 rounded-full bg-elevated border border-border-muted overflow-hidden flex-shrink-0">
+            {athleteAvatar ? (
+              <img src={athleteAvatar} alt={athleteName} className="w-full h-full object-cover" />
+            ) : (
+              <div className="w-full h-full flex items-center justify-center font-bold text-sm text-text-primary">
+                {athleteName.charAt(0)}
+              </div>
+            )}
+          </div>
+          <div>
+            <div className="font-sans font-bold text-xs text-text-primary">{athleteName}</div>
+            <div className="font-mono text-[10px] text-text-muted">@{athleteUsername}</div>
+          </div>
         </div>
 
-        {/* File Picker / Preview */}
-        {contentType !== 'post' && (
-          <div className="space-y-2">
-            <label className="block font-mono text-xs text-text-muted">Select Media File</label>
-            <div className="relative border-2 border-dashed border-border-muted rounded-2xl p-4 text-center hover:border-accent transition-all bg-elevated/50">
-              <input
-                type="file"
-                accept={contentType === 'video' ? 'video/*' : 'image/*'}
-                onChange={handleFileChange}
-                className="absolute inset-0 opacity-0 cursor-pointer w-full h-full z-10"
-              />
-              {previewUrl ? (
-                <div className="relative aspect-video rounded-xl overflow-hidden max-h-40 mx-auto">
-                  {contentType === 'video' ? (
-                    <video src={previewUrl} className="w-full h-full object-cover" />
-                  ) : (
-                    <img src={previewUrl} alt="Preview" className="w-full h-full object-cover" />
-                  )}
-                  <span className="absolute bottom-2 right-2 px-2 py-1 rounded bg-black/70 font-mono text-[10px] text-white">
-                    Click to change
-                  </span>
-                </div>
-              ) : (
-                <div className="py-4 space-y-2">
-                  <Upload size={28} className="mx-auto text-accent opacity-80" />
-                  <p className="font-mono text-xs text-text-primary">
-                    Drop {contentType} file here or click to browse
-                  </p>
-                </div>
-              )}
-            </div>
-          </div>
-        )}
-
-        {/* Caption Input */}
+        {/* Text Area */}
         <div className="space-y-1.5">
-          <label className="block font-mono text-xs text-text-muted">Caption / Story Details</label>
           <textarea
             value={caption}
             onChange={e => setCaption(e.target.value)}
-            rows={3}
-            placeholder="Share the story behind this highlight..."
-            className="w-full bg-elevated border border-border-muted rounded-xl p-3 font-sans text-xs text-text-primary placeholder-text-muted outline-none focus:border-accent resize-none"
+            rows={4}
+            placeholder="What's happening in your sports world? Share match updates, stats, or thoughts..."
+            className="w-full bg-elevated border border-border-muted rounded-2xl p-4 font-sans text-xs text-text-primary placeholder-text-muted outline-none focus:border-accent resize-none leading-relaxed"
           />
         </div>
 
-        {/* Sport Tag */}
-        <div className="space-y-1.5">
-          <label className="block font-mono text-xs text-text-muted">Sport Tag</label>
+        {/* Media Preview or Drop Zone */}
+        {previewUrl ? (
+          <div className="relative rounded-2xl overflow-hidden bg-black max-h-48 flex items-center justify-center border border-border-muted group">
+            {isVideo ? (
+              <video src={previewUrl} controls className="max-h-48 w-full object-contain" />
+            ) : (
+              <img src={previewUrl} alt="Upload preview" className="max-h-48 w-full object-cover" />
+            )}
+            <button
+              onClick={handleRemoveMedia}
+              className="absolute top-2 right-2 p-1.5 rounded-full bg-black/70 hover:bg-red-500 text-white transition-all shadow-md"
+              title="Remove media"
+            >
+              <X size={14} />
+            </button>
+          </div>
+        ) : (
+          <label className="relative border-2 border-dashed border-border-muted hover:border-accent/60 rounded-2xl p-4 text-center cursor-pointer transition-all bg-elevated/40 hover:bg-elevated flex items-center justify-center gap-3">
+            <input
+              type="file"
+              accept="image/*,video/*"
+              onChange={handleFileChange}
+              className="hidden"
+            />
+            <div className="w-10 h-10 rounded-xl bg-surface border border-border-muted flex items-center justify-center text-accent">
+              <Upload size={18} />
+            </div>
+            <div className="text-left">
+              <span className="font-mono text-xs text-text-primary font-bold block">
+                Attach Image or Video
+              </span>
+              <span className="font-mono text-[10px] text-text-muted block">
+                JPEG, PNG, MP4, MOV up to 100MB
+              </span>
+            </div>
+          </label>
+        )}
+
+        {/* Quick Sport Tag Input */}
+        <div className="flex items-center gap-2 pt-1">
+          <span className="font-mono text-[10px] text-text-muted uppercase font-bold">Sport Tag:</span>
           <input
             type="text"
             value={sportTag}
             onChange={e => setSportTag(e.target.value)}
-            placeholder="e.g. Football, Basketball, Athletics"
-            className="w-full bg-elevated border border-border-muted rounded-xl p-2.5 font-mono text-xs text-text-primary outline-none focus:border-accent"
+            placeholder="e.g. Football"
+            className="flex-1 bg-elevated border border-border-muted rounded-xl px-3 py-1.5 font-mono text-xs text-text-primary outline-none focus:border-accent"
           />
         </div>
 
@@ -820,10 +862,10 @@ const VaultUploadModal: React.FC<{
         {uploading && (
           <div className="space-y-1">
             <div className="flex justify-between font-mono text-[10px] text-accent font-bold">
-              <span>Uploading content...</span>
+              <span>Publishing post...</span>
               <span>{progress}%</span>
             </div>
-            <div className="w-full h-2 rounded-full bg-elevated overflow-hidden">
+            <div className="w-full h-1.5 rounded-full bg-elevated overflow-hidden">
               <div
                 className="h-full bg-accent transition-all duration-300"
                 style={{ width: `${progress}%` }}
@@ -846,7 +888,7 @@ const VaultUploadModal: React.FC<{
             type="button"
             onClick={onClose}
             disabled={uploading}
-            className="flex-1 py-2.5 rounded-xl border border-border-muted font-mono text-xs text-text-secondary hover:text-text-primary hover:bg-elevated transition-all"
+            className="flex-1 py-3 rounded-xl border border-border-muted font-mono text-xs text-text-secondary hover:text-text-primary hover:bg-elevated transition-all"
           >
             Cancel
           </button>
@@ -854,10 +896,10 @@ const VaultUploadModal: React.FC<{
             type="button"
             onClick={handleUploadSubmit}
             disabled={uploading}
-            className="flex-1 py-2.5 rounded-xl bg-accent hover:bg-accent/90 text-volt-text font-mono text-xs font-bold uppercase tracking-wider transition-all flex items-center justify-center gap-2 shadow-lg disabled:opacity-50"
+            className="flex-1 py-3 rounded-xl btn-accent font-display font-bold text-xs uppercase tracking-wider transition-all flex items-center justify-center gap-2 shadow-md cursor-pointer disabled:opacity-50"
           >
-            {uploading ? <Loader2 size={14} className="animate-spin" /> : <Upload size={14} />}
-            {uploading ? 'Uploading...' : 'Save to VaultD'}
+            {uploading ? <Loader2 size={14} className="animate-spin" /> : <Sparkles size={14} />}
+            {uploading ? 'Publishing...' : 'Publish Post'}
           </button>
         </div>
       </motion.div>

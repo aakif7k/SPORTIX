@@ -54,8 +54,16 @@ export const MatchHistory: React.FC = () => {
       {/* Matches list */}
       <div className="space-y-4">
         {squad.matchHistory.length === 0 ? (
-          <div className="p-8 rounded-[16px] border border-border-muted bg-surface shadow-card text-center font-mono text-[12px] text-text-secondary">
-            No matches played yet. Schedule a match or enter matchmaking!
+          <div className="p-12 rounded-3xl border border-border-muted bg-surface text-center space-y-3 shadow-card">
+            <div className="w-12 h-12 rounded-2xl bg-elevated border border-border-muted flex items-center justify-center mx-auto text-volt">
+              <Award size={22} />
+            </div>
+            <p className="font-sans font-bold text-sm text-text-primary">
+              Play a match to build your history.
+            </p>
+            <p className="font-mono text-xs text-text-secondary">
+              Schedule a match or enter matchmaking to build your squad's history.
+            </p>
           </div>
         ) : (
           squad.matchHistory.map((match) => {

@@ -1,4 +1,5 @@
 import React, { useRef, useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Heart, MessageCircle, Share2, Bookmark, Music, Volume2, VolumeX, MoreVertical } from 'lucide-react';
 import { motion } from 'framer-motion';
 import type { DbReel } from '../../services/socialService';
@@ -29,6 +30,7 @@ export const ReelCard: React.FC<ReelCardProps> = ({
   onLike,
   onView,
 }) => {
+  const navigate = useNavigate();
   const videoRef = useRef<HTMLVideoElement>(null);
   const [muted, setMuted] = useState(true);
   const [saved, setSaved] = useState(false);
@@ -36,9 +38,10 @@ export const ReelCard: React.FC<ReelCardProps> = ({
   // Use DB-driven state
   const liked = reel.is_liked ?? false;
   const likeCount = reel.likes_count;
-  const authorName = reel.author?.full_name || 'Unknown';
-  const authorSport = reel.author?.sport || '';
-  const authorAvatar = reel.author?.avatar_url || null;
+  const authorId = reel.author_id || (reel as any).user_id || (reel.author as any)?.id || (reel.author as any)?.$id;
+  const authorName = reel.author?.full_name || (reel as any).author_full_name || 'Unknown';
+  const authorSport = reel.author?.sport || reel.sport_tag || '';
+  const authorAvatar = reel.author?.avatar_url || (reel as any).author_avatar_url || null;
 
   useEffect(() => {
     if (!videoRef.current) return;
@@ -151,13 +154,18 @@ export const ReelCard: React.FC<ReelCardProps> = ({
       {/* Bottom info */}
       <div className="absolute bottom-6 left-4 right-16 z-10">
         {/* Author */}
-        <div className="flex items-center gap-2.5 mb-3">
-          <ReelAvatar url={authorAvatar} name={authorName} />
-          <div className="flex-1">
-            <div className="text-white font-bold text-[14px] leading-tight">{authorName}</div>
-            {authorSport && (
-              <span className="text-[#CCFF00] text-[10px] font-bold">{authorSport}</span>
-            )}
+        <div className="flex items-center justify-between gap-2.5 mb-3">
+          <div
+            onClick={() => authorId && navigate(`/app/profile/${authorId}`)}
+            className="flex items-center gap-2.5 cursor-pointer hover:opacity-90 transition-opacity"
+          >
+            <ReelAvatar url={authorAvatar} name={authorName} />
+            <div>
+              <div className="text-white font-bold text-[14px] leading-tight hover:underline">{authorName}</div>
+              {authorSport && (
+                <span className="text-[#CCFF00] text-[10px] font-bold">{authorSport}</span>
+              )}
+            </div>
           </div>
           <button className="px-3 py-1 rounded-full border border-white/70 text-white text-[11px] font-semibold hover:bg-white/10 transition-colors">
             Follow

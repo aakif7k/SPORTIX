@@ -176,7 +176,7 @@ export const PostCard: React.FC<PostCardProps> = ({ post, onLike, onDelete }) =>
   const navigate = useNavigate();
 
   const postId = post.$id || post.id;
-  const authorId = post.author_id || post.author?.id;
+  const authorId = post.author_id || post.user_id || (post as any).userId || post.author?.id || (post.author as any)?.$id;
   const authorName = post.author_full_name || post.author?.full_name || 'SportiX Athlete';
   const authorUsername = post.author_username || post.author?.username || 'athlete';
   const authorSport = post.sport_tag || post.author_sport || post.author?.sport || '';

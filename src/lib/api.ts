@@ -1,4 +1,14 @@
-const BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
+function getBaseUrl(): string {
+  const envUrl = import.meta.env.VITE_API_URL || import.meta.env.VITE_BACKEND_URL;
+  if (envUrl && !envUrl.includes('localhost') && !envUrl.includes('127.0.0.1')) {
+    return envUrl;
+  }
+  if (typeof window !== 'undefined' && window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1') {
+    return envUrl || window.location.origin;
+  }
+  return envUrl || 'http://localhost:8000';
+}
+const BASE_URL = getBaseUrl();
 
 function getJWT(): string {
   return localStorage.getItem('sportix_jwt') || '';

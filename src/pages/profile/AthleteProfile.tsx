@@ -49,7 +49,7 @@ export const AthleteProfile: React.FC = () => {
       return;
     }
 
-    const lookupId = targetId || authUser?.id || uid;
+    const lookupId = uid || targetId;
 
     if (!lookupId) {
       setProfileLoading(false);
@@ -66,10 +66,8 @@ export const AthleteProfile: React.FC = () => {
           if (appwriteProfile) {
             setProfileUser(profileToUserShape(appwriteProfile) as unknown as User);
             setProfileError(null);
-          } else if (authUser) {
-            setProfileUser(authUser as unknown as User);
-            setProfileError(null);
           } else {
+            setProfileUser(null);
             setProfileError('Athlete profile not found.');
           }
         }
@@ -77,12 +75,8 @@ export const AthleteProfile: React.FC = () => {
       .catch(err => {
         console.error('[AthleteProfile] fetch error:', err);
         if (isMounted) {
-          if (authUser) {
-            setProfileUser(authUser as unknown as User);
-            setProfileError(null);
-          } else {
-            setProfileError('Failed to load profile. Please try again.');
-          }
+          setProfileUser(null);
+          setProfileError('Failed to load profile. Please try again.');
         }
       })
       .finally(() => {
@@ -328,7 +322,18 @@ export const AthleteProfile: React.FC = () => {
                   </p>
 
                   {/* Physical Specs Grid */}
-                  <div className="grid grid-cols-3 gap-3 pt-2">
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 pt-2">
+                    <div className="p-3 rounded-xl bg-elevated border border-border-muted">
+                      <p className="font-mono text-[9px] text-text-muted uppercase">Age</p>
+                      <p className="font-mono text-xs font-bold text-accent">
+                        {(() => {
+                          const dob = profileUser.dateOfBirth || (profileUser as any).date_of_birth;
+                          if (!dob) return 'Not set';
+                          const age = Math.floor((Date.now() - new Date(dob).getTime()) / (365.25 * 24 * 3600 * 1000));
+                          return !isNaN(age) && age > 0 ? `${age} yrs` : 'Not set';
+                        })()}
+                      </p>
+                    </div>
                     <div className="p-3 rounded-xl bg-elevated border border-border-muted">
                       <p className="font-mono text-[9px] text-text-muted uppercase">Height</p>
                       <p className="font-mono text-xs font-bold text-text-primary">{(profileUser as any).height ? `${(profileUser as any).height} cm` : 'Not set'}</p>
@@ -338,7 +343,7 @@ export const AthleteProfile: React.FC = () => {
                       <p className="font-mono text-xs font-bold text-text-primary">{(profileUser as any).weight ? `${(profileUser as any).weight} kg` : 'Not set'}</p>
                     </div>
                     <div className="p-3 rounded-xl bg-elevated border border-border-muted">
-                      <p className="font-mono text-[9px] text-text-muted uppercase">Foot</p>
+                      <p className="font-mono text-[9px] text-text-muted uppercase">Foot / Hand</p>
                       <p className="font-mono text-xs font-bold text-accent">{(profileUser as any).preferred_foot || 'Not set'}</p>
                     </div>
                   </div>
@@ -430,24 +435,17 @@ export const AthleteProfile: React.FC = () => {
           {/* MATCH HISTORY TAB */}
           {activeTab === 'Match History' && (
             <div className="space-y-4">
-              {[
-                { vs: 'VS Iron Titans', score: '3 - 1', result: 'WIN', mvp: true, date: '2 days ago' },
-                { vs: 'VS Cyber Knights', score: '2 - 2', result: 'DRAW', mvp: false, date: '5 days ago' },
-                { vs: 'VS Apex Predators', score: '4 - 0', result: 'WIN', mvp: true, date: '1 week ago' },
-              ].map((m, i) => (
-                <div key={i} className="p-4 rounded-2xl bg-surface border border-border-muted flex items-center justify-between">
-                  <div>
-                    <p className="font-sans font-bold text-sm text-text-primary">{m.vs}</p>
-                    <p className="font-mono text-xs text-text-muted">{m.date}</p>
-                  </div>
-                  <div className="flex items-center gap-3">
-                    <span className="font-mono text-base font-bold text-text-primary">{m.score}</span>
-                    <span className={`px-2.5 py-1 rounded-lg font-mono text-xs font-bold ${m.result === 'WIN' ? 'bg-accent/10 text-accent' : 'bg-elevated border border-border-muted text-text-primary'}`}>
-                      {m.result}
-                    </span>
-                  </div>
+              <div className="p-8 rounded-3xl bg-surface border border-border-muted text-center space-y-3 shadow-lg">
+                <div className="w-12 h-12 rounded-2xl bg-elevated border border-border-muted flex items-center justify-center mx-auto text-accent">
+                  <Trophy size={22} />
                 </div>
-              ))}
+                <p className="font-sans font-bold text-sm text-text-primary">
+                  Play a match to build your history.
+                </p>
+                <p className="font-mono text-xs text-text-muted">
+                  Compete in events & tournaments to log match statistics, earn SSR ratings, and record your performance.
+                </p>
+              </div>
             </div>
           )}
 

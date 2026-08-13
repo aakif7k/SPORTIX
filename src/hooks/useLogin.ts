@@ -4,6 +4,7 @@ import { useAuth } from '@/context/AuthContext';
 import { validateEmail } from '@/lib/validation';
 import { mapAppwriteError, mapGoogleError } from '@/lib/errorMapper';
 import { toast } from '@/components/ui/SportixToast';
+import { loginWithGoogle, getUserProfile, getCurrentUser } from '@/lib/authService';
 
 export function useLogin() {
   const navigate = useNavigate();
@@ -37,7 +38,6 @@ export function useLogin() {
 
   const handleGoogleLogin = useCallback(async () => {
     try {
-      const { loginWithGoogle } = await import('@/lib/authService');
       loginWithGoogle();
     } catch (err) {
       const mapped = mapGoogleError(err);
@@ -70,7 +70,6 @@ export function useLogin() {
       await login(email.trim().toLowerCase(), password);
       toast.success('Welcome back to SPORTiX! ⚡', 'Logged in successfully.');
 
-      const { getUserProfile, getCurrentUser } = await import('@/lib/authService');
       const freshUser = await getCurrentUser();
       let freshProfile = null;
       if (freshUser?.id) {

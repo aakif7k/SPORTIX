@@ -80,6 +80,7 @@ function docToProfile(doc: AppwriteDocument): UserProfile {
     profile_image_file_id:  doc.profile_image_file_id  ?? null,
     profile_image_url:      fileUrl,
     bio:                    doc.bio                    ?? '',
+    date_of_birth:          doc.date_of_birth          ?? null,
     is_open_to_recruit:     doc.is_open_to_recruit     ?? false,
     is_active:              doc.is_active              ?? true,
     is_onboarding_complete: doc.is_onboarding_complete ?? false,
@@ -201,6 +202,7 @@ export async function ensureUserProfile(appwriteAcc: {
     location: '',
     avatar_url: null,
     bio: '',
+    date_of_birth: null,
     is_open_to_recruit: false,
     is_active: true,
     is_onboarding_complete: false,
@@ -221,6 +223,21 @@ export async function ensureUserProfile(appwriteAcc: {
     );
     return docToProfile(doc as AppwriteDocument);
   } catch (err: any) {
+    if (err?.message?.includes('date_of_birth') || err?.message?.includes('Unknown attribute')) {
+      try {
+        const fallbackData = { ...newDocData };
+        delete (fallbackData as any).date_of_birth;
+        const doc = await databases.createDocument(
+          DATABASE_ID,
+          COLLECTIONS.PROFILES,
+          uid,
+          fallbackData
+        );
+        return docToProfile(doc as AppwriteDocument);
+      } catch (retryErr: any) {
+        console.error('[profileService] ensureUserProfile retry error:', retryErr);
+      }
+    }
     const retryDoc = await getProfile(uid);
     if (retryDoc) return retryDoc;
     console.error('[profileService] ensureUserProfile error:', err);
@@ -489,6 +506,8 @@ export function profileToUserShape(profile: UserProfile): Record<string, any> {
     sports:              profile.sports ?? [],
     location:            profile.location,
     bio:                 profile.bio,
+    dateOfBirth:         profile.date_of_birth || undefined,
+    date_of_birth:       profile.date_of_birth || undefined,
     experienceLevel:     profile.experience_level,
     openToRecruit:       profile.is_open_to_recruit,
     isOnboardingComplete: profile.is_onboarding_complete,

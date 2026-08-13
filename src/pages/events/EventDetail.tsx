@@ -990,20 +990,34 @@ export const EventDetail: React.FC = () => {
             </motion.div>
           )}
 
-          {/* ─── BRACKET ──────────────────────────────────────── */}
-          {activeTab === 'bracket' && bracket.length > 0 && (
+          {/* ─── BRACKET / MATCHES ──────────────────────────── */}
+          {activeTab === 'bracket' && (
             <motion.div key="bracket" variants={stagger} initial="hidden" animate="visible" className="space-y-4">
               <motion.div variants={fadeUp} className="flex items-center gap-2">
                 <Trophy size={14} style={{ color: '#FFD700' }} />
                 <h2 className="font-display text-[18px] tracking-wider uppercase" style={{ color: 'var(--text-primary)' }}>
-                  Tournament Bracket
+                  Tournament Bracket & Matches
                 </h2>
               </motion.div>
-              <motion.div variants={fadeUp} className="premium-card rounded-[22px] p-4 relative overflow-hidden">
-                <div className="absolute top-0 left-0 right-0 h-px"
-                  style={{ background: 'linear-gradient(90deg, transparent, rgba(255,213,74,0.5), transparent)' }} />
-                <BracketView rounds={bracket} />
-              </motion.div>
+              {bracket.length === 0 ? (
+                <motion.div variants={fadeUp} className="premium-card rounded-[22px] p-8 text-center space-y-3">
+                  <div className="w-12 h-12 rounded-2xl bg-elevated border border-border-muted flex items-center justify-center mx-auto text-accent">
+                    <Trophy size={22} />
+                  </div>
+                  <p className="font-sans font-bold text-sm" style={{ color: 'var(--text-primary)' }}>
+                    Play a match to build your history.
+                  </p>
+                  <p className="font-mono text-xs" style={{ color: 'var(--text-muted)' }}>
+                    Tournament brackets and match fixtures will populate here as athletes join.
+                  </p>
+                </motion.div>
+              ) : (
+                <motion.div variants={fadeUp} className="premium-card rounded-[22px] p-4 relative overflow-hidden">
+                  <div className="absolute top-0 left-0 right-0 h-px"
+                    style={{ background: 'linear-gradient(90deg, transparent, rgba(255,213,74,0.5), transparent)' }} />
+                  <BracketView rounds={bracket} />
+                </motion.div>
+              )}
             </motion.div>
           )}
         </AnimatePresence>

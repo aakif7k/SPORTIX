@@ -39,6 +39,7 @@ export interface UserProfile {
   profile_image_file_id?: string | null;
   profile_image_url?: string | null;
   bio: string;
+  date_of_birth?: string | null;   // ISO date string YYYY-MM-DD
   is_open_to_recruit: boolean;
   is_active: boolean;
   is_onboarding_complete: boolean;
@@ -60,6 +61,8 @@ export interface RegisterData {
   sports: string[];
   experienceLevel: string;
   location: string;
+  bio?: string;
+  dateOfBirth?: string;  // ISO date string YYYY-MM-DD
 }
 
 /* ─── Map Appwrite Models.User to AuthUser ───────────────────────────────── */
@@ -73,6 +76,13 @@ export function toAuthUser(user: AppwriteUser): AuthUser {
 
 /* ─── REGISTER ───────────────────────────────────────────────────────────── */
 export async function registerUser(data: RegisterData): Promise<AuthUser> {
+  // 0. Clear any pre-existing active session to prevent Appwrite Error 409 (user_session_already_exists)
+  try {
+    await account.deleteSession('current');
+  } catch {
+    /* no active session */
+  }
+
   // 1. Create Appwrite auth account
   const user = await account.create(
     ID.unique(),
@@ -82,16 +92,28 @@ export async function registerUser(data: RegisterData): Promise<AuthUser> {
   );
 
   // 2. Create email session immediately (log them in)
-  await account.createEmailPasswordSession(data.email, data.password);
+  try {
+    await account.createEmailPasswordSession(data.email, data.password);
+  } catch (sessionErr: any) {
+    if (
+      sessionErr?.message?.includes('prohibited when a session is active') ||
+      sessionErr?.type === 'user_session_already_exists'
+    ) {
+      try {
+        await account.deleteSession('current');
+        await account.createEmailPasswordSession(data.email, data.password);
+      } catch {
+        /* session established */
+      }
+    } else {
+      throw sessionErr;
+    }
+  }
 
   // 3. Create profile document in Appwrite Database
   const nowIso = new Date().toISOString();
   try {
-    await databases.createDocument(
-      DATABASE_ID,
-      COLLECTIONS.PROFILES,
-      user.$id,           // Use the auth user ID as the document ID
-      {
+      const profileDocData: Record<string, any> = {
         full_name:              data.fullName,
         username:               data.username.toLowerCase().trim(),
         email:                  data.email,
@@ -101,7 +123,8 @@ export async function registerUser(data: RegisterData): Promise<AuthUser> {
         experience_level:       data.experienceLevel || 'amateur',
         location:               data.location || '',
         avatar_url:             null,
-        bio:                    '',
+        bio:                    data.bio || '',
+        date_of_birth:          data.dateOfBirth || null,
         is_open_to_recruit:     false,
         is_active:              true,
         is_onboarding_complete: false,
@@ -111,19 +134,44 @@ export async function registerUser(data: RegisterData): Promise<AuthUser> {
         login_streak:           0,
         created_at:             nowIso,
         updated_at:             nowIso,
-      },
-    );
-  } catch (err: any) {
-    console.error('Appwrite profiles document creation failed:', err?.message || err);
-    // User-friendly error message if write fails
-    throw new Error(err?.message || "Couldn't create your profile. Please try again.");
-  }
+      };
+
+      try {
+        await databases.createDocument(
+          DATABASE_ID,
+          COLLECTIONS.PROFILES,
+          user.$id,
+          profileDocData,
+        );
+      } catch (docErr: any) {
+        if (docErr?.message?.includes('date_of_birth') || docErr?.message?.includes('Unknown attribute')) {
+          delete profileDocData.date_of_birth;
+          await databases.createDocument(
+            DATABASE_ID,
+            COLLECTIONS.PROFILES,
+            user.$id,
+            profileDocData,
+          );
+        } else {
+          throw docErr;
+        }
+      }
+    } catch (err: any) {
+      console.error('Appwrite profiles document creation failed:', err?.message || err);
+      // User-friendly error message if write fails
+      throw new Error(err?.message || "Couldn't create your profile. Please try again.");
+    }
 
   return toAuthUser(user);
 }
 
 /* ─── LOGIN ──────────────────────────────────────────────────────────────── */
 export async function loginUser(email: string, password: string): Promise<AuthUser> {
+  try {
+    await account.deleteSession('current');
+  } catch {
+    /* no active session */
+  }
   await account.createEmailPasswordSession(email, password);
   const user = await account.get();
   return toAuthUser(user);
@@ -227,6 +275,9 @@ export function getAuthErrorMessage(error: any): string {
   if (msg.includes('user_already_exists') || msg.includes('already exists') || msg.includes('already registered')) {
     return 'An account with this email address already exists. Please log in.';
   }
+  if (msg.includes('prohibited when a session is active') || msg.includes('user_session_already_exists')) {
+    return 'A session is currently active. Signing out and completing your registration...';
+  }
   if (msg.includes('Invalid credentials') || msg.includes('invalid_credentials')) {
     return 'Email or password is incorrect.';
   }
@@ -259,6 +310,7 @@ function docToProfile(doc: AppwriteDocument): UserProfile {
     location:               doc.location         ?? '',
     avatar_url:             doc.avatar_url       ?? null,
     bio:                    doc.bio              ?? '',
+    date_of_birth:          doc.date_of_birth    ?? null,
     is_open_to_recruit:     doc.is_open_to_recruit     ?? false,
     is_active:              doc.is_active              ?? true,
     is_onboarding_complete: doc.is_onboarding_complete ?? false,

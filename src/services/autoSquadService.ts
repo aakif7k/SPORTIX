@@ -8,7 +8,17 @@
 
 import { account, databases, ID, Query, DATABASE_ID, COLLECTIONS } from '@/lib/appwrite';
 
-const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || 'http://localhost:8000';
+function getBackendUrl(): string {
+  const envUrl = import.meta.env.VITE_BACKEND_URL || import.meta.env.VITE_API_URL;
+  if (envUrl && !envUrl.includes('localhost') && !envUrl.includes('127.0.0.1')) {
+    return envUrl;
+  }
+  if (typeof window !== 'undefined' && window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1') {
+    return envUrl || window.location.origin;
+  }
+  return envUrl || 'http://localhost:8000';
+}
+const BACKEND_URL = getBackendUrl();
 
 export interface ScoreBreakdown {
   compatibility_score: number;

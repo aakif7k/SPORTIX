@@ -193,7 +193,7 @@ export const ProfileEditDrawer: React.FC<Props> = ({ athlete, onClose }) => {
     weight: athlete?.weight || '',
     nationality: athlete?.nationality || '',
     phone: athlete?.phone || '',
-    dateOfBirth: athlete?.dateOfBirth || '',
+    dateOfBirth: athlete?.dateOfBirth || (athlete as any)?.date_of_birth || '',
     club: athlete?.club || '',
     agent: athlete?.agent || '',
     jersey: athlete?.jersey || '',
@@ -261,6 +261,7 @@ export const ProfileEditDrawer: React.FC<Props> = ({ athlete, onClose }) => {
           is_open_to_recruit: draft.openToRecruit,
           position: draft.position,
           avatar_url: draft.avatar,
+          date_of_birth: draft.dateOfBirth || null,
         } as any);
       }
 
@@ -275,6 +276,8 @@ export const ProfileEditDrawer: React.FC<Props> = ({ athlete, onClose }) => {
         openToRecruit: draft.openToRecruit,
         avatar: draft.avatar,
         position: draft.position,
+        dateOfBirth: draft.dateOfBirth,
+        date_of_birth: draft.dateOfBirth,
       });
 
       toast.success('Profile Updated! ⚡ Your changes have been saved.');

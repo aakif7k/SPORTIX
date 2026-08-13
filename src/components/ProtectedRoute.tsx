@@ -1,6 +1,23 @@
+/**
+ * src/components/ProtectedRoute.tsx
+ * ─────────────────────────────────────────────────────────────────────────────
+ * Route guards for SPORTiX.
+ *
+ * Exports:
+ *   ProtectedRoute   — requires auth + completed onboarding. Saves intended
+ *                      destination in location.state.from so login can redirect back.
+ *   OnboardingRoute  — requires auth; redirects to feed if onboarding already done.
+ *   PublicRoute      — redirects authenticated users away from public pages.
+ *   PublicOnlyRoute  — alias for PublicRoute (per architecture spec).
+ */
+
 import React from 'react';
-import { Navigate } from 'react-router-dom';
+import { Navigate, useLocation } from 'react-router-dom';
 import { useAuth } from '@/context/AuthContext';
+
+// ─────────────────────────────────────────────────────────────────────────────
+//  Loading screen
+// ─────────────────────────────────────────────────────────────────────────────
 
 function LoadingScreen() {
   return (
@@ -32,83 +49,105 @@ function LoadingScreen() {
       </div>
       <style>{`
         @keyframes loadBar {
-          0% { width: 0%; marginLeft: 0% }
-          50% { width: 60%; marginLeft: 20% }
-          100% { width: 0%; marginLeft: 100% }
+          0%   { width: 0%;  marginLeft: 0% }
+          50%  { width: 60%; marginLeft: 20% }
+          100% { width: 0%;  marginLeft: 100% }
         }
       `}</style>
     </div>
   );
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+//  ProtectedRoute
+// ─────────────────────────────────────────────────────────────────────────────
+
 /**
  * Route guard for main app pages (/app/*, /pulse/*).
- * Requires authenticated user AND completed onboarding.
  *
- * IMPORTANT: profile=null means the profile hasn't loaded OR failed to load.
- * We treat it as "onboarding incomplete" so users can't bypass onboarding
- * if the profile load fails. This is the correct conservative default.
+ * Requires: authenticated + onboarding complete.
+ *
+ * On failure → saves the intended path in `location.state.from` so the
+ * login page can send the user back after they authenticate.
+ *
+ * profile=null is treated as "onboarding incomplete" — the safe conservative
+ * default when the profile load fails or is still pending.
  */
-export function ProtectedRoute({
-  children
-}: {
-  children: React.ReactNode
-}) {
+export function ProtectedRoute({ children }: { children: React.ReactNode }) {
+  const { isAuthenticated, authLoading, profile } = useAuth();
+  const location = useLocation();
+
+  if (authLoading) return <LoadingScreen />;
+
+  if (!isAuthenticated) {
+    // Preserve the intended destination so login can redirect back
+    return <Navigate to="/login" state={{ from: location.pathname }} replace />;
+  }
+
+  // profile=null → onboarding not yet complete (safe default)
+  if (!profile || !profile.is_onboarding_complete) {
+    return <Navigate to="/onboarding" replace />;
+  }
+
+  return <>{children}</>;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+//  OnboardingRoute
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * Dedicated guard for /onboarding.
+ *
+ * Requires: authenticated.
+ * If onboarding IS complete → send to /app/feed.
+ * If profile is null (not yet loaded) → stay on onboarding.
+ */
+export function OnboardingRoute({ children }: { children: React.ReactNode }) {
   const { isAuthenticated, authLoading, profile } = useAuth();
 
   if (authLoading) return <LoadingScreen />;
   if (!isAuthenticated) return <Navigate to="/login" replace />;
 
-  // FIXED: profile=null → onboarding required (not bypassed)
-  // Previously: `profile && !profile.is_onboarding_complete` — when profile was null,
-  // the condition was false (null && ... = false) so the guard was skipped entirely,
-  // letting users without a persisted profile through to the app.
-  if (!profile || !profile.is_onboarding_complete) return <Navigate to="/onboarding" replace />;
+  // Only redirect to feed when profile is loaded AND onboarding is confirmed done
+  if (profile && profile.is_onboarding_complete) {
+    return <Navigate to="/app/feed" replace />;
+  }
 
   return <>{children}</>;
 }
 
-/**
- * Dedicated route guard for /onboarding page.
- * Requires authenticated user.
- * If onboarding is ALREADY complete, redirects to /app/feed.
- * If profile is null (not loaded), stay on onboarding — don't redirect to feed.
- */
-export function OnboardingRoute({
-  children
-}: {
-  children: React.ReactNode
-}) {
-  const { isAuthenticated, authLoading, profile } = useAuth();
-
-  if (authLoading) return <LoadingScreen />;
-  if (!isAuthenticated) return <Navigate to="/login" replace />;
-
-  // Only redirect to feed if profile is loaded AND onboarding is confirmed complete
-  if (profile && profile.is_onboarding_complete) return <Navigate to="/app/feed" replace />;
-
-  return <>{children}</>;
-}
+// ─────────────────────────────────────────────────────────────────────────────
+//  PublicRoute / PublicOnlyRoute
+// ─────────────────────────────────────────────────────────────────────────────
 
 /**
- * Route guard for login/signup public pages.
- * If user is authenticated AND onboarding is complete, redirects to /app/feed.
- * If user is authenticated AND onboarding is incomplete (or profile=null), redirects to /onboarding.
+ * Guard for login / signup / forgot-password pages.
+ *
+ * Authenticated users are redirected:
+ *   → onboarding  if profile=null or onboarding not complete
+ *   → location.state.from OR /app/feed  if fully set up
  */
-export function PublicRoute({
-  children
-}: {
-  children: React.ReactNode
-}) {
+function PublicGuard({ children }: { children: React.ReactNode }) {
   const { isAuthenticated, authLoading, profile } = useAuth();
+  const location = useLocation();
 
   if (authLoading) return <LoadingScreen />;
+
   if (isAuthenticated) {
-    // FIXED: profile=null means not yet loaded — go to onboarding, not feed
     if (!profile || !profile.is_onboarding_complete) {
       return <Navigate to="/onboarding" replace />;
     }
-    return <Navigate to="/app/feed" replace />;
+    // Return to the page the user originally tried to visit, or fall back to feed
+    const from = (location.state as any)?.from as string | undefined;
+    return <Navigate to={from || '/app/feed'} replace />;
   }
+
   return <>{children}</>;
 }
+
+/** Original name — kept for backward compatibility with App.tsx */
+export const PublicRoute = PublicGuard;
+
+/** New canonical name per architecture spec */
+export const PublicOnlyRoute = PublicGuard;

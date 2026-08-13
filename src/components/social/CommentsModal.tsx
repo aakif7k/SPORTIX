@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { X, Send, MessageCircle, Loader2 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useAuth } from '@/context/AuthContext';
@@ -24,6 +25,7 @@ function timeAgo(iso: string): string {
 
 export const CommentsModal: React.FC<CommentsModalProps> = ({ postId, onClose, onCommentAdded }) => {
   const { user } = useAuth();
+  const navigate = useNavigate();
   const [comments, setComments] = useState<PostComment[]>([]);
   const [loading, setLoading] = useState(true);
   const [text, setText] = useState('');
@@ -122,14 +124,40 @@ export const CommentsModal: React.FC<CommentsModalProps> = ({ postId, onClose, o
                 <img
                   src={c.author_avatar_url || `https://i.pravatar.cc/100?u=${c.author_id}`}
                   alt=""
-                  className="w-8 h-8 rounded-full object-cover border border-border-muted flex-shrink-0"
+                  onClick={() => {
+                    if (c.author_id) {
+                      onClose();
+                      navigate(`/app/profile/${c.author_id}`);
+                    }
+                  }}
+                  className="w-8 h-8 rounded-full object-cover border border-border-muted flex-shrink-0 cursor-pointer hover:border-accent transition-colors"
                 />
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center justify-between">
-                    <p className="font-bold text-xs text-text-primary truncate">{c.author_name}</p>
+                    <p
+                      onClick={() => {
+                        if (c.author_id) {
+                          onClose();
+                          navigate(`/app/profile/${c.author_id}`);
+                        }
+                      }}
+                      className="font-bold text-xs text-text-primary truncate cursor-pointer hover:text-accent transition-colors"
+                    >
+                      {c.author_name}
+                    </p>
                     <span className="font-mono text-[10px] text-text-muted">{timeAgo(c.created_at)}</span>
                   </div>
-                  <p className="font-mono text-[10px] text-accent">@{c.author_username}</p>
+                  <p
+                    onClick={() => {
+                      if (c.author_id) {
+                        onClose();
+                        navigate(`/app/profile/${c.author_id}`);
+                      }
+                    }}
+                    className="font-mono text-[10px] text-accent cursor-pointer hover:underline"
+                  >
+                    @{c.author_username}
+                  </p>
                   <p className="font-sans text-xs text-text-primary mt-1 leading-relaxed whitespace-pre-wrap">{c.content}</p>
                 </div>
               </div>

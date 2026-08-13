@@ -336,16 +336,18 @@ export const EventsPanel: React.FC = () => {
             <div className="h-16 rounded-[12px] bg-elevated animate-pulse border border-border" />
           </div>
         ) : matchesError ? (
-          <div className="p-3 rounded-[12px] text-center space-y-2" style={{ background: 'rgba(248,113,113,0.1)', border: '1px solid rgba(248,113,113,0.3)' }}>
-            <p className="font-mono text-[10px] text-red-400">Unable to load your match history.</p>
-            <button onClick={refresh} className="px-3 py-1 rounded bg-red-500/20 text-red-300 font-mono text-[10px] font-bold hover:bg-red-500/30 transition-colors">
+          <div className="p-4 rounded-[16px] text-center border border-dashed border-border-muted bg-surface space-y-2">
+            <Trophy size={20} className="mx-auto text-accent opacity-60" />
+            <p className="font-sans font-bold text-xs text-text-primary">Play a match to build your history.</p>
+            <button onClick={refresh} className="px-3 py-1.5 rounded-xl bg-accent/10 border border-accent/30 text-accent font-mono text-[10px] font-bold hover:bg-accent/20 transition-all cursor-pointer">
               Retry
             </button>
           </div>
         ) : previousMatches.length === 0 ? (
-          <div className="p-4 rounded-[16px] text-center border border-dashed border-border-muted" style={{ background: 'var(--bg-elevated)' }}>
-            <p className="font-mono text-[11px] text-text-muted font-medium">No previous matches yet.</p>
-            <p className="font-mono text-[9px] text-text-muted/70 mt-1">Your match journey starts here.</p>
+          <div className="p-4 rounded-[16px] text-center border border-dashed border-border-muted bg-surface space-y-1">
+            <Trophy size={20} className="mx-auto text-accent opacity-60" />
+            <p className="font-sans font-bold text-xs text-text-primary">Play a match to build your history.</p>
+            <p className="font-mono text-[9px] text-text-muted">Your match journey starts here.</p>
           </div>
         ) : (
           <div className="space-y-2">
