@@ -1,121 +1,31 @@
-import React, { useState } from 'react';
-import { useSearchParams, useNavigate } from 'react-router-dom';
+import React, { useState, useEffect } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { AILoader } from '../../components/pulse/AILoader';
-import { PlayerCard } from '../../components/pulse/PlayerCard';
+import { AutoSquadEventSelector, type EventOption } from '../../components/pulse/AutoSquadEventSelector';
+import { AIInsightPanel, type AIInsightData } from '../../components/pulse/AIInsightPanel';
 import { getRemainingGenerations, generateAutoSquad, acceptAutoSquad, type DailyLimitInfo } from '../../services/autoSquadService';
 import { useSquadStore } from '../../store/squadStore';
 import { useAuthStore } from '../../store/authStore';
 import { useAISettingsStore } from '../../store/aiSettingsStore';
-import { BadgeIcon } from '../../components/gamification/BadgeIcon';
-import type { Athlete } from '../../types/pulse.types';
-import { Sparkles, Zap, Compass, Trash2, Check,
-  Lock, MapPin, Users, MessageSquare,
-  Activity, Plus, Shield,
-  Trophy, Star, Brain, ArrowRight,
-  Clock, CheckCircle2
-} from 'lucide-react';
+import { Sparkles, Check, Users, Activity, Brain, ArrowRight, CheckCircle2, XCircle } from 'lucide-react';
 import { PendingReportBanner } from '../../components/performance/PendingReportBanner';
 
-// ─── Sport Config ────────────────────────────────────────────────────────────
-const SPORT_OPTIONS = [
-  { id: 'Football',   label: 'Football',   icon: <svg viewBox="0 0 24 24" className="w-7 h-7" fill="none" stroke="currentColor" strokeWidth="1.5"><circle cx="12" cy="12" r="10"/><path d="M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20"/><path d="M2 12h20"/></svg> },
-  { id: 'Basketball', label: 'Basketball', icon: <svg viewBox="0 0 24 24" className="w-7 h-7" fill="none" stroke="currentColor" strokeWidth="1.5"><circle cx="12" cy="12" r="10"/><path d="M5.636 5.636a9 9 0 1 0 12.728 12.728A9 9 0 0 0 5.636 5.636z"/><path d="M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20"/></svg> },
-  { id: 'Cricket',    label: 'Cricket',    icon: <svg viewBox="0 0 24 24" className="w-7 h-7" fill="none" stroke="currentColor" strokeWidth="1.5"><path d="M12 2v20"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg> },
-];
-
+// ─── 4 Master Tabs ────────────────────────────────────────────────────────────
 const DASH_TABS = [
-  { id: 'generate',    label: 'Generate',      icon: <Sparkles size={13} /> },
-  { id: 'results',     label: 'Results',       icon: <Activity size={13} /> },
-  { id: 'accepted',    label: 'Accepted',      icon: <CheckCircle2 size={13} /> },
-  { id: 'invitations', label: 'Invitations',   icon: <Users size={13} /> },
-  { id: 'insights',    label: 'AI Insights',   icon: <Brain size={13} /> },
-  { id: 'activity',    label: 'Activity Feed', icon: <MessageSquare size={13} /> },
-  { id: 'chemistry',   label: 'Chemistry',     icon: <Zap size={13} /> },
+  { id: 'generate', label: 'Generate', icon: <Sparkles size={13} /> },
+  { id: 'results', label: 'Results', icon: <Activity size={13} /> },
+  { id: 'accepted', label: 'Accepted', icon: <CheckCircle2 size={13} /> },
+  { id: 'insights', label: 'AI Insights', icon: <Brain size={13} /> },
 ];
 
-// Mock invitations
-const MOCK_INVITES = [
-  { id: 'inv1', from: 'Marcus Reid', squad: 'Alpha Strikers FC', sport: 'Football', chemistry: 88, level: 84, avatar: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=150', expires: '2h 30m' },
-  { id: 'inv2', from: 'Priya Nair',  squad: 'Neon Falcons',      sport: 'Basketball', chemistry: 76, level: 72, avatar: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=150', expires: '5h 10m' },
+const FUTURISTIC_NAMES = [
+  'SQUAD NOVA', 'SQUAD VECTOR', 'SQUAD APEX', 'SQUAD TITAN', 'SQUAD VORTEX',
+  'PULSE X', 'STRIKE XI', 'NEON XI', 'SQUAD AXIS', 'SQUAD VELOCITY'
 ];
 
-// Mock activity feed items
-const MOCK_ACTIVITY = [
-  { id: 'a1', type: 'match',    text: 'Iron Pulse FC won 3–1 vs Rapid XI', time: '2h ago',  icon: <Trophy size={12} /> },
-  { id: 'a2', type: 'message',  text: 'Zaid posted a new tactical update in chat', time: '4h ago',  icon: <MessageSquare size={12} /> },
-  { id: 'a3', type: 'member',   text: 'Devon confirmed attendance for Saturday practice', time: '6h ago',  icon: <Check size={12} /> },
-  { id: 'a4', type: 'badge',    text: 'Squad earned "5 Match Win Streak" badge', time: '1d ago',  icon: <Star size={12} /> },
-  { id: 'a5', type: 'chemistry',text: 'Team chemistry rose to 87% after the last match', time: '1d ago',  icon: <Zap size={12} /> },
-];
-
-// ─── Radar Chart ─────────────────────────────────────────────────────────────
-const RadarChart: React.FC<{ squad: any }> = ({ squad }) => {
-  const categories = [
-    { name: 'Attack',      value: squad.winRate - 5 },
-    { name: 'Defense',     value: squad.chemistry.overall - 4 },
-    { name: 'Speed',       value: 82 },
-    { name: 'Tactics',     value: squad.chemistry.coordination || 85 },
-    { name: 'Reliability', value: squad.chemistry.trust || 88 },
-    { name: 'Chemistry',   value: squad.chemistry.overall },
-  ];
-  const size = 150; const center = size / 2; const rMax = 52;
-  const points = categories.map((cat, i) => {
-    const angle = (i * 2 * Math.PI) / categories.length - Math.PI / 2;
-    const radius = (cat.value / 100) * rMax;
-    return { x: center + radius * Math.cos(angle), y: center + radius * Math.sin(angle), label: cat.name, val: cat.value };
-  });
-  const polygonPoints = points.map(p => `${p.x},${p.y}`).join(' ');
-  return (
-    <div className="flex flex-col items-center p-4 bg-base border border-border-muted/50 rounded-2xl">
-      <span className="font-mono text-[9px] text-text-secondary uppercase mb-2">Tactical Balance Index</span>
-      <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} className="overflow-visible select-none">
-        {[0.2, 0.4, 0.6, 0.8, 1].map((scale, idx) => (
-          <polygon key={idx} points={points.map((_, i) => {
-            const angle = (i * 2 * Math.PI) / categories.length - Math.PI / 2;
-            const r = scale * rMax;
-            return `${center + r * Math.cos(angle)},${center + r * Math.sin(angle)}`;
-          }).join(' ')} fill="none" stroke="var(--border)" strokeWidth="1" />
-        ))}
-        {points.map((_, i) => {
-          const angle = (i * 2 * Math.PI) / categories.length - Math.PI / 2;
-          return <line key={i} x1={center} y1={center} x2={center + rMax * Math.cos(angle)} y2={center + rMax * Math.sin(angle)} stroke="var(--border)" strokeWidth="1" />;
-        })}
-        <polygon points={polygonPoints} fill="var(--volt-dim)" stroke="var(--volt)" strokeWidth="2" />
-        {points.map((p, i) => {
-          const angle = (i * 2 * Math.PI) / categories.length - Math.PI / 2;
-          const lx = center + (rMax + 14) * Math.cos(angle);
-          const ly = center + (rMax + 8) * Math.sin(angle) + 2;
-          return (
-            <g key={i}>
-              <circle cx={p.x} cy={p.y} r="3" fill="var(--volt)" />
-              <text x={lx} y={ly} fill="var(--text-secondary)" fontSize="7" fontFamily="DM Mono" textAnchor="middle">{p.label} ({p.val})</text>
-            </g>
-          );
-        })}
-      </svg>
-    </div>
-  );
-};
-
-// ─── Chemistry Breakdown Bar ──────────────────────────────────────────────────
-const ChemBar: React.FC<{ label: string; value: number; color: string }> = ({ label, value, color }) => (
-  <div className="space-y-1">
-    <div className="flex items-center justify-between">
-      <span className="font-mono text-[9px] text-text-secondary">{label}</span>
-      <span className="font-mono text-[10px] font-bold" style={{ color }}>{value}</span>
-    </div>
-    <div className="h-1.5 rounded-full bg-text-primary/10 overflow-hidden">
-      <motion.div initial={{ width: 0 }} animate={{ width: `${value}%` }} transition={{ duration: 0.8, ease: 'easeOut' }}
-        className="h-full rounded-full" style={{ background: color }} />
-    </div>
-  </div>
-);
-
-// ─── Main Component ───────────────────────────────────────────────────────────
 export const SquadFormation: React.FC = () => {
   const [searchParams] = useSearchParams();
-  const navigate = useNavigate();
   const { user } = useAuthStore();
   const { nearbyRadius } = useAISettingsStore();
   const {
@@ -124,23 +34,29 @@ export const SquadFormation: React.FC = () => {
   } = useSquadStore();
 
   const initialType = searchParams.get('type') || 'solo';
+  const urlEventId = searchParams.get('eventId') || searchParams.get('event_id');
   const [entryType, setEntryType] = useState<string>(initialType);
-  const [selectedSport, setSelectedSport] = useState('Football');
-  const [gameplayCategory, setGameplayCategory] = useState<'Amateur' | 'Semi-Pro' | 'Professional'>('Semi-Pro');
+  const [selectedEvent, setSelectedEvent] = useState<EventOption | null>(null);
   const [status, setStatus] = useState<'selection' | 'matching'>('selection');
   const [selectedDraftId, setSelectedDraftId] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState('generate');
-  const [dailyQuota, setDailyQuota] = useState<DailyLimitInfo>({ used: 0, remaining: 3, max: 3 });
+  const [dailyQuota, setDailyQuota] = useState<DailyLimitInfo>({ used: 0, remaining: 5, max: 5 });
   const [genError, setGenError] = useState<string | null>(null);
 
-  React.useEffect(() => {
+  useEffect(() => {
     getRemainingGenerations().then(setDailyQuota).catch(() => null);
   }, []);
 
+  // Master generation handler
   const handleGenerateSquad = async () => {
     setGenError(null);
+    if (!selectedEvent) {
+      setGenError('Please select an event to start AutoSquad matchmaking.');
+      return;
+    }
+
     if (dailyQuota.remaining <= 0) {
-      setGenError('Daily limit reached (3 generations max per day). Please try again tomorrow.');
+      setGenError('Daily limit reached (5 generations max per day). Please try again tomorrow.');
       return;
     }
 
@@ -149,73 +65,89 @@ export const SquadFormation: React.FC = () => {
 
     try {
       const res = await generateAutoSquad({
-        sport: selectedSport,
+        event_id: selectedEvent.id,
+        sport: selectedEvent.sport,
         entry_type: entryType as any,
-        skill_level: gameplayCategory.toLowerCase() as any,
-        radius_km: nearbyRadius || 25,
+        radius_km: nearbyRadius || 10,
+        location: selectedEvent.location,
       });
 
-      // Map backend squad data to SquadStore format
-      const squadData = res.squad_data;
-      const squadObj: any = {
-        squadId: res.squad_id || `squad_${Date.now()}`,
-        name: squadData.name || `Volt ${selectedSport} Squad`,
-        sport: selectedSport,
-        captainId: squadData.captain_recommendation?.id || user?.id || 'cu1',
-        members: squadData.members.map((m: any) => ({
-          uid: m.id,
-          name: m.full_name,
-          avatar: m.avatar_url || `https://i.pravatar.cc/150?u=${m.id}`,
-          sport: m.sport,
-          position: m.position,
-          pulseScore: m.pulse_score || 750,
-          tier: m.ssr >= 85 ? 'ELITE' : 'CONTENDER',
-          compatibility: m.compatibility_score,
-          role: m.is_captain ? 'captain' : 'member',
-          readiness: 'Ready',
-          level: m.level || 1,
-          distance: m.distance_km || 0,
-        })),
-        chemistry: {
-          overall: res.overall_compatibility || 85,
-          trust: squadData.score_breakdown?.activity_score || 85,
-          coordination: squadData.score_breakdown?.position_score || 88,
-          communication: squadData.score_breakdown?.level_score || 82,
-          retentionScore: 88,
-          activityScore: squadData.score_breakdown?.activity_score || 85,
-          consistencyScore: squadData.score_breakdown?.skill_score || 85,
-          approvalScore: squadData.score_breakdown?.history_score || 80,
-        },
-        pulseAvg: Math.round(squadData.members.reduce((sum: number, m: any) => sum + (m.pulse_score || 700), 0) / squadData.members.length),
-        winRate: squadData.score_breakdown?.skill_score || 80,
-        matchHistory: [],
-        achievements: [],
-        formation: squadData.formation || '4-3-3',
-        tacticalNotes: squadData.reasoning || res.reasoning,
-        createdAt: new Date().toISOString().split('T')[0],
-        lastActive: new Date().toISOString().split('T')[0],
-        tournamentIds: [],
-        events: [],
-        posts: [],
-        xpBoostActive: false,
-        streakMultiplier: 1.0,
-        tags: ['AutoSquad AI', squadData.formation || '4-3-3'],
-        lookingFor: [],
-        score_breakdown: squadData.score_breakdown,
-        captain_recommendation: squadData.captain_recommendation,
-        exclusion_reasons: squadData.exclusion_reasons || [],
-      };
+      // Generate 5 draft slot variations
+      const baseSquad = res.squad_data;
+      const squadMembers = baseSquad.members || [];
 
-      addGeneratedSquad(squadObj);
+      // Create 5 saved draft slots for this generation
+      for (let i = 0; i < 5; i++) {
+        const draftName = FUTURISTIC_NAMES[i % FUTURISTIC_NAMES.length];
+        const pulsedMembers = squadMembers.map((m: any, idx: number) => ({
+          uid: m.id || `user_${idx}`,
+          name: m.full_name || `Athlete ${idx + 1}`,
+          username: m.username || `athlete_${idx + 1}`,
+          avatar: m.avatar_url || `https://i.pravatar.cc/150?u=${m.id || idx}`,
+          sport: m.sport || selectedEvent.sport,
+          position: m.position || ['FW', 'MF', 'DF', 'GK'][idx % 4],
+          pulseScore: m.pulse_score || (700 + ((idx * 37) % 150)),
+          tier: (m.ssr || 75) >= 85 ? 'ELITE' : 'CONTENDER',
+          compatibility: Math.max(75, (baseSquad.score_breakdown?.compatibility_score || 88) - (i * 2)),
+          role: m.is_captain || idx === 0 ? 'captain' : 'member',
+          readiness: 'Ready',
+          level: m.level || 15,
+          distance: m.distance_km || Number((1.2 + idx * 0.8).toFixed(1)),
+          location: selectedEvent.city || 'Chennai',
+        }));
+
+        const totalPulse = pulsedMembers.reduce((sum: number, m: any) => sum + (m.pulseScore || 700), 0);
+        const avgPulse = Math.round(totalPulse / Math.max(1, pulsedMembers.length));
+
+        const draftObj: any = {
+          squadId: `draft_${Date.now()}_${i + 1}`,
+          name: draftName,
+          sport: selectedEvent.sport,
+          eventId: selectedEvent.id,
+          eventName: selectedEvent.title,
+          captainId: pulsedMembers[0]?.uid || user?.id || 'cu1',
+          members: pulsedMembers,
+          chemistry: {
+            overall: Math.max(70, (res.overall_compatibility || 88) - (i * 2)),
+            trust: 85,
+            coordination: 88,
+            communication: 82,
+            retentionScore: 88,
+            activityScore: 85,
+            consistencyScore: 85,
+            approvalScore: 80,
+          },
+          pulseAvg: avgPulse,
+          winRate: 80 + i,
+          matchHistory: [],
+          achievements: [],
+          formation: baseSquad.formation || '4-3-3',
+          tacticalNotes: res.reasoning,
+          createdAt: new Date().toISOString().split('T')[0],
+          lastActive: new Date().toISOString().split('T')[0],
+          tournamentIds: [],
+          events: [selectedEvent.title],
+          posts: [],
+          xpBoostActive: false,
+          streakMultiplier: 1.0,
+          tags: ['AutoSquad AI', baseSquad.formation || '4-3-3', selectedEvent.sport],
+          lookingFor: [],
+          score_breakdown: baseSquad.score_breakdown,
+          captain_recommendation: baseSquad.captain_recommendation,
+        };
+
+        addGeneratedSquad(draftObj);
+        if (i === 0) setSelectedDraftId(draftObj.squadId);
+      }
+
       incrementGenerationsCount();
-      setSelectedDraftId(squadObj.squadId);
       setActiveTab('results');
 
       // Refresh daily limit count
       const updatedQuota = await getRemainingGenerations();
       setDailyQuota(updatedQuota);
     } catch (err: any) {
-      console.error(err);
+      console.error('[SquadFormation] Generation error:', err);
       setGenError(err.message || 'AutoSquad generation failed.');
     } finally {
       setStatus('selection');
@@ -233,289 +165,369 @@ export const SquadFormation: React.FC = () => {
   const handleAccept = async (id: string) => {
     await acceptAutoSquad(id).catch(() => null);
     acceptGeneratedSquad(id);
-    navigate('/app/messages');
+    setActiveTab('accepted');
   };
 
   const activeSquad = generatedSquads.find(s => s.squadId === selectedDraftId) || generatedSquads[0] || null;
 
-  // ─── Tab: Generate ───────────────────────────────────────────────────────
+  // Prepare AI Insight data for current accepted / generated squad
+  const currentInsightSquad = squads[0] || activeSquad;
+  const insightData: AIInsightData | null = currentInsightSquad ? (() => {
+    const pulses = currentInsightSquad.members.map((m: any) => m.pulseScore || 700);
+    const highestPulse = Math.max(...pulses);
+    const lowestPulse = Math.min(...pulses);
+    const avgPulse = Math.round(pulses.reduce((a: number, b: number) => a + b, 0) / Math.max(1, pulses.length));
+    const topPlayer = currentInsightSquad.members.find((m: any) => (m.pulseScore || 700) === highestPulse) || currentInsightSquad.members[0];
+
+    return {
+      teamName: currentInsightSquad.name,
+      eventName: (currentInsightSquad as any).eventName || selectedEvent?.title || 'SPORTiX Event',
+      avgPulse,
+      highestPulse,
+      lowestPulse,
+      pulseSpread: highestPulse - lowestPulse,
+      topPerformerName: topPlayer?.name || 'Athlete',
+      topPerformerUsername: (topPlayer as any)?.username || 'athlete',
+      topPerformerPulse: topPlayer?.pulseScore || highestPulse,
+      rawInsightText: currentInsightSquad.tacticalNotes,
+    };
+  })() : null;
+
+  // ─── Tab: Generate (Event-First) ──────────────────────────────────────────
   const TabGenerate = () => (
-    <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
-      {/* Left: Config */}
-      <div className="lg:col-span-4 space-y-5">
-        <div className="p-5 rounded-[20px] bg-surface border border-border-muted/50 space-y-5 shadow-card">
-          <h3 className="font-display text-[13px] text-text-secondary tracking-wider uppercase">Configure AI Parameters</h3>
+    <div className="space-y-6">
+      {/* Top Section: Left Config + Right Command CTA */}
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-stretch">
+        {/* Left: Configuration & Event Selector */}
+        <div className="lg:col-span-5 space-y-5 flex flex-col justify-between">
+          <div className="p-6 rounded-3xl bg-surface border border-border-muted space-y-5 shadow-card h-full flex flex-col justify-between">
+            <div>
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="font-display text-sm text-text-primary tracking-wider uppercase flex items-center gap-2">
+                  <Sparkles size={16} className="text-accent" /> BUILD YOUR SQUAD
+                </h3>
+                <span className="font-mono text-[10px] text-accent font-bold px-2 py-0.5 rounded bg-accent/10">
+                  EVENT-FIRST
+                </span>
+              </div>
 
-          <div className="space-y-2">
-            <label className="font-mono text-[10px] text-text-secondary uppercase">Entry Mode</label>
-            <div className="grid grid-cols-3 gap-1 p-1 bg-base border border-border-muted/50 rounded-xl font-mono text-[9px]">
-              {['solo', 'duo', 'full'].map(type => (
-                <button key={type} onClick={() => setEntryType(type)}
-                  className={`py-2 rounded-lg uppercase font-bold transition-all ${entryType === type ? 'bg-volt text-volt-text shadow-glow-volt-sm' : 'text-text-muted hover:text-text-primary'}`}>
-                  {type}
-                </button>
-              ))}
+              {/* Searchable Event Selector (Pre-fills URL eventId if available) */}
+              <AutoSquadEventSelector
+                selectedEvent={selectedEvent}
+                onSelectEvent={setSelectedEvent}
+                preselectedEventId={urlEventId}
+              />
             </div>
-          </div>
 
-          <div className="space-y-2">
-            <label className="font-mono text-[10px] text-text-secondary uppercase">Sport</label>
-            <div className="grid grid-cols-3 gap-2">
-              {SPORT_OPTIONS.map(sport => (
-                <button key={sport.id} onClick={() => setSelectedSport(sport.id)}
-                  style={{ backgroundColor: selectedSport === sport.id ? 'var(--volt-dim)' : 'transparent' }}
-                  className={`py-3 rounded-xl border flex flex-col items-center gap-1.5 transition-all ${
-                    selectedSport === sport.id ? 'border-volt text-volt' : 'border-border-muted/50 hover:border-border-muted text-text-secondary hover:text-text-primary'
-                  }`}>
-                  {sport.icon}
-                  <span className="font-display text-[9px] uppercase">{sport.label}</span>
-                </button>
-              ))}
-            </div>
-          </div>
-
-          <div className="space-y-2">
-            <label className="font-mono text-[10px] text-text-secondary uppercase">Gameplay Category</label>
-            <div className="grid grid-cols-3 gap-1 p-1 bg-base border border-border-muted/50 rounded-xl font-mono text-[9px]">
-              {(['Amateur', 'Semi-Pro', 'Professional'] as const).map(cat => (
-                <button key={cat} onClick={() => setGameplayCategory(cat)}
-                  className={`py-2 rounded-lg font-bold transition-all ${gameplayCategory === cat ? 'bg-volt text-volt-text shadow-glow-volt-sm' : 'text-text-muted hover:text-text-primary'}`}>
-                  {cat}
-                </button>
-              ))}
-            </div>
-          </div>
-
-          <button onClick={handleGenerateSquad}
-            className="w-full py-3.5 rounded-[12px] font-condensed font-bold text-[14px] uppercase tracking-wider flex items-center justify-center gap-2 transition-all bg-volt text-volt-text hover:scale-[1.02] shadow-glow-volt-sm cursor-pointer">
-            <Sparkles size={16} /> Generate My Squad
-          </button>
-        </div>
-
-        {/* AI Criteria info */}
-        <div style={{ backgroundColor: 'var(--volt-dim)' }} className="p-4 rounded-[16px] border border-volt/20 space-y-2.5">
-          <div className="flex items-center gap-2 mb-3">
-            <Brain size={13} className="text-volt" />
-            <span className="font-mono text-[10px] text-volt uppercase tracking-wider">AI Matchmaking Criteria</span>
-          </div>
-          {[
-            [`${nearbyRadius} KM Radius`, 'Only athletes within proximity'],
-            ['Level Sync', 'Similar SPORTiX level range'],
-            ['Category Match', `${gameplayCategory} players only`],
-            ['Role Balance', 'All positions covered'],
-            ['Activity Score', 'Active players prioritized'],
-            ['Chemistry Fit', 'Compatible playing styles'],
-          ].map(([label, desc]) => (
-            <div key={label} className="flex items-start gap-2">
-              <Check size={10} className="text-volt mt-0.5 flex-shrink-0" />
-              <div>
-                <span className="font-mono text-[10px] text-text-primary">{label}</span>
-                <span className="font-mono text-[9px] text-text-muted ml-1">— {desc}</span>
+            {/* Entry Mode */}
+            <div className="space-y-2 pt-2">
+              <label className="font-mono text-[10px] font-bold text-text-secondary uppercase">Entry Mode</label>
+              <div className="grid grid-cols-3 gap-1.5 p-1 bg-elevated border border-border-muted rounded-xl font-mono text-[10px]">
+                {['solo', 'duo', 'full'].map(type => (
+                  <button
+                    key={type}
+                    type="button"
+                    onClick={() => setEntryType(type)}
+                    className={`py-2 rounded-lg uppercase font-bold transition-all ${
+                      entryType === type
+                        ? 'btn-accent shadow-md'
+                        : 'text-text-muted hover:text-text-primary'
+                    }`}
+                  >
+                    {type}
+                  </button>
+                ))}
               </div>
             </div>
-          ))}
+          </div>
+        </div>
+
+        {/* Right: Primary Generate CTA Component & Flow Visual */}
+        <div className="lg:col-span-7">
+          <div className="p-8 text-center rounded-3xl border border-dashed border-border-muted bg-surface shadow-card flex flex-col items-center justify-center space-y-6 h-full min-h-[380px]">
+            <div className="w-20 h-20 rounded-2xl bg-accent/10 border border-accent/30 flex items-center justify-center text-accent shadow-glow">
+              <Sparkles size={36} />
+            </div>
+
+            <div>
+              <h3 className="font-display text-xl uppercase tracking-wider text-text-primary">
+                AUTOSQUAD AI LAB
+              </h3>
+              <p className="font-mono text-xs text-text-secondary mt-2 max-w-md mx-auto leading-relaxed">
+                EVENT → PARTICIPANTS → AI MATCHMAKING → SQUAD
+              </p>
+            </div>
+
+            {/* Quota Stats */}
+            <div className="grid grid-cols-2 gap-4 w-full max-w-xs">
+              <div className="rounded-2xl p-4 bg-elevated border border-border-muted text-center">
+                <div className="font-display text-2xl text-accent font-bold">{generatedSquads.length}</div>
+                <div className="font-mono text-[10px] text-text-muted uppercase mt-0.5">Saved Drafts</div>
+              </div>
+              <div className="rounded-2xl p-4 bg-elevated border border-border-muted text-center">
+                <div className="font-display text-2xl text-text-primary font-bold">{dailyQuota.remaining} / 5</div>
+                <div className="font-mono text-[10px] text-text-muted uppercase mt-0.5">Quota Remaining</div>
+              </div>
+            </div>
+
+            {/* Primary CTA Button */}
+            <div className="w-full max-w-xs space-y-3">
+              <button
+                type="button"
+                onClick={handleGenerateSquad}
+                disabled={dailyQuota.remaining <= 0}
+                className={`w-full py-4 rounded-xl font-display font-bold text-sm uppercase tracking-wider flex items-center justify-center gap-2 transition-all shadow-md ${
+                  dailyQuota.remaining > 0
+                    ? 'btn-accent hover:scale-[1.01] cursor-pointer'
+                    : 'bg-elevated border border-border-muted text-text-muted cursor-not-allowed'
+                }`}
+              >
+                <Sparkles size={18} />
+                {dailyQuota.remaining > 0 ? 'GENERATE AUTOSQUAD' : 'Daily Limit Reached (5/5)'}
+              </button>
+
+              {genError && (
+                <div className="p-3 rounded-xl bg-danger/10 border border-danger/30 text-danger font-mono text-xs">
+                  {genError}
+                </div>
+              )}
+            </div>
+
+            {generatedSquads.length > 0 && (
+              <button
+                type="button"
+                onClick={() => setActiveTab('results')}
+                className="flex items-center gap-2 font-mono text-xs text-accent hover:underline font-bold"
+              >
+                View {generatedSquads.length} Saved Squad Draft Slot{generatedSquads.length !== 1 ? 's' : ''} <ArrowRight size={14} />
+              </button>
+            )}
+          </div>
         </div>
       </div>
 
-      {/* Right: Info panel */}
-      <div className="lg:col-span-8">
-        <div className="p-8 text-center rounded-[24px] border border-dashed border-border-muted/50 bg-surface shadow-card flex flex-col items-center justify-center space-y-5 min-h-[400px]">
-          <div style={{ backgroundColor: 'var(--volt-dim)' }} className="w-20 h-20 rounded-[24px] border border-volt/20 flex items-center justify-center">
-            <Sparkles size={32} className="text-volt" />
-          </div>
-          <div>
-            <h3 className="font-display text-[22px] uppercase tracking-wider text-text-primary">AutoSquad AI Lab</h3>
-            <p className="font-mono text-[11px] text-text-secondary mt-2 max-w-sm mx-auto leading-relaxed">
-              Configure your parameters and click Generate to let the AutoSquad AI engine scan nearby athletes and build your perfect squad.
-            </p>
-          </div>
-          <div className="grid grid-cols-2 gap-3 w-full max-w-xs">
-            <div className="rounded-[12px] p-3 bg-base border border-border-muted/50 text-center">
-              <div className="font-display text-[20px] text-volt">{generatedSquads.length}</div>
-              <div className="font-mono text-[9px] text-text-muted">Generated Drafts</div>
+      {/* Bottom Section: AI Matchmaking Engine Component (FULL WIDTH HORIZONTALLY) */}
+      <div className="w-full p-6 rounded-3xl bg-surface border border-border-muted space-y-5 shadow-card">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div className="flex items-center gap-2.5">
+            <div className="w-10 h-10 rounded-xl bg-accent/15 border border-accent/30 flex items-center justify-center text-accent">
+              <Brain size={22} />
             </div>
-            <div className="rounded-[12px] p-3 bg-base border border-border-muted/50 text-center">
-              <div className="font-display text-[20px] text-cyan">{dailyQuota.remaining} / 5</div>
-              <div className="font-mono text-[9px] text-text-muted">Daily Limit Left</div>
+            <div>
+              <h4 className="font-display text-sm text-text-primary tracking-wider uppercase">
+                AI MATCHMAKING ENGINE
+              </h4>
+              <p className="font-mono text-[11px] text-text-muted">
+                Multi-dimensional candidate scoring matrix • Real-time squad compatibility evaluation
+              </p>
             </div>
           </div>
 
-          {genError && (
-            <div className="p-3 rounded-xl bg-danger-dim border border-danger/30 text-danger font-mono text-[10px]">
-              {genError}
+          <div className="flex items-center gap-3">
+            <span className="font-mono text-[10px] text-accent font-bold px-3 py-1 rounded-full bg-accent/10 flex items-center gap-1.5 border border-accent/30">
+              <span className="w-2 h-2 rounded-full bg-accent animate-pulse" />
+              ENGINE MONITORED & ACTIVE
+            </span>
+            <span className="font-mono text-[10px] text-text-primary font-bold px-3 py-1 rounded-full bg-elevated border border-border-muted">
+              100% READY
+            </span>
+          </div>
+        </div>
+
+        {/* 6 Dimension Grid Spanning Horizontally Across Entire Width with Full Un-truncated Text */}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          {[
+            ['Proximity Radius', `Strict ${nearbyRadius || 10} KM radius limit applied`, '10 KM LIMIT'],
+            ['Competitive Skill (SSR)', 'Competitive rating compatibility matrix', 'ACTIVE'],
+            ['Position Coverage', 'Balanced formation role synchronization', 'BALANCED'],
+            ['Pulse Activity Signal', 'Real-time engagement & consistency metrics', 'LIVE'],
+            ['Historical Chemistry', 'Evaluated match & crew relationship data', 'VERIFIED'],
+            ['Level Calibration', 'SPORTiX level range calibration', 'SYNCED'],
+          ].map(([label, desc, tag]) => (
+            <div key={label} className="p-4 rounded-2xl bg-elevated border border-border-muted/70 flex flex-col justify-between space-y-2.5">
+              <div className="flex items-center justify-between gap-2">
+                <span className="font-mono text-xs text-text-primary font-bold">{label}</span>
+                <span className="font-mono text-[9px] font-bold text-accent px-2 py-0.5 rounded bg-surface border border-border-muted flex-shrink-0">
+                  {tag}
+                </span>
+              </div>
+              <span className="font-mono text-[11px] text-text-muted leading-snug">{desc}</span>
             </div>
-          )}
-
-          <button
-            onClick={handleGenerateSquad}
-            disabled={dailyQuota.remaining <= 0}
-            className={`w-full max-w-xs py-3.5 rounded-xl font-display text-[13px] uppercase tracking-wider font-bold transition-all shadow-glow-volt ${
-              dailyQuota.remaining > 0
-                ? 'bg-volt text-volt-text hover:bg-volt-light'
-                : 'bg-surface border border-border-muted/50 text-text-muted cursor-not-allowed'
-            }`}
-          >
-            {dailyQuota.remaining > 0 ? 'Generate AutoSquad' : 'Daily Limit Reached (5/5)'}
-          </button>
-
-          {generatedSquads.length > 0 && (
-            <button onClick={() => setActiveTab('results')} className="flex items-center gap-2 font-mono text-[11px] text-volt hover:underline">
-              View {generatedSquads.length} Generated Result{generatedSquads.length !== 1 ? 's' : ''} <ArrowRight size={12} />
-            </button>
-          )}
+          ))}
         </div>
       </div>
     </div>
   );
 
-  // ─── Tab: Results ────────────────────────────────────────────────────────
+  // ─── Tab: Results (5 Persistent Saved Slots) ──────────────────────────────
   const TabResults = () => (
     <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
-      {/* Left: Draft list */}
-      <div className="lg:col-span-4 space-y-4">
-        <div className="p-5 rounded-[20px] bg-surface border border-border-muted/50 space-y-3 shadow-card">
-          <div className="flex items-center justify-between">
-            <h3 className="font-display text-[13px] text-text-secondary tracking-wider uppercase">Generated Results</h3>
-            <span style={{ backgroundColor: 'var(--volt-dim)' }} className="font-mono text-[9px] px-1.5 py-0.5 rounded text-volt border border-volt/20">
-              {generatedSquads.length} DRAFTS
+      {/* Left: 5 Draft Slots */}
+      <div className="lg:col-span-4 space-y-3">
+        <div className="p-5 rounded-3xl bg-surface border border-border-muted space-y-3 shadow-card">
+          <div className="flex items-center justify-between mb-2">
+            <h3 className="font-display text-xs text-text-secondary tracking-wider uppercase">
+              GENERATED SQUAD SLOTS
+            </h3>
+            <span className="font-mono text-[10px] px-2 py-0.5 rounded text-accent bg-accent/10 font-bold">
+              5 SLOTS
             </span>
           </div>
-          {[0, 1, 2].map(idx => {
+
+          {[0, 1, 2, 3, 4].map(idx => {
             const draft = generatedSquads[idx];
             const isSelected = activeSquad?.squadId === draft?.squadId;
+            const slotNum = String(idx + 1).padStart(2, '0');
+
             if (draft) {
               return (
-                <motion.div key={draft.squadId} onClick={() => setSelectedDraftId(draft.squadId)} whileHover={{ scale: 1.01 }}
-                  style={{ backgroundColor: isSelected ? 'var(--volt-dim)' : 'transparent' }}
-                  className={`p-4 rounded-[12px] border cursor-pointer transition-all ${
-                    isSelected ? 'border-volt shadow-card' : 'border-border-muted/50 hover:border-border-muted'
-                  }`}>
-                  <div className="flex items-center justify-between mb-2">
-                    <p className="font-display text-[12px] tracking-wide text-text-primary truncate">{draft.name.toUpperCase()}</p>
-                    <button onClick={e => { e.stopPropagation(); handleDecline(draft.squadId); }}
-                      className="p-1 rounded hover:bg-danger-dim text-text-secondary hover:text-danger transition-colors">
-                      <Trash2 size={12} />
+                <motion.div
+                  key={draft.squadId}
+                  onClick={() => setSelectedDraftId(draft.squadId)}
+                  whileHover={{ scale: 1.01 }}
+                  className={`p-4 rounded-2xl border cursor-pointer transition-all ${
+                    isSelected
+                      ? 'bg-accent/15 border-accent shadow-md'
+                      : 'bg-elevated border-border-muted hover:border-border-muted/80'
+                  }`}
+                >
+                  <div className="flex items-center justify-between mb-1.5">
+                    <div className="flex items-center gap-2">
+                      <span className="font-mono text-[10px] text-accent font-bold">SLOT {slotNum}</span>
+                      <p className="font-sans font-bold text-xs tracking-wide text-text-primary truncate">
+                        {draft.name}
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={e => { e.stopPropagation(); handleDecline(draft.squadId); }}
+                      className="p-1 rounded text-text-muted hover:text-danger transition-colors"
+                      title="Reject Draft"
+                    >
+                      <XCircle size={14} />
                     </button>
                   </div>
-                  <div className="grid grid-cols-3 gap-1 font-mono text-[8px]">
-                    <div className="text-center p-1 rounded bg-base">
-                      <div className="text-volt font-bold">{draft.chemistry.overall}%</div>
-                      <div className="text-text-muted">Chem</div>
+
+                  <div className="grid grid-cols-3 gap-1 font-mono text-[9px]">
+                    <div className="text-center p-1.5 rounded bg-surface border border-border-muted/50">
+                      <div className="text-accent font-bold">{draft.chemistry.overall}%</div>
+                      <div className="text-text-muted">MATCH</div>
                     </div>
-                    <div className="text-center p-1 rounded bg-base">
-                      <div className="text-text-primary font-bold">{draft.winRate}%</div>
-                      <div className="text-text-muted">Win%</div>
+                    <div className="text-center p-1.5 rounded bg-surface border border-border-muted/50">
+                      <div className="text-text-primary font-bold">⚡ {draft.pulseAvg}</div>
+                      <div className="text-text-muted">AVG PULSE</div>
                     </div>
-                    <div className="text-center p-1 rounded bg-base">
-                      <div className="text-cyan font-bold">{draft.members.length}</div>
-                      <div className="text-text-muted">Players</div>
+                    <div className="text-center p-1.5 rounded bg-surface border border-border-muted/50">
+                      <div className="text-text-primary font-bold">{draft.members.length}</div>
+                      <div className="text-text-muted">PLAYERS</div>
                     </div>
                   </div>
-                  {/* Suggested Captain */}
-                  {draft.members.find(m => m.role === 'captain') && (
-                    <div className="mt-2 flex items-center gap-1.5">
-                      <span className="font-mono text-[8px] text-text-muted">AI Captain:</span>
-                      <span className="font-mono text-[8px] text-gold font-bold">
-                        {draft.members.find(m => m.role === 'captain')?.name}
-                      </span>
-                    </div>
-                  )}
                 </motion.div>
               );
             }
+
             return (
-              <div key={idx} className="p-4 rounded-[12px] border border-dashed border-border-muted/50 bg-base flex items-center justify-center py-5 text-text-secondary font-mono text-[10px]">
-                <Lock size={11} className="mr-1.5" /> DRAFT SLOT #{idx + 1} EMPTY
+              <div
+                key={idx}
+                className="p-4 rounded-2xl border border-dashed border-border-muted bg-elevated flex items-center justify-between text-text-muted font-mono text-xs"
+              >
+                <span>SLOT {slotNum}</span>
+                <span className="text-[10px] uppercase">AVAILABLE</span>
               </div>
             );
           })}
         </div>
       </div>
 
-      {/* Right: Squad detail */}
+      {/* Right: Selected Squad Draft Detail */}
       <div className="lg:col-span-8">
         {activeSquad ? (
-          <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="space-y-5">
-            {/* Header */}
-            <div className="p-6 rounded-[24px] bg-surface border border-border-muted/50 space-y-4 shadow-card">
+          <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="space-y-6">
+            {/* Squad Card Header */}
+            <div className="p-6 rounded-3xl bg-surface border border-border-muted space-y-4 shadow-card">
               <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
                 <div>
-                  <span className="font-mono text-[9px] text-volt font-bold tracking-widest">PROPOSED AI MATCH</span>
-                  <h2 className="font-display text-[28px] uppercase leading-none mt-1 text-text-primary">{activeSquad.name}</h2>
-                  <div className="flex flex-wrap items-center gap-2 mt-2">
-                    <span className="px-2 py-0.5 rounded bg-base border border-border-muted/50 font-mono text-[9px] text-text-secondary uppercase">{activeSquad.sport}</span>
-                    <span style={{ backgroundColor: 'var(--volt-dim)' }} className="px-2 py-0.5 rounded border border-volt/20 font-mono text-[9px] text-volt font-bold uppercase">{gameplayCategory}</span>
-                    <span className="px-2 py-0.5 rounded bg-base border border-border-muted/50 font-mono text-[9px] text-text-primary">{activeSquad.formation}</span>
-                  </div>
+                  <span className="font-mono text-[10px] text-accent font-bold tracking-widest uppercase px-2 py-0.5 rounded bg-accent/10">
+                    {activeSquad.chemistry.overall}% MATCH SCORE
+                  </span>
+                  <h2 className="font-display text-2xl uppercase leading-none mt-2 text-text-primary">
+                    {activeSquad.name}
+                  </h2>
+                  <p className="font-mono text-xs text-text-muted mt-1">
+                    Event: {(activeSquad as any).eventName || selectedEvent?.title || 'SPORTiX Event'}
+                  </p>
                 </div>
-                <div className="flex gap-2 w-full sm:w-auto">
-                  <button onClick={() => handleAccept(activeSquad.squadId)}
-                    className="flex-1 sm:flex-initial px-5 py-2.5 rounded-[10px] bg-volt text-volt-text font-condensed font-bold text-[12px] tracking-wide uppercase hover:opacity-90 flex items-center justify-center gap-1.5 shadow-glow-volt-sm cursor-pointer">
-                    <Check size={13} /> Accept Squad
-                  </button>
-                  <button onClick={() => handleDecline(activeSquad.squadId)}
-                    className="px-4 py-2.5 rounded-[10px] bg-elevated border border-border-muted text-text-primary font-mono text-[10px] hover:bg-danger-dim hover:text-danger hover:border-danger/30 transition-all">
-                    Decline
-                  </button>
-                </div>
-              </div>
-              {/* Stats */}
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 pt-4 border-t border-border-muted/50">
-                {[
-                  { label: 'AI Compatibility', value: `${activeSquad.chemistry.overall}%`, color: 'var(--volt)' },
-                  { label: 'Win Probability',  value: `${activeSquad.winRate}%`,            color: 'var(--success)' },
-                  { label: 'Avg Pulse Score',  value: activeSquad.pulseAvg,                 color: 'var(--text-primary)'    },
-                  { label: 'Formation',         value: activeSquad.formation,               color: 'var(--text-primary)'    },
-                ].map((s, i) => (
-                  <div key={i} className="p-3 bg-base rounded-xl">
-                    <span className="font-mono text-[8px] text-text-secondary block uppercase">{s.label}</span>
-                    <strong className="font-display text-[18px] block mt-1" style={{ color: s.color }}>{s.value}</strong>
-                  </div>
-                ))}
-              </div>
-            </div>
 
-            {/* Radar + AI reasoning */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-              <RadarChart squad={activeSquad} />
-              <div className="p-5 rounded-[20px] bg-surface border border-border-muted/50 shadow-card space-y-4">
-                <div className="flex items-center gap-2 text-volt">
-                  <Sparkles size={13} />
-                  <span className="font-display text-[12px] uppercase tracking-wider">AI Match Reasoning</span>
+                <div className="flex items-center gap-2.5 w-full sm:w-auto">
+                  <button
+                    type="button"
+                    onClick={() => handleAccept(activeSquad.squadId)}
+                    className="flex-1 sm:flex-initial px-6 py-3 rounded-xl btn-accent font-display font-bold text-xs tracking-wider uppercase hover:scale-[1.02] transition-all flex items-center justify-center gap-2 shadow-md cursor-pointer"
+                  >
+                    <Check size={16} /> ACCEPT TEAM
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleDecline(activeSquad.squadId)}
+                    className="px-5 py-3 rounded-xl bg-elevated border border-border-muted text-text-secondary font-mono text-xs hover:bg-danger/10 hover:text-danger hover:border-danger/30 transition-all cursor-pointer"
+                  >
+                    REJECT TEAM
+                  </button>
                 </div>
-                <p className="font-mono text-[11px] text-text-secondary leading-relaxed bg-base border border-border-muted/50 rounded-xl p-4">
-                  {activeSquad.tacticalNotes || `Perfect roster identified. Athletes selected based on positioning, ${nearbyRadius} KM proximity, and level synchronization.`}
-                </p>
-                <div className="space-y-2">
-                  <span className="font-mono text-[8px] text-text-secondary uppercase">Chemistry Breakdown</span>
-                  <ChemBar label="Trust"          value={activeSquad.chemistry.trust}         color="var(--success)" />
-                  <ChemBar label="Coordination"   value={activeSquad.chemistry.coordination}  color="var(--volt)" />
-                  <ChemBar label="Communication"  value={activeSquad.chemistry.communication} color="var(--info)" />
+              </div>
+
+              {/* Metrics Summary */}
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 pt-4 border-t border-border-muted">
+                <div className="p-3 bg-elevated rounded-xl">
+                  <span className="font-mono text-[10px] text-text-muted block uppercase">AI BALANCE</span>
+                  <strong className="font-display text-base text-accent block mt-0.5">{activeSquad.chemistry.overall}</strong>
+                </div>
+                <div className="p-3 bg-elevated rounded-xl">
+                  <span className="font-mono text-[10px] text-text-muted block uppercase">AVG PULSE</span>
+                  <strong className="font-display text-base text-text-primary block mt-0.5">⚡ {activeSquad.pulseAvg}</strong>
+                </div>
+                <div className="p-3 bg-elevated rounded-xl">
+                  <span className="font-mono text-[10px] text-text-muted block uppercase">AVG SSR</span>
+                  <strong className="font-display text-base text-text-primary block mt-0.5">81</strong>
+                </div>
+                <div className="p-3 bg-elevated rounded-xl">
+                  <span className="font-mono text-[10px] text-text-muted block uppercase">PLAYERS</span>
+                  <strong className="font-display text-base text-text-primary block mt-0.5">{activeSquad.members.length}</strong>
                 </div>
               </div>
             </div>
 
-            {/* Roster */}
+            {/* Athlete Cards Grid */}
             <div className="space-y-3">
-              <div className="flex items-center gap-2">
-                <Compass size={13} className="text-volt" />
-                <h3 className="font-display text-[14px] uppercase tracking-wider">AI Matched Roster ({activeSquad.members.length})</h3>
-              </div>
-              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-5">
-                {activeSquad.members.map((athlete: Athlete) => (
-                  <div key={athlete.uid} className="relative group">
-                    <PlayerCard athlete={athlete} interactive={false} />
-                    <div className="absolute top-3 right-3 flex flex-col items-end gap-1.5">
-                      {athlete.distance !== undefined && (
-                        <span className="px-2 py-0.5 bg-base border border-border-muted/50 rounded font-mono text-[8px] text-volt font-bold flex items-center gap-1">
-                          <MapPin size={7} /> {athlete.distance === 0 ? 'YOU' : `${athlete.distance} KM`}
-                        </span>
-                      )}
-                      {athlete.level !== undefined && (
-                        <div className="w-6 h-6 rounded bg-surface flex items-center justify-center border border-volt/20">
-                          <BadgeIcon level={athlete.level} size={15} animate={false} glow={false} />
-                        </div>
-                      )}
+              <h4 className="font-mono text-xs font-bold text-text-secondary uppercase tracking-wider">
+                ATHLETES ({activeSquad.members.length})
+              </h4>
+              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
+                {activeSquad.members.map((m: any) => (
+                  <div key={m.uid} className="p-4 rounded-2xl bg-surface border border-border-muted space-y-3">
+                    <div className="flex items-center gap-3">
+                      <img
+                        src={m.avatar || `https://i.pravatar.cc/150?u=${m.uid}`}
+                        alt={m.name}
+                        className="w-11 h-11 rounded-xl object-cover border border-border-muted"
+                      />
+                      <div className="min-w-0 flex-1">
+                        <h5 className="font-sans font-bold text-xs text-text-primary truncate">
+                          {m.name}
+                        </h5>
+                        <p className="font-mono text-[10px] text-text-muted truncate">
+                          @{m.username}
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center justify-between font-mono text-[10px] pt-2 border-t border-border-muted/50">
+                      <span className="text-accent font-bold flex items-center gap-1">
+                        ⚡ {m.pulseScore || 700} Pulse
+                      </span>
+                      <span className="text-text-muted flex items-center gap-1">
+                        📍 {m.location || 'Chennai'}
+                      </span>
                     </div>
                   </div>
                 ))}
@@ -523,343 +535,196 @@ export const SquadFormation: React.FC = () => {
             </div>
           </motion.div>
         ) : (
-          <div className="p-12 text-center rounded-[24px] border border-dashed border-border-muted bg-surface shadow-card flex flex-col items-center gap-4 min-h-[350px] justify-center">
-            <div className="w-16 h-16 rounded-full bg-base border border-border-muted flex items-center justify-center text-text-secondary">
-              <Activity size={24} />
-            </div>
-            <div>
-              <h3 className="font-display text-[18px] uppercase tracking-wider text-text-primary">No Generated Drafts</h3>
-              <p className="font-mono text-[11px] text-text-secondary mt-1">Generate a squad first to see results here.</p>
-            </div>
-            <button onClick={() => setActiveTab('generate')}
-              className="px-5 py-2.5 bg-volt text-volt-text font-display text-[12px] tracking-wide rounded-[10px] hover:scale-105 transition-all">
-              Go To Generator
-            </button>
+          <div className="p-12 text-center rounded-3xl border border-dashed border-border-muted bg-surface shadow-card flex flex-col items-center gap-4 min-h-[350px] justify-center">
+            <Activity size={28} className="text-text-muted" />
+            <h3 className="font-display text-base uppercase text-text-primary">NO SQUAD DRAFTS</h3>
+            <p className="font-mono text-xs text-text-muted">
+              Select an event and click Generate AutoSquad to build draft squads.
+            </p>
           </div>
         )}
       </div>
     </div>
   );
 
-  // ─── Tab: Accepted Squads ────────────────────────────────────────────────
+  // ─── Tab: Accepted Squads (Team Intelligence Dashboard) ────────────────────
   const TabAccepted = () => (
-    <div className="space-y-5">
+    <div className="space-y-6">
       {squads.length === 0 ? (
-        <div className="p-12 text-center rounded-[24px] border border-dashed border-border-muted bg-surface shadow-card flex flex-col items-center gap-4 min-h-[300px] justify-center">
-          <div style={{ backgroundColor: 'var(--volt-dim)' }} className="w-14 h-14 rounded-[18px] border border-volt/20 flex items-center justify-center">
-            <Users size={22} className="text-volt" />
-          </div>
-          <div>
-            <h3 className="font-display text-[18px] uppercase tracking-wider text-text-primary">No Accepted Squads</h3>
-            <p className="font-mono text-[11px] text-text-secondary mt-1">Accept a generated squad to unlock the full coordination workspace.</p>
-          </div>
-          <button onClick={() => setActiveTab('generate')} className="px-5 py-2.5 bg-volt text-volt-text font-display text-[12px] tracking-wide rounded-[10px] hover:scale-105 transition-all">
+        <div className="p-12 text-center rounded-3xl border border-dashed border-border-muted bg-surface shadow-card flex flex-col items-center gap-4 min-h-[320px] justify-center">
+          <Users size={28} className="text-accent" />
+          <h3 className="font-display text-base uppercase text-text-primary">NO ACCEPTED SQUADS</h3>
+          <p className="font-mono text-xs text-text-muted max-w-sm">
+            Accept a generated squad to build and view your accepted team dashboard.
+          </p>
+          <button
+            type="button"
+            onClick={() => setActiveTab('generate')}
+            className="px-6 py-3 btn-accent font-display font-bold text-xs uppercase tracking-wider rounded-xl hover:scale-[1.02] transition-all cursor-pointer shadow-md"
+          >
             Generate A Squad
           </button>
         </div>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-          {squads.map((squad, i) => (
-            <motion.div key={squad.squadId} initial={{ opacity: 0, y: 15 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.05 }}
-              className="rounded-[20px] border p-5 space-y-4 relative overflow-hidden"
-              style={{ background: 'linear-gradient(135deg, var(--volt-dim) 0%, var(--bg-surface) 100%)', borderColor: 'var(--accent-border)' }}>
-              <div className="flex items-start justify-between">
+        squads.map(squad => {
+          const pulses = squad.members.map((m: any) => m.pulseScore || 700);
+          const highestPulse = Math.max(...pulses);
+          const lowestPulse = Math.min(...pulses);
+          const avgPulse = Math.round(pulses.reduce((a: number, b: number) => a + b, 0) / Math.max(1, pulses.length));
+
+          return (
+            <div key={squad.squadId} className="p-6 rounded-3xl bg-surface border border-border-muted space-y-6 shadow-card">
+              {/* Header */}
+              <div className="flex flex-wrap items-center justify-between gap-4 pb-4 border-b border-border-muted">
                 <div>
-                  <h3 className="font-display text-[17px] text-text-primary tracking-wide">{squad.name}</h3>
-                  <p className="font-mono text-[10px] text-text-secondary mt-0.5">{squad.sport} · {squad.formation} · {squad.members.length} Members</p>
-                </div>
-                <span style={{ backgroundColor: 'var(--volt-dim)' }} className="px-2 py-1 rounded-lg border border-volt/20 font-mono text-[9px] text-volt font-bold">
-                  {squad.chemistry.overall}% CHEM
-                </span>
-              </div>
-              <div className="grid grid-cols-3 gap-2 font-mono text-[9px]">
-                <div className="p-2 rounded-lg bg-base text-center">
-                  <div className="text-volt font-bold text-[14px]">{squad.winRate}%</div>
-                  <div className="text-text-muted">Win Rate</div>
-                </div>
-                <div className="p-2 rounded-lg bg-base text-center">
-                  <div className="text-text-primary font-bold text-[14px]">{squad.matchHistory?.length || 0}</div>
-                  <div className="text-text-muted">Matches</div>
-                </div>
-                <div className="p-2 rounded-lg bg-base text-center">
-                  <div className="text-gold font-bold text-[14px]">{squad.pulseAvg}</div>
-                  <div className="text-text-muted">Avg Pulse</div>
-                </div>
-              </div>
-              {/* Members row */}
-              <div className="flex -space-x-2">
-                {squad.members.slice(0, 6).map(m => (
-                  <img key={m.uid} src={m.avatar} alt={m.name} className="w-8 h-8 rounded-full border-2 border-surface object-cover" />
-                ))}
-                {squad.members.length > 6 && (
-                  <div className="w-8 h-8 rounded-full border-2 border-surface bg-elevated flex items-center justify-center font-mono text-[8px] text-text-muted">
-                    +{squad.members.length - 6}
+                  <div className="flex items-center gap-2">
+                    <h3 className="font-display text-xl text-text-primary tracking-wide uppercase">
+                      {squad.name}
+                    </h3>
+                    <span className="font-mono text-[10px] font-bold text-accent uppercase px-2 py-0.5 rounded bg-accent/10">
+                      READY
+                    </span>
                   </div>
-                )}
+                  <p className="font-mono text-xs text-text-muted mt-1">
+                    Event: {(squad as any).eventName || selectedEvent?.title || 'Chennai Sunday Football League'} • {squad.sport}
+                  </p>
+                </div>
+
+                <div className="flex items-center gap-3">
+                  <div className="text-right">
+                    <span className="font-mono text-[10px] text-text-muted uppercase block">TEAM PULSE</span>
+                    <span className="font-display text-lg text-accent font-bold">⚡ {avgPulse}</span>
+                  </div>
+                  <div className="text-right">
+                    <span className="font-mono text-[10px] text-text-muted uppercase block">PLAYERS</span>
+                    <span className="font-display text-lg text-text-primary font-bold">{squad.members.length}</span>
+                  </div>
+                </div>
               </div>
-              <div className="flex gap-2">
-                <button onClick={() => navigate(`/pulse/squad/${squad.squadId}`)}
-                  className="flex-1 py-2 rounded-[10px] bg-volt text-volt-text font-mono text-[11px] font-bold hover:scale-105 transition-all flex items-center justify-center gap-1.5">
-                  <MessageSquare size={12} /> Open Workspace
-                </button>
-                <button onClick={() => navigate(`/pulse/squad/${squad.squadId}/chat`)}
-                  className="px-3 py-2 rounded-[10px] border border-border-muted bg-elevated text-text-secondary hover:text-text-primary font-mono text-[11px] transition-all">
-                  <MessageSquare size={14} />
-                </button>
+
+              {/* Pulse Distribution Summary */}
+              <div className="p-4 rounded-2xl bg-elevated border border-border-muted grid grid-cols-2 sm:grid-cols-4 gap-3 text-center font-mono text-xs">
+                <div>
+                  <span className="text-text-muted text-[10px] uppercase block">AVERAGE PULSE</span>
+                  <strong className="text-accent text-sm">⚡ {avgPulse}</strong>
+                </div>
+                <div>
+                  <span className="text-text-muted text-[10px] uppercase block">HIGHEST PULSE</span>
+                  <strong className="text-text-primary text-sm">⚡ {highestPulse}</strong>
+                </div>
+                <div>
+                  <span className="text-text-muted text-[10px] uppercase block">LOWEST PULSE</span>
+                  <strong className="text-text-primary text-sm">⚡ {lowestPulse}</strong>
+                </div>
+                <div>
+                  <span className="text-text-muted text-[10px] uppercase block">PULSE SPREAD</span>
+                  <strong className="text-text-primary text-sm">{highestPulse - lowestPulse} pts</strong>
+                </div>
               </div>
-            </motion.div>
-          ))}
-        </div>
+
+              {/* Player Cards Grid */}
+              <div className="space-y-3">
+                <h4 className="font-mono text-xs font-bold text-text-secondary uppercase tracking-wider">
+                  ATHLETES
+                </h4>
+                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
+                  {squad.members.map((m: any) => (
+                    <div key={m.uid} className="p-4 rounded-2xl bg-elevated border border-border-muted space-y-3">
+                      <div className="flex items-center gap-3">
+                        <img
+                          src={m.avatar || `https://i.pravatar.cc/150?u=${m.uid}`}
+                          alt={m.name}
+                          className="w-12 h-12 rounded-xl object-cover border border-border-muted"
+                        />
+                        <div className="min-w-0 flex-1">
+                          <h5 className="font-sans font-bold text-xs text-text-primary truncate">
+                            {m.name}
+                          </h5>
+                          <p className="font-mono text-[10px] text-text-muted truncate">
+                            @{m.username}
+                          </p>
+                        </div>
+                      </div>
+
+                      <div className="flex items-center justify-between font-mono text-[10px] pt-2 border-t border-border-muted/50">
+                        <span className="text-accent font-bold">⚡ {m.pulseScore || 700} Pulse</span>
+                        <span className="text-text-muted">📍 {m.location || 'Chennai'}</span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          );
+        })
       )}
     </div>
   );
 
-  // ─── Tab: Invitations ────────────────────────────────────────────────────
-  const TabInvitations = () => (
-    <div className="space-y-4">
-      <div className="flex items-center justify-between">
-        <span className="font-mono text-[10px] text-text-secondary uppercase tracking-wider">Pending Invitations ({MOCK_INVITES.length})</span>
-      </div>
-      {MOCK_INVITES.map((inv, i) => (
-        <motion.div key={inv.id} initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: i * 0.05 }}
-          className="p-5 rounded-[18px] border border-border-muted bg-surface shadow-card flex items-center gap-4">
-          <img src={inv.avatar} alt={inv.from} className="w-12 h-12 rounded-full object-cover border-2 border-border-muted flex-shrink-0" />
-          <div className="flex-1 min-w-0">
-            <div className="font-display text-[14px] text-text-primary truncate">{inv.squad}</div>
-            <div className="font-mono text-[10px] text-text-secondary mt-0.5">
-              Invited by <span className="text-text-primary">{inv.from}</span> · {inv.sport}
-            </div>
-            <div className="flex items-center gap-3 mt-2 flex-wrap">
-              <span className="font-mono text-[9px] text-volt">{inv.chemistry}% Chem</span>
-              <span className="font-mono text-[9px] text-text-muted">Lvl {inv.level}</span>
-              <span className="font-mono text-[9px] text-text-muted flex items-center gap-0.5"><Clock size={8} /> Expires in {inv.expires}</span>
-            </div>
-          </div>
-          <div className="flex flex-col gap-2 flex-shrink-0">
-            <button onClick={() => navigate('/pulse/squad-formation?tab=accepted')}
-              className="px-4 py-1.5 rounded-lg bg-volt text-volt-text font-mono text-[10px] font-bold hover:scale-105 transition-all">
-              Accept
-            </button>
-            <button className="px-4 py-1.5 rounded-lg border border-border-muted bg-elevated text-text-muted hover:text-danger font-mono text-[10px] transition-all">
-              Decline
-            </button>
-          </div>
-        </motion.div>
-      ))}
-    </div>
-  );
-
-  // ─── Tab: AI Insights ────────────────────────────────────────────────────
-  const TabInsights = () => {
-    const squad = squads[0] || generatedSquads[0];
-    return (
-      <div className="space-y-5">
-        {squad ? (
-          <>
-            <div style={{ backgroundColor: 'var(--volt-dim)' }} className="p-5 rounded-[20px] border border-volt/20 space-y-4">
-              <div className="flex items-center gap-2">
-                <Brain size={15} className="text-volt" />
-                <h3 className="font-display text-[15px] text-text-primary tracking-wider uppercase">AI Team Analysis — {squad.name}</h3>
-              </div>
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                {[
-                  { label: 'Leadership Score',   value: '92/100',   desc: 'Captain effectiveness', color: 'var(--gold)' },
-                  { label: 'Teamwork Index',      value: `${squad.chemistry.coordination}`,  desc: 'Based on coordination',  color: 'var(--volt)' },
-                  { label: 'Sportsmanship',       value: '88/100',   desc: 'Post-match conduct',    color: 'var(--cyan)' },
-                ].map((metric, i) => (
-                  <div key={i} className="p-4 rounded-[14px] bg-base border border-border-muted/50 text-center">
-                    <div className="font-display text-[28px]" style={{ color: metric.color }}>{metric.value}</div>
-                    <div className="font-label text-[12px] text-text-primary font-semibold mt-1">{metric.label}</div>
-                    <div className="font-mono text-[9px] text-text-muted">{metric.desc}</div>
-                  </div>
-                ))}
-              </div>
-              <div className="p-4 rounded-[14px] bg-base border border-border-muted/50">
-                <div className="font-mono text-[9px] text-volt uppercase tracking-wider mb-2">AI Tactical Recommendation</div>
-                <p className="font-mono text-[11px] text-text-secondary leading-relaxed">
-                  {squad.tacticalNotes || `Your squad shows exceptional coordination patterns. Consider switching to a high-press system leveraging ${squad.members[0]?.name}'s pace upfront. Chemistry is above threshold — activating XP boost on next practice session confirmation.`}
-                </p>
-              </div>
-            </div>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div className="p-5 rounded-[20px] bg-surface border border-border-muted/50 shadow-card space-y-3">
-                <div className="flex items-center gap-2">
-                  <Shield size={13} className="text-cyan" />
-                  <span className="font-display text-[13px] text-text-primary tracking-wider">CAPTAIN CANDIDATES</span>
-                </div>
-                {squad.members.slice(0, 3).map((m, i) => (
-                  <div key={m.uid} className="flex items-center gap-3">
-                    <img src={m.avatar} alt={m.name} className="w-8 h-8 rounded-full object-cover" />
-                    <div className="flex-1 min-w-0">
-                      <div className="font-mono text-[11px] text-text-primary truncate">{m.name}</div>
-                      <div className="font-mono text-[9px] text-text-muted">{m.position} · Pulse {m.pulseScore}</div>
-                    </div>
-                    <div className="font-mono text-[10px] font-bold" style={{ color: i === 0 ? 'var(--gold)' : 'var(--text-secondary)' }}>
-                      {[92, 88, 84][i]}%
-                    </div>
-                  </div>
-                ))}
-              </div>
-              <div className="p-5 rounded-[20px] bg-surface border border-border-muted/50 shadow-card space-y-3">
-                <div className="flex items-center gap-2">
-                  <Star size={13} className="text-volt" />
-                  <span className="font-display text-[13px] text-text-primary tracking-wider">TOP PERFORMERS</span>
-                </div>
-                {squad.members.slice(0, 3).map((m, i) => (
-                  <div key={m.uid} className="flex items-center gap-3">
-                    <img src={m.avatar} alt={m.name} className="w-8 h-8 rounded-full object-cover" />
-                    <div className="flex-1 min-w-0">
-                      <div className="font-mono text-[11px] text-text-primary truncate">{m.name}</div>
-                      <div className="font-mono text-[9px] text-text-muted">{m.tier} · Compat {m.compatibility}%</div>
-                    </div>
-                    <div className="font-mono text-[10px] text-volt font-bold">{[m.pulseScore, m.pulseScore - 20, m.pulseScore - 45][i]}</div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          </>
-        ) : (
-          <div className="p-10 text-center rounded-[24px] border border-dashed border-border-muted bg-surface shadow-card">
-            <Brain size={28} className="text-text-muted mx-auto mb-3" />
-            <p className="font-mono text-[11px] text-text-secondary">Generate or accept a squad to unlock AI match insights and captain recommendations.</p>
-          </div>
-        )}
-      </div>
-    );
-  };
-
-  // ─── Tab: Activity Feed ──────────────────────────────────────────────────
-  const TabActivity = () => (
-    <div className="space-y-3">
-      <div className="font-mono text-[10px] text-text-muted uppercase tracking-wider mb-4">Squad Activity Feed</div>
-      {MOCK_ACTIVITY.map((item, i) => (
-        <motion.div key={item.id} initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: i * 0.04 }}
-          className="flex items-start gap-3 p-4 rounded-[14px] border border-border-muted bg-surface shadow-card">
-          <div
-            style={{
-              backgroundColor:
-                item.type === 'match' ? 'var(--volt-dim)' :
-                item.type === 'badge' ? 'var(--gold-surface)' :
-                item.type === 'chemistry' ? 'var(--cyan-dim)' : 'var(--bg-elevated)',
-              color:
-                item.type === 'match' ? 'var(--volt)' :
-                item.type === 'badge' ? 'var(--gold)' :
-                item.type === 'chemistry' ? 'var(--cyan)' : 'var(--text-muted)'
-            }}
-            className="w-8 h-8 rounded-xl flex items-center justify-center flex-shrink-0"
-          >
-            {item.icon}
-          </div>
-          <div className="flex-1 min-w-0">
-            <p className="font-mono text-[11px] text-text-primary leading-snug">{item.text}</p>
-            <span className="font-mono text-[9px] text-text-muted mt-0.5 flex items-center gap-1">
-              <Clock size={8} /> {item.time}
-            </span>
-          </div>
-        </motion.div>
-      ))}
-      {squads.length > 0 && (
-        <button onClick={() => navigate(`/pulse/squad/${squads[0].squadId}`)}
-          className="w-full py-3 rounded-[12px] border border-volt/20 font-mono text-[11px] text-volt hover:bg-volt-dim transition-all flex items-center justify-center gap-2">
-          <Plus size={12} /> View Full Activity in Squad Workspace
-        </button>
-      )}
-    </div>
-  );
-
-  // ─── Tab: Chemistry Overview ─────────────────────────────────────────────
-  const TabChemistry = () => {
-    const squad = squads[0] || generatedSquads[0];
-    if (!squad) return (
-      <div className="p-10 text-center rounded-[24px] border border-dashed border-border-muted bg-surface shadow-card">
-        <Zap size={28} className="text-text-muted mx-auto mb-3" />
-        <p className="font-mono text-[11px] text-text-secondary">Accept a squad to view detailed team chemistry analytics.</p>
-      </div>
-    );
-    return (
-      <div className="space-y-5">
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-          <RadarChart squad={squad} />
-          <div className="p-5 rounded-[20px] bg-surface border border-border-muted/50 shadow-card space-y-3">
-            <span className="font-display text-[13px] text-text-primary tracking-wider uppercase">Chemistry Factors</span>
-            <ChemBar label="Overall Chemistry"   value={squad.chemistry.overall}          color="var(--volt)" />
-            <ChemBar label="Trust"               value={squad.chemistry.trust}            color="var(--success)" />
-            <ChemBar label="Coordination"        value={squad.chemistry.coordination}     color="var(--volt)" />
-            <ChemBar label="Communication"       value={squad.chemistry.communication}    color="var(--info)" />
-            <ChemBar label="Retention Score"     value={squad.chemistry.retentionScore ?? 0}   color="var(--plasma)" />
-            <ChemBar label="Activity Score"      value={squad.chemistry.activityScore ?? 0}    color="var(--hot)" />
-            <ChemBar label="Consistency Score"   value={squad.chemistry.consistencyScore ?? 0} color="var(--volt)" />
-          </div>
-        </div>
-        <div className="p-5 rounded-[20px] bg-surface border border-border-muted/50 shadow-card">
-          <span className="font-mono text-[10px] text-text-muted uppercase tracking-wider mb-4 block">Player Compatibility Matrix</span>
-          <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-            {squad.members.map(m => {
-              const comp = m.compatibility ?? 0;
-              return (
-                <div key={m.uid} className="flex items-center gap-2 p-2 rounded-[10px] bg-base border border-border-muted/50">
-                  <img src={m.avatar} alt={m.name} className="w-7 h-7 rounded-full object-cover flex-shrink-0" />
-                  <div className="min-w-0 flex-1">
-                    <div className="font-mono text-[9px] text-text-primary truncate">{m.name.split(' ')[0]}</div>
-                    <div className="font-mono text-[9px]" style={{ color: comp >= 90 ? 'var(--volt)' : comp >= 80 ? 'var(--gold)' : 'var(--text-secondary)' }}>
-                      {comp}% compat
-                    </div>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        </div>
-      </div>
-    );
-  };
-
-  // ─── Main Render ─────────────────────────────────────────────────────────
+  // ─── Main Render ──────────────────────────────────────────────────────────
   return (
     <div className="p-4 md:p-8 max-w-7xl mx-auto text-text-primary space-y-6 min-h-screen pb-20">
-
-      {/* Pending report banner */}
       <PendingReportBanner />
 
       {/* Header */}
-      <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }}
-        className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 border-b border-border-muted/50 pb-6">
+      <motion.div
+        initial={{ opacity: 0, y: -10 }}
+        animate={{ opacity: 1, y: 0 }}
+        className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 border-b border-border-muted pb-6"
+      >
         <div>
-          <h1 className="font-display text-[36px] md:text-[44px] tracking-wide leading-none uppercase text-text-primary">AUTOSQUAD AI LAB</h1>
-          <p className="font-mono text-[11px] text-text-secondary mt-1.5 uppercase">
-            AutoSquad AI matchmaking · Proximity limit: <strong className="text-text-primary">{nearbyRadius} KM</strong> · Level-matched
+          <h1 className="font-display text-3xl md:text-4xl tracking-wide leading-none uppercase text-text-primary">
+            AUTOSQUAD AI LAB
+          </h1>
+          <p className="font-mono text-xs text-text-secondary mt-1.5 uppercase tracking-wide">
+            EVENT-BASED ATHLETE MATCHMAKING · INTELLIGENT SQUAD FORMATION
           </p>
+
+          <div className="flex flex-wrap items-center gap-2 mt-3 font-mono text-[10px]">
+            <span className="px-2.5 py-1 rounded-lg bg-accent/10 border border-accent/30 text-accent font-bold">
+              10 KM PROXIMITY
+            </span>
+            <span className="px-2.5 py-1 rounded-lg bg-elevated border border-border-muted text-text-primary font-bold">
+              AI MATCHING
+            </span>
+            <span className="px-2.5 py-1 rounded-lg bg-elevated border border-border-muted text-text-primary font-bold">
+              PULSE INTELLIGENCE
+            </span>
+          </div>
         </div>
-        <div className="flex items-center gap-3">
-          <div className="p-3 bg-surface border border-border-muted/50 rounded-xl flex items-center gap-3 shadow-card">
-            <div className="w-8 h-8 rounded-lg bg-base flex items-center justify-center text-text-muted">
-              <Users size={15} />
-            </div>
-            <div>
-              <span className="font-mono text-[9px] text-text-secondary block">ACCEPTED SQUADS</span>
-              <strong className="font-mono text-[14px] text-text-primary">{squads.length}</strong>
-            </div>
+
+        {/* Quota Display */}
+        <div className="p-3.5 rounded-2xl bg-surface border border-border-muted flex items-center gap-3 shadow-md">
+          <div className="w-9 h-9 rounded-xl bg-accent/10 border border-accent/30 flex items-center justify-center text-accent font-bold font-mono text-xs">
+            {dailyQuota.remaining}
+          </div>
+          <div>
+            <span className="font-mono text-[9px] text-text-muted uppercase block font-bold">AI GENERATIONS</span>
+            <span className="font-mono text-xs font-bold text-text-primary">
+              {dailyQuota.remaining} / 5 AVAILABLE TODAY
+            </span>
           </div>
         </div>
       </motion.div>
 
-      {/* Sticky Tab Nav */}
-      <div className="sticky top-0 z-30 bg-base/95 backdrop-blur-md border-b border-border-muted/50 -mx-4 px-4 md:-mx-8 md:px-8 py-2">
-        <div className="flex gap-1 overflow-x-auto" style={{ scrollbarWidth: 'none' }}>
+      {/* 4 Tabs Navigation */}
+      <div className="sticky top-0 z-30 bg-base/95 backdrop-blur-md border-b border-border-muted -mx-4 px-4 md:-mx-8 md:px-8 py-2">
+        <div className="flex gap-2 overflow-x-auto scrollbar-none">
           {DASH_TABS.map(tab => (
-            <button key={tab.id} onClick={() => setActiveTab(tab.id)}
-              className={`relative flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-label font-semibold flex-shrink-0 transition-all ${
-                activeTab === tab.id ? 'bg-volt text-volt-text shadow-glow-volt-sm font-bold' : 'text-text-secondary hover:text-text-primary hover:bg-elevated'
-              }`}>
+            <button
+              key={tab.id}
+              type="button"
+              onClick={() => setActiveTab(tab.id)}
+              className={`relative flex items-center gap-2 px-5 py-2.5 rounded-xl text-xs font-label font-bold flex-shrink-0 transition-all ${
+                activeTab === tab.id
+                  ? 'btn-accent shadow-md'
+                  : 'text-text-secondary hover:text-text-primary hover:bg-elevated'
+              }`}
+            >
               {tab.icon} {tab.label}
               {tab.id === 'results' && generatedSquads.length > 0 && (
-                <span className="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-volt text-volt-text text-[8px] font-bold flex items-center justify-center">
+                <span className="ml-1 px-1.5 py-0.5 rounded-full bg-surface text-text-primary text-[9px] font-bold border border-border-muted">
                   {generatedSquads.length}
-                </span>
-              )}
-              {tab.id === 'invitations' && MOCK_INVITES.length > 0 && (
-                <span className="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-[#f97316] text-white text-[8px] font-bold flex items-center justify-center">
-                  {MOCK_INVITES.length}
                 </span>
               )}
             </button>
@@ -872,14 +737,17 @@ export const SquadFormation: React.FC = () => {
         {status === 'matching' ? (
           <AILoader key="ai-loader" onComplete={() => {}} />
         ) : (
-          <motion.div key={activeTab} initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }} transition={{ duration: 0.2 }}>
-            {activeTab === 'generate'    && <TabGenerate />}
-            {activeTab === 'results'     && <TabResults />}
-            {activeTab === 'accepted'    && <TabAccepted />}
-            {activeTab === 'invitations' && <TabInvitations />}
-            {activeTab === 'insights'    && <TabInsights />}
-            {activeTab === 'activity'    && <TabActivity />}
-            {activeTab === 'chemistry'   && <TabChemistry />}
+          <motion.div
+            key={activeTab}
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -8 }}
+            transition={{ duration: 0.2 }}
+          >
+            {activeTab === 'generate' && <TabGenerate />}
+            {activeTab === 'results' && <TabResults />}
+            {activeTab === 'accepted' && <TabAccepted />}
+            {activeTab === 'insights' && <AIInsightPanel insightData={insightData} />}
           </motion.div>
         )}
       </AnimatePresence>

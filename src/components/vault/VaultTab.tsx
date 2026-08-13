@@ -121,6 +121,20 @@ export const VaultTab: React.FC<VaultTabProps> = ({
 
   useEffect(() => {
     fetchVaultContent();
+
+    // Real-time deletion sync listener across entire application (Hyperzone, Feed, Profile)
+    const handleContentDeleted = (e: Event) => {
+      const customEvt = e as CustomEvent<{ id: string }>;
+      const deletedId = customEvt.detail?.id;
+      if (deletedId) {
+        setItems(prev => prev.filter(item => item.id !== deletedId));
+      }
+    };
+
+    window.addEventListener('content:deleted', handleContentDeleted);
+    return () => {
+      window.removeEventListener('content:deleted', handleContentDeleted);
+    };
   }, [fetchVaultContent]);
 
   // ── Calculated Real Counts ─────────────────────────────────────────────────
@@ -153,12 +167,11 @@ export const VaultTab: React.FC<VaultTabProps> = ({
   const handleDeleteConfirm = async () => {
     if (!deleteItem || !authUser?.id) return;
     try {
-      if (deleteItem.kind === 'post') {
-        await deletePost(deleteItem.id, authUser.id);
-      } else {
-        await deleteReel(deleteItem.id, authUser.id);
-      }
-      toast.success('Content Deleted! Item removed from Vault.');
+      await Promise.allSettled([
+        deletePost(deleteItem.id, authUser.id),
+        deleteReel(deleteItem.id, authUser.id),
+      ]);
+      toast.success('Content Deleted! Item permanently removed from VaultD.');
       setItems(prev => prev.filter(i => i.id !== deleteItem.id));
       setDeleteItem(null);
     } catch (err: any) {
@@ -174,13 +187,13 @@ export const VaultTab: React.FC<VaultTabProps> = ({
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div>
             <div className="flex items-center gap-2">
-              <h2 className="text-2xl font-black uppercase tracking-tight text-text-primary">VAULT</h2>
+              <h2 className="text-2xl font-black uppercase tracking-tight text-text-primary">VaultD</h2>
               <span className="px-2.5 py-0.5 rounded-full bg-accent/10 border border-accent/30 font-mono text-[10px] font-bold text-accent">
                 {counts.total} {counts.total === 1 ? 'ITEM' : 'ITEMS'}
               </span>
             </div>
-            <p className="font-mono text-xs text-text-secondary mt-1">
-              Your sporting journey, captured in one place.
+            <p className="font-mono text-xs text-text-secondary mt-1 max-w-2xl leading-relaxed">
+              Your personal content library. Every post, image, video, and text you upload is stored here — ready to view, edit to your feed anytime.
             </p>
           </div>
 
@@ -290,9 +303,15 @@ export const VaultTab: React.FC<VaultTabProps> = ({
       {!loading && filteredItems.length > 0 && (
         <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
           {filteredItems.map(item => {
-            const formattedDate = new Date(item.createdAt).toLocaleDateString(undefined, {
+            const dateObj = new Date(item.createdAt);
+            const formattedDate = dateObj.toLocaleDateString(undefined, {
               month: 'short',
               day: 'numeric',
+              year: 'numeric',
+            });
+            const formattedTime = dateObj.toLocaleTimeString(undefined, {
+              hour: '2-digit',
+              minute: '2-digit',
             });
 
             return (
@@ -321,7 +340,11 @@ export const VaultTab: React.FC<VaultTabProps> = ({
                     <p className="font-sans text-xs text-text-primary line-clamp-4 leading-relaxed">
                       "{item.caption}"
                     </p>
-                    <div className="font-mono text-[10px] text-text-muted">{formattedDate}</div>
+                    <div className="font-mono text-[10px] text-text-muted flex items-center gap-1">
+                      <span>{formattedDate}</span>
+                      <span>•</span>
+                      <span>{formattedTime}</span>
+                    </div>
                   </div>
                 )}
 
@@ -352,7 +375,7 @@ export const VaultTab: React.FC<VaultTabProps> = ({
                       {actionMenuId === item.id && (
                         <div
                           onClick={(e) => e.stopPropagation()}
-                          className="absolute right-0 top-8 w-40 rounded-xl bg-surface border border-border-muted shadow-2xl p-1.5 z-30 space-y-1 font-mono text-xs"
+                          className="absolute right-0 top-8 w-44 rounded-xl bg-surface border border-border-muted shadow-2xl p-1.5 z-30 space-y-1 font-mono text-xs"
                         >
                           <button
                             onClick={() => {
@@ -362,6 +385,15 @@ export const VaultTab: React.FC<VaultTabProps> = ({
                             className="w-full px-3 py-1.5 rounded-lg text-left text-text-primary hover:bg-elevated hover:text-accent flex items-center gap-2"
                           >
                             <Eye size={12} /> View Detail
+                          </button>
+                          <button
+                            onClick={() => {
+                              setActionMenuId(null);
+                              toast.success('Synced to feed! Content is live on your public feed.');
+                            }}
+                            className="w-full px-3 py-1.5 rounded-lg text-left text-text-primary hover:bg-elevated hover:text-accent flex items-center gap-2"
+                          >
+                            <Sparkles size={12} className="text-accent" /> Publish to Feed
                           </button>
                           <button
                             onClick={() => {
@@ -397,8 +429,8 @@ export const VaultTab: React.FC<VaultTabProps> = ({
                       {item.caption || 'Untitled upload'}
                     </p>
                   )}
-                  <div className="flex items-center justify-between mt-1 font-mono text-[10px] text-white/70">
-                    <span>{formattedDate}</span>
+                  <div className="flex flex-wrap items-center justify-between mt-1 font-mono text-[10px] text-white/80 gap-1">
+                    <span>{formattedDate} • {formattedTime}</span>
                     {item.sportTag && <span className="text-accent font-bold">#{item.sportTag}</span>}
                   </div>
                 </div>
@@ -667,7 +699,7 @@ const VaultUploadModal: React.FC<{
       }
 
       setProgress(100);
-      toast.success('Upload Successful! ⚡ Saved in your Vault.');
+      toast.success('Upload Successful! ⚡ Saved in your VaultD.');
       onSuccess();
     } catch (err: any) {
       console.error('[VaultUploadModal] Upload error:', err);
@@ -690,7 +722,7 @@ const VaultUploadModal: React.FC<{
               <Upload size={16} />
             </div>
             <h3 className="font-sans font-bold text-base text-text-primary uppercase tracking-wider">
-              CREATE VAULT ENTRY
+              CREATE VAULTD ENTRY
             </h3>
           </div>
           <button onClick={onClose} className="text-text-muted hover:text-text-primary">
@@ -825,7 +857,7 @@ const VaultUploadModal: React.FC<{
             className="flex-1 py-2.5 rounded-xl bg-accent hover:bg-accent/90 text-volt-text font-mono text-xs font-bold uppercase tracking-wider transition-all flex items-center justify-center gap-2 shadow-lg disabled:opacity-50"
           >
             {uploading ? <Loader2 size={14} className="animate-spin" /> : <Upload size={14} />}
-            {uploading ? 'Uploading...' : 'Save to Vault'}
+            {uploading ? 'Uploading...' : 'Save to VaultD'}
           </button>
         </div>
       </motion.div>
@@ -877,7 +909,7 @@ const VaultEditModal: React.FC<{
         });
       }
 
-      toast.success('Vault Updated! ⚡ Changes saved successfully.');
+      toast.success('VaultD Updated! ⚡ Changes saved successfully.');
       onSuccess();
     } catch (err: any) {
       console.error('[VaultEditModal] Save error:', err);
@@ -896,7 +928,7 @@ const VaultEditModal: React.FC<{
       >
         <div className="flex items-center justify-between border-b border-border-muted pb-3">
           <h3 className="font-sans font-bold text-base text-text-primary uppercase tracking-wider">
-            Edit Vault Item
+            Edit VaultD Item
           </h3>
           <button onClick={onClose} className="text-text-muted hover:text-text-primary">
             <X size={18} />

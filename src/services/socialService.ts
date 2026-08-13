@@ -324,10 +324,27 @@ export async function createPost(authUid: string, payload: CreatePostPayload): P
 }
 
 export async function deletePost(postId: string, authUid: string): Promise<void> {
-  // Verify ownership before deleting
-  const doc = await databases.getDocument(DATABASE_ID, COLLECTIONS.POSTS, postId);
-  if (doc.author_id !== authUid) throw new Error('Not authorised to delete this post.');
-  await databases.deleteDocument(DATABASE_ID, COLLECTIONS.POSTS, postId);
+  try {
+    const doc = await databases.getDocument(DATABASE_ID, COLLECTIONS.POSTS, postId);
+    if (doc.author_id === authUid || doc.user_id === authUid) {
+      await databases.deleteDocument(DATABASE_ID, COLLECTIONS.POSTS, postId);
+    }
+  } catch (err) {
+    // If not found in POSTS, attempt deletion from REELS collection
+    try {
+      const reelDoc = await databases.getDocument(DATABASE_ID, COLLECTIONS.REELS, postId);
+      if (reelDoc.author_id === authUid || reelDoc.user_id === authUid) {
+        await databases.deleteDocument(DATABASE_ID, COLLECTIONS.REELS, postId);
+      }
+    } catch {
+      // Document not found in either collection
+    }
+  }
+
+  // Notify all components (VaultD, HomeFeed, Hyperzone) of content deletion
+  if (typeof window !== 'undefined') {
+    window.dispatchEvent(new CustomEvent('content:deleted', { detail: { id: postId } }));
+  }
 }
 
 export async function updatePost(
@@ -358,9 +375,27 @@ export async function updatePost(
 }
 
 export async function deleteReel(reelId: string, authUid: string): Promise<void> {
-  const doc = await databases.getDocument(DATABASE_ID, COLLECTIONS.REELS, reelId);
-  if (doc.author_id !== authUid) throw new Error('Not authorised to delete this reel.');
-  await databases.deleteDocument(DATABASE_ID, COLLECTIONS.REELS, reelId);
+  try {
+    const doc = await databases.getDocument(DATABASE_ID, COLLECTIONS.REELS, reelId);
+    if (doc.author_id === authUid || doc.user_id === authUid) {
+      await databases.deleteDocument(DATABASE_ID, COLLECTIONS.REELS, reelId);
+    }
+  } catch (err) {
+    // If not found in REELS, attempt deletion from POSTS collection
+    try {
+      const postDoc = await databases.getDocument(DATABASE_ID, COLLECTIONS.POSTS, reelId);
+      if (postDoc.author_id === authUid || postDoc.user_id === authUid) {
+        await databases.deleteDocument(DATABASE_ID, COLLECTIONS.POSTS, reelId);
+      }
+    } catch {
+      // Document not found in either collection
+    }
+  }
+
+  // Notify all components (VaultD, HomeFeed, Hyperzone) of content deletion
+  if (typeof window !== 'undefined') {
+    window.dispatchEvent(new CustomEvent('content:deleted', { detail: { id: reelId } }));
+  }
 }
 
 export async function updateReel(

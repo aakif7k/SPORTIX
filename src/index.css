@@ -581,6 +581,17 @@ html:not(.light) body::after {
   /* ══════════════════════════════════════════
      CHIP / BADGE VARIANTS
   ══════════════════════════════════════════ */
+  .btn-accent {
+    background-color: var(--accent);
+    color: #000000;
+    font-weight: 700;
+    transition: all 0.2s ease;
+  }
+  html.light .btn-accent {
+    background-color: var(--accent);
+    color: #FFFFFF !important;
+  }
+
   .chip-volt {
     background: rgba(204,255,0,0.1);
     border: 1px solid rgba(204,255,0,0.25);

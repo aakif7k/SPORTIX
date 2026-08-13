@@ -15,7 +15,7 @@ import { Toggle } from '../../components/ui/index';
 import { ProfileEditDrawer } from '../../components/profile/ProfileEditDrawer';
 import { VaultTab } from '../../components/vault/VaultTab';
 
-const TABS = ['Overview', 'Vault', 'Peak Stats', 'Match History', 'Glory Board'];
+const TABS = ['Overview', 'VaultD', 'Peak Stats', 'Match History', 'Glory Board'];
 
 export const AthleteProfile: React.FC = () => {
   const { uid } = useParams<{ uid: string }>();
@@ -398,8 +398,8 @@ export const AthleteProfile: React.FC = () => {
             </div>
           )}
 
-          {/* VAULT TAB */}
-          {activeTab === 'Vault' && targetId && (
+          {/* VAULTD TAB */}
+          {activeTab === 'VaultD' && targetId && (
             <VaultTab
               targetId={targetId}
               isMe={isMe}

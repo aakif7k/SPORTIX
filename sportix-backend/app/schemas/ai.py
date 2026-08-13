@@ -17,12 +17,12 @@ class SkillLevel(str, Enum):
 
 
 class AutoSquadRequest(BaseModel):
-    sport: str
     event_id: Optional[str] = None
+    sport: Optional[str] = None
     entry_type: EntryType = EntryType.solo
-    skill_level: SkillLevel = SkillLevel.amateur
+    skill_level: Optional[SkillLevel] = SkillLevel.amateur
     partner_id: Optional[str] = None
-    radius_km: Optional[float] = 25.0
+    radius_km: Optional[float] = 10.0
     location: Optional[str] = None
 
 

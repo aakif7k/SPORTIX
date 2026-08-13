@@ -22,3 +22,7 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+PROJECT_OVERVIEW.md
+PROJECT_STATUS.md
+TECHNICAL_DOCUMENTATION.md

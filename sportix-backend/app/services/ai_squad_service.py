@@ -360,7 +360,12 @@ async def generate(user_id: str, payload: AutoSquadRequest) -> dict:
     }
 
     # 6. GEMINI AI EXPLANATION LAYER
-    ai_reasoning = f"AutoSquad algorithm successfully assembled a balanced {sport} {sport_rules['default_formation']} lineup. Team compatibility score is {overall_compat}% with optimal position coverage."
+    ai_reasoning = (
+        f"TEAM OUTLOOK\nSolid tactical balance and strong compatibility across all positions.\n\n"
+        f"PULSE ANALYSIS\nTeam averages active engagement with strong consistency signals.\n\n"
+        f"TOP PERFORMER\n{captain_rec['name']} leads with highest combined activity signal and competitive rating.\n\n"
+        f"RECOMMENDATION\nMaintain current participation consistency and build team coordination before competition."
+    )
     
     gemini_key = settings.gemini_api_key or os.getenv("GEMINI_API_KEY")
     gemini_model_name = settings.gemini_model or os.getenv("GEMINI_MODEL", "gemini-2.5-flash")
@@ -371,18 +376,33 @@ async def generate(user_id: str, payload: AutoSquadRequest) -> dict:
             model = genai.GenerativeModel(gemini_model_name)
             
             prompt = (
-                f"You are a professional sports tactical analyst for SPORTiX.\n"
+                f"You are SPORTiX AI Team Intelligence.\n"
                 f"Analyze this {sport} squad draft ({sport_rules['default_formation']} formation):\n"
+                f"- Event: {event_doc.get('title') if event_doc else 'SPORTiX Match'}\n"
                 f"- Overall Compatibility: {overall_compat}%\n"
-                f"- Skill Match: {avg_components['skill_score']}%\n"
-                f"- Position Fit: {avg_components['position_score']}%\n"
-                f"- Distance Score: {avg_components['distance_score']}%\n"
-                f"- Recommended Captain: {captain_rec['name']}\n\n"
-                f"Provide 2-3 concise sentences explaining why this squad works well together strategically and tactically."
+                f"- Average Pulse: {round(sum(m.get('pulse_score', 100) for m in full_squad_members) / len(full_squad_members))}\n"
+                f"- Top Player: {captain_rec['name']}\n\n"
+                f"CRITICAL CONSTRAINT: Total output MUST BE UNDER 150 WORDS (aim for 80-120 words).\n"
+                f"Never invent non-existent statistics (goals, match wins, assists).\n"
+                f"Pulse represents activity/consistency/engagement, while SSR represents competitive skill.\n\n"
+                f"Use exactly these 4 sections:\n"
+                f"TEAM OUTLOOK\n"
+                f"[1-2 sentences on overall performance potential]\n\n"
+                f"PULSE ANALYSIS\n"
+                f"[1-2 sentences on team activity and consistency]\n\n"
+                f"TOP PERFORMER\n"
+                f"[1 sentence identifying top player by activity signal]\n\n"
+                f"RECOMMENDATION\n"
+                f"[1-2 actionable tips]"
             )
             response = model.generate_content(prompt)
             if response and response.text:
-                ai_reasoning = response.text.strip()
+                text_out = response.text.strip()
+                # Enforce word count limit
+                words = text_out.split()
+                if len(words) > 150:
+                    text_out = " ".join(words[:145]) + "..."
+                ai_reasoning = text_out
         except Exception as ai_err:
             print(f"[AutoSquad] Gemini API notice: {ai_err}")
 

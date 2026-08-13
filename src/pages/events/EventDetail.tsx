@@ -306,7 +306,7 @@ export const EventDetail: React.FC = () => {
       toast.error('AutoSquad is unavailable because this event has ended.');
       return;
     }
-    navigate('/pulse/matchmaking');
+    navigate(`/pulse/matchmaking?eventId=${id}`);
   };
 
   if (loadingEvent && !rawEvent) {
