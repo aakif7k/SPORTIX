@@ -3,17 +3,21 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Zap, RefreshCw, CheckCircle, Users, Terminal } from 'lucide-react';
 import { useEventStore } from '../../store/eventStore';
+import { useAuthStore } from '../../store/authStore';
 import { generateTeam } from '../../services/aiService';
+import { createNotification } from '../../services/notificationService';
 import { SPORT_CATEGORIES } from '../../services/mockData';
 import type { AITeamResult } from '../../types';
 import { Avatar } from '../../components/ui/Avatar';
 import { Button } from '../../components/ui/Button';
 import { Spinner } from '../../components/ui/index';
 import { ProgressBar } from '../../components/ui/index';
+import toast from 'react-hot-toast';
 
 export const AITeamBuilder: React.FC = () => {
   const { id } = useParams();
   const navigate = useNavigate();
+  const { user } = useAuthStore();
   const { events, setAITeamResult, setIsGenerating } = useEventStore();
   const [logs, setLogs] = useState<string[]>([]);
   const [phase, setPhase] = useState<'idle' | 'analyzing' | 'done'>('idle');
@@ -48,6 +52,37 @@ export const AITeamBuilder: React.FC = () => {
     setLogs([]);
   };
 
+  const handleAcceptTeam = async () => {
+    if (!activeTeam || !event) return;
+    const currentUserId = user?.id || '';
+    const memberIds = activeTeam.team.members.map(m => m.userId).filter(Boolean);
+
+    if (currentUserId && event.id) {
+      await useEventStore.getState().joinEvent(
+        event.id,
+        currentUserId,
+        'team',
+        activeTeam.team.id,
+        memberIds.length > 0 ? memberIds : [currentUserId]
+      );
+
+      await createNotification({
+        userId: currentUserId,
+        type: 'team_update',
+        title: `⚡ Team Accepted: ${activeTeam.team.name}`,
+        message: `Your new team is accepted by you: ${activeTeam.team.name} • ${event.title}`,
+        read: false,
+        relatedId: event.id,
+        relatedType: 'event',
+        actorName: activeTeam.team.name,
+        actorAvatar: activeTeam.team.members[0]?.avatar,
+      }).catch(() => null);
+    }
+
+    toast.success(`Your new team is accepted by you: ${activeTeam.team.name} • ${event.title}`, { duration: 4500 });
+    navigate(`/app/events/${id || event.id}`);
+  };
+
   return (
     <div className="max-w-2xl mx-auto space-y-5" style={{ color: 'var(--text-primary)' }}>
       {/* Header */}
@@ -75,11 +110,11 @@ export const AITeamBuilder: React.FC = () => {
               <div>
                 <h2 className="font-display text-3xl text-text-primary mb-2 tracking-wide uppercase">NO TEAM? NO PROBLEM.</h2>
                 <p className="font-label text-text-secondary text-sm max-w-md mx-auto leading-relaxed">
-                  SportiX AI analyzes hundreds of registered athletes, calculates compatibility scores, and assembles the perfect team for <span className="text-accent font-semibold">{event?.sport}</span> in seconds.
+                  SportiX AI analyzes registered event athletes, matches Pulse ratings, and assembles the perfect team for <span className="text-accent font-semibold">{event?.sport}</span> in seconds.
                 </p>
               </div>
               <div className="grid grid-cols-3 gap-3 text-center">
-                {['847 Athletes Scanned', '2,400 Combinations', '94% Avg Compatibility'].map((stat, i) => (
+                {['Event Athletes Scanned', 'Pulse Proximity Matched', '94% Avg Chemistry'].map((stat, i) => (
                   <div key={i} className="telemetry-card rounded-lg p-3">
                     <div className="font-mono text-sm text-accent">{stat.split(' ')[0]}</div>
                     <div className="stat-label text-[10px] mt-0.5" style={{ color: 'var(--text-secondary)' }}>{stat.split(' ').slice(1).join(' ')}</div>
@@ -101,7 +136,7 @@ export const AITeamBuilder: React.FC = () => {
                 <Spinner size={22} />
                 <div>
                   <p className="font-display text-2xl text-text-primary tracking-wide uppercase">SCANNING ATHLETES</p>
-                  <p className="text-xs font-mono text-text-secondary">AutoSquad processing {event?.sport} talent pool...</p>
+                  <p className="text-xs font-mono text-text-secondary">AutoSquad processing {event?.sport} talent pool from {event?.title}...</p>
                 </div>
               </div>
 
@@ -146,7 +181,7 @@ export const AITeamBuilder: React.FC = () => {
               <div className="flex items-center justify-between mb-5">
                 <div>
                   <h2 className="font-display text-2xl text-text-primary tracking-wide uppercase">{activeTeam.team.name}</h2>
-                  <p className="text-xs font-mono text-text-secondary">{sportData?.emoji} {event?.sport} · AI Generated</p>
+                  <p className="text-xs font-mono text-text-secondary">{sportData?.emoji} {event?.sport} · AI Generated for {event?.title}</p>
                 </div>
                 <div className="text-right">
                   <div className="font-mono text-3xl text-accent">{activeTeam.team.overallRating}</div>
@@ -186,7 +221,7 @@ export const AITeamBuilder: React.FC = () => {
             {/* Actions */}
             <div className="flex gap-3">
               <Button variant="ghost" onClick={handleRegenerate} icon={<RefreshCw size={15} />}>Regenerate</Button>
-              <Button fullWidth onClick={() => navigate(`/app/events/${id}`)} icon={<CheckCircle size={15} fill="currentColor" />}>
+              <Button fullWidth onClick={handleAcceptTeam} icon={<CheckCircle size={15} fill="currentColor" />}>
                 Accept Team →
               </Button>
             </div>

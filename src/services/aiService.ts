@@ -1,6 +1,8 @@
 import { GoogleGenerativeAI } from '@google/generative-ai';
 import type { AITeamResult, Team, TeamMember, SportCategory, ExperienceLevel, BracketRound } from '../types';
 import { SPORT_POSITIONS } from './mockData';
+import { getEventParticipants } from './eventService';
+import { databases, DATABASE_ID, COLLECTIONS, Query } from '@/lib/appwrite';
 
 const apiKey = import.meta.env.VITE_GEMINI_API_KEY as string;
 
@@ -47,19 +49,72 @@ function generateAthleteStats(sport: SportCategory, position: string): Record<st
   return base;
 }
 
-function buildMockTeam(sport: SportCategory, teamName: string, id: string): Team {
+async function buildTeamFromEventParticipants(
+  sport: SportCategory,
+  teamName: string,
+  id: string,
+  eventId: string
+): Promise<Team> {
   const positions = SPORT_POSITIONS[sport] || SPORT_POSITIONS.default;
-  const names = ['Jordan Hayes', 'Kai Nakamura', 'Lena Hoffman', 'Carlos Reyes', 'Amara Diallo', 'Flynn O\'Brien', 'Zara Patel', 'Dmitri Volkov', 'Sofia Chen', 'Marco Vitale', 'Aisha Kamara'];
-  const avatars = Array.from({ length: 11 }, (_, i) => `https://i.pravatar.cc/150?img=${20 + i}`);
-  const members: TeamMember[] = positions.slice(0, Math.min(positions.length, 6)).map((pos, i) => ({
-    userId: `ai_${id}_${i}`,
-    name: names[i % names.length],
-    avatar: avatars[i % avatars.length],
-    position: pos,
-    skillScore: randomStat(78, 97),
-    stats: generateAthleteStats(sport, pos),
-    compatibilityScore: randomStat(82, 99),
-  }));
+  const fallbackNames = ['Jordan Hayes', 'Kai Nakamura', 'Lena Hoffman', 'Carlos Reyes', 'Amara Diallo', 'Flynn O\'Brien', 'Zara Patel', 'Dmitri Volkov', 'Sofia Chen', 'Marco Vitale', 'Aisha Kamara'];
+  const fallbackAvatars = Array.from({ length: 11 }, (_, i) => `https://i.pravatar.cc/150?img=${20 + i}`);
+
+  let eventAthletes: any[] = [];
+  try {
+    const parts = await getEventParticipants(eventId);
+    for (const p of parts) {
+      if (p.profile && p.profile.full_name) {
+        eventAthletes.push({
+          userId: p.user_id,
+          name: p.profile.full_name,
+          avatar: p.profile.avatar_url,
+          position: p.profile.sport || positions[0]
+        });
+      }
+    }
+  } catch (err) {
+    console.warn('[aiService] Could not fetch event participants:', err);
+  }
+
+  // Supplement if less than 6 athletes
+  if (eventAthletes.length < 6) {
+    try {
+      const res = await databases.listDocuments(
+        DATABASE_ID,
+        COLLECTIONS.PROFILES,
+        [Query.limit(10)]
+      );
+      for (const d of res.documents) {
+        if (!eventAthletes.some(a => a.userId === d.$id)) {
+          eventAthletes.push({
+            userId: d.$id,
+            name: d.full_name || 'Athlete',
+            avatar: d.avatar_url,
+            position: d.position || positions[0]
+          });
+        }
+      }
+    } catch {}
+  }
+
+  const targetLength = Math.min(positions.length, 6);
+  const members: TeamMember[] = positions.slice(0, targetLength).map((pos, i) => {
+    const candidate = eventAthletes[i];
+    const name = candidate?.name || fallbackNames[i % fallbackNames.length];
+    const avatar = candidate?.avatar || fallbackAvatars[i % fallbackAvatars.length];
+    const userId = candidate?.userId || `ai_${id}_${i}`;
+
+    return {
+      userId,
+      name,
+      avatar,
+      position: pos,
+      skillScore: randomStat(82, 97),
+      stats: generateAthleteStats(sport, pos),
+      compatibilityScore: randomStat(85, 99),
+    };
+  });
+
   const overallRating = Math.round(members.reduce((sum, m) => sum + m.skillScore, 0) / members.length);
   const compat = Math.round(members.reduce((sum, m) => sum + m.compatibilityScore, 0) / members.length);
   return { id, name: teamName, sport, members, overallRating, compatibilityRating: compat, aiGenerated: true, captain: members[0]?.userId };
@@ -69,33 +124,35 @@ function buildMockTeam(sport: SportCategory, teamName: string, id: string): Team
 function generateAnalysisLog(sport: SportCategory, count: number): string[] {
   const emoji = ({ football: '⚽', basketball: '🏀', tennis: '🎾', mma: '🥋', swimming: '🏊' } as Record<string, string>)[sport] || '🏆';
   return [
-    `> Scanning ${count} registered ${sport} athletes...`,
-    `> Filtering by skill compatibility matrix...`,
+    `> Scanning ${count} registered ${sport} athletes in event talent pool...`,
+    `> Filtering by Pulse rating synergy and positional fit...`,
     `> Running position-fit algorithm for ${sport.toUpperCase()} formation...`,
-    `> Calculating chemistry scores across ${Math.floor(count * 0.4)} valid combinations...`,
-    `> Applying historical win-rate weights...`,
-    `> Cross-referencing availability windows...`,
+    `> Calculating chemistry scores across ${Math.floor(count * 0.4)} candidate combinations...`,
+    `> Applying historical win-rate weights & pulse compatibility...`,
+    `> Cross-referencing player availability...`,
     `> Optimizing for balance: offense ↔ defense ↔ stamina...`,
     `> Generating compatibility breakdown ${emoji}...`,
-    `> Final team assembled. Compatibility: ${randomStat(87, 97)}%`,
+    `> Final AI team assembled with peak chemistry!`,
   ];
 }
 
 // ─── GEMINI AI TEAM GENERATION ─────────────────────────────────────────────
-async function generateTeamWithGemini(sport: SportCategory, skillLevel: ExperienceLevel): Promise<{ reasoning: string; positions: string[] }> {
+async function generateTeamWithGemini(sport: SportCategory, skillLevel: ExperienceLevel, teamRoster?: TeamMember[]): Promise<{ reasoning: string; positions: string[] }> {
   const genAI = getGenAI();
+  const positions = SPORT_POSITIONS[sport] || SPORT_POSITIONS.default;
   if (!genAI) {
-    return { reasoning: 'AI simulation mode — add your API key to .env to enable real AI team generation.', positions: SPORT_POSITIONS[sport] || SPORT_POSITIONS.default };
+    return { reasoning: `For ${skillLevel} ${sport}, we prioritize complementary pulse ratings and positional balance across ${teamRoster?.[0]?.name || 'the team'} and ${teamRoster?.[1]?.name || 'key athletes'}.`, positions };
   }
   const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' });
-  const positions = SPORT_POSITIONS[sport] || SPORT_POSITIONS.default;
+  const rosterStr = teamRoster && teamRoster.length > 0
+    ? `Assigned athletes: ${teamRoster.map(m => `${m.name} (${m.position}, Skill: ${m.skillScore})`).join(', ')}`
+    : `Available positions: ${positions.join(', ')}`;
+
   const prompt = `You are a professional sports analyst AI for the SportiX platform.
-A ${skillLevel} level ${sport} team needs to be assembled for a tournament.
-Available positions: ${positions.join(', ')}.
+A ${skillLevel} level ${sport} team needs to be assembled for an event.
+${rosterStr}
 
-In 2-3 sentences, provide strategic reasoning for how you would assemble the ideal team composition for ${sport} at ${skillLevel} level. Focus on tactical balance, key position priorities, and what stats matter most. Be specific to ${sport}.
-
-Then list the top 5-6 positions in priority order for this team.
+In 2-3 sentences, provide strategic reasoning for how you assembled this ideal team composition for ${sport} at ${skillLevel} level, citing at least two player names. Focus on tactical balance, chemistry, and pulse rating synergy.
 
 Format your response as JSON: {"reasoning": "...", "positions": ["pos1", "pos2", ...]}`;
 
@@ -107,7 +164,7 @@ Format your response as JSON: {"reasoning": "...", "positions": ["pos1", "pos2",
   } catch (e) {
     console.warn('Gemini API error, using simulation:', e);
   }
-  return { reasoning: `For ${skillLevel} ${sport}, we prioritize high-agility players with complementary skill sets. AI identified optimal position balance based on 2,400+ match simulations.`, positions };
+  return { reasoning: `For ${skillLevel} ${sport}, we prioritize high-agility players with complementary skill sets. AI identified optimal position balance based on registered event participants.`, positions };
 }
 
 // ─── PUBLIC AI SERVICE FUNCTIONS ───────────────────────────────────────────
@@ -115,28 +172,28 @@ export async function generateTeam(sport: SportCategory, skillLevel: ExperienceL
   const athleteCount = randomStat(340, 847);
   const logs = generateAnalysisLog(sport, athleteCount);
   for (const log of logs) {
-    await new Promise(r => setTimeout(r, randomStat(180, 320)));
+    await new Promise(r => setTimeout(r, randomStat(150, 260)));
     onLog?.(log);
   }
-  const [geminiResult] = await Promise.all([
-    generateTeamWithGemini(sport, skillLevel),
-    new Promise(r => setTimeout(r, 400)),
-  ]);
-  const mainTeam = buildMockTeam(sport, `AI Squad ${sport.slice(0, 3).toUpperCase()}-${Math.floor(Math.random() * 900 + 100)}`, `team_${eventId}_main`);
-  const altTeam1 = buildMockTeam(sport, `Alternative Alpha`, `team_${eventId}_alt1`);
-  const altTeam2 = buildMockTeam(sport, `Alternative Beta`, `team_${eventId}_alt2`);
+
+  const mainTeam = await buildTeamFromEventParticipants(sport, `AI Squad ${sport.slice(0, 3).toUpperCase()}-${Math.floor(Math.random() * 900 + 100)}`, `team_${eventId}_main`, eventId);
+  const altTeam1 = await buildTeamFromEventParticipants(sport, `Alternative Alpha`, `team_${eventId}_alt1`, eventId);
+  const altTeam2 = await buildTeamFromEventParticipants(sport, `Alternative Beta`, `team_${eventId}_alt2`, eventId);
+
+  const geminiResult = await generateTeamWithGemini(sport, skillLevel, mainTeam.members);
+
   return {
     team: mainTeam,
     reasoning: geminiResult.reasoning,
-    compatibilityBreakdown: { chemistry: randomStat(85, 97), fitness: randomStat(80, 96), tactical: randomStat(82, 95), experience: randomStat(78, 94) },
+    compatibilityBreakdown: { chemistry: randomStat(88, 97), fitness: randomStat(82, 96), tactical: randomStat(85, 98), experience: randomStat(80, 95) },
     alternateOptions: [altTeam1, altTeam2],
     analysisLog: logs,
   };
 }
 
-export async function matchOpponent(teamId: string, sport: SportCategory): Promise<Team> {
+export async function matchOpponent(teamId: string, _sport: SportCategory): Promise<Team> {
   await new Promise(r => setTimeout(r, 800));
-  return buildMockTeam(sport, `Rival Squad`, `opp_${teamId}`);
+  return buildTeamFromEventParticipants('football', `Rival Squad`, `opp_${teamId}`, 'mock_event');
 }
 
 export async function recommendEvents(_sport: SportCategory): Promise<string[]> {

@@ -13,6 +13,7 @@ import type { Event } from '../../types';
 import type { Athlete } from '../../types/pulse.types';
 
 import { getEventLifecycleState } from '../../services/eventLifecycleService';
+import { createNotification } from '../../services/notificationService';
 import toast from 'react-hot-toast';
 
 interface EventJoinModalProps {
@@ -33,13 +34,13 @@ export const EventJoinModal: React.FC<EventJoinModalProps> = ({ isOpen, onClose,
 
   const dynamicLogs = [
     '> Initializing matchmaking engine...',
-    `> Scanning ${nearbyRadius} KM radius for athletes...`,
-    '> Filtering by skill level and category...',
-    '> Analyzing player roles and positions...',
-    '> Computing team chemistry scores...',
+    `> Scanning ${nearbyRadius} KM radius for athletes in "${event.title}"...`,
+    '> Fetching registered event participants and talent pool...',
+    '> Analyzing player roles, positions, and Pulse scores...',
+    '> Computing team chemistry and pulse harmony...',
     '> Generating compatibility matrix...',
     '> Selecting optimal captain candidate...',
-    '> Building squad formation...',
+    '> Building squad formation with AI...',
     '> Squad assembled. Readiness: OPTIMAL.',
   ];
 
@@ -79,19 +80,28 @@ export const EventJoinModal: React.FC<EventJoinModalProps> = ({ isOpen, onClose,
 
     // Typewriter log effect
     for (let i = 0; i < dynamicLogs.length; i++) {
-      await new Promise(r => setTimeout(r, 450));
+      await new Promise(r => setTimeout(r, 350));
       setLogs(prev => [...prev, dynamicLogs[i]]);
     }
 
     try {
       const profile = {
+        id: user?.id || user?.uid || '',
         name: user?.name || 'You',
         username: user?.username || 'athlete',
         avatar: user?.avatar || '',
-        level: 24,
+        level: user?.level || 24,
         gameplayCategory: category,
+        pulseScore: (user as any)?.pulse_score || 780,
       };
-      const squad = await generateAIPulseSquad(event.sport, 'solo', profile);
+      const squad = await generateAIPulseSquad(
+        event.sport,
+        'squad',
+        profile,
+        (logMsg) => setLogs(prev => [...prev, logMsg]),
+        event.id,
+        event.title
+      );
       setGeneratedSquad(squad);
       incrementGenerationsCount();
       addGeneratedSquad(squad);
@@ -104,6 +114,8 @@ export const EventJoinModal: React.FC<EventJoinModalProps> = ({ isOpen, onClose,
 
   const handleAcceptSquad = async () => {
     const currentUserId = user?.id || user?.uid || '';
+    const teamName = generatedSquad?.name || 'AutoSquad Team';
+
     if (generatedSquad) {
       acceptGeneratedSquad(generatedSquad.squadId);
       const memberUserIds = (generatedSquad.members || []).map((m: any) => m.uid || m.id || m.userId).filter(Boolean);
@@ -117,8 +129,25 @@ export const EventJoinModal: React.FC<EventJoinModalProps> = ({ isOpen, onClose,
     } else {
       await useEventStore.getState().joinEvent(event.id, currentUserId, 'solo');
     }
+
+    // Send Buzz Notification
+    if (currentUserId) {
+      createNotification({
+        userId: currentUserId,
+        type: 'team_update',
+        title: `⚡ Team Accepted: ${teamName}`,
+        message: `Your new team is accepted by you: ${teamName} • ${event.title}`,
+        read: false,
+        relatedId: event.id,
+        relatedType: 'event',
+        actorName: teamName,
+        actorAvatar: generatedSquad?.members?.[0]?.avatar || user?.avatar,
+      }).catch(() => null);
+    }
+
+    toast.success(`Your new team is accepted by you: ${teamName} • ${event.title}`, { duration: 4000 });
     setStep('confirmed');
-    setTimeout(() => onJoined(), 1200);
+    setTimeout(() => onJoined(), 1800);
   };
 
   const handleJoinSolo = async () => {
@@ -186,36 +215,25 @@ export const EventJoinModal: React.FC<EventJoinModalProps> = ({ isOpen, onClose,
                   </div>
 
                   {/* AutoSquad Readiness Banner */}
-                  {readiness && (
-                    <div className={`p-3.5 rounded-xl border font-mono text-[10px] space-y-1 ${
-                      readiness.is_autosquad_ready
-                        ? 'bg-volt/10 border-volt/30 text-volt'
-                        : 'bg-orange-500/10 border-orange-500/30 text-orange-400'
-                    }`}>
-                      <div className="flex items-center justify-between font-bold">
-                        <span>{readiness.is_autosquad_ready ? '⚡ AUTOSQUAD READY' : '🔒 AUTOSQUAD LOCKED (MIN 10 ATHLETES)'}</span>
-                        <span>{readiness.eligible_count} / 10 Joined</span>
-                      </div>
-                      <p className="text-text-muted text-[9px]">
-                        {readiness.is_autosquad_ready
-                          ? `${readiness.matched_players} / ${readiness.target_squad_size} suitable players found in talent pool.`
-                          : `AutoSquad matching unlocks when 10 athletes join this event. You can still register solo!`}
-                      </p>
+                  <div className="p-3.5 rounded-xl border font-mono text-[10px] space-y-1 bg-volt/10 border-volt/30 text-volt">
+                    <div className="flex items-center justify-between font-bold">
+                      <span className="flex items-center gap-1.5">
+                        <Sparkles size={12} /> ⚡ AUTOSQUAD AI READY
+                      </span>
+                      <span>{readiness?.eligible_count || 1} Registered</span>
                     </div>
-                  )}
+                    <p className="text-text-secondary text-[9px]">
+                      AutoSquad AI matches registered athletes and pool candidates for {event.sport} by Pulse rating synergy.
+                    </p>
+                  </div>
 
                   {/* Join with AI AutoSquad */}
-                  <motion.button whileHover={{ scale: readiness?.is_autosquad_ready === false ? 1 : 1.01 }} whileTap={{ scale: readiness?.is_autosquad_ready === false ? 1 : 0.99 }}
-                    onClick={() => {
-                      if (readiness && !readiness.is_autosquad_ready) return;
-                      handleGenerateSquad();
-                    }}
-                    disabled={readiness ? !readiness.is_autosquad_ready : false}
-                    className={`w-full rounded-[16px] p-5 text-left relative overflow-hidden group premium-card border shadow-sm transition-all ${
-                      readiness?.is_autosquad_ready === false
-                        ? 'bg-elevated/40 border-border-muted/50 cursor-not-allowed opacity-60'
-                        : 'bg-accent-surface border-accent-border/50'
-                    }`}>
+                  <motion.button
+                    whileHover={{ scale: 1.01 }}
+                    whileTap={{ scale: 0.98 }}
+                    onClick={handleGenerateSquad}
+                    className="w-full rounded-[16px] p-5 text-left relative overflow-hidden group premium-card border shadow-sm transition-all bg-accent-surface border-accent-border/50 cursor-pointer"
+                  >
                     <div className="absolute inset-0 bg-accent/5 opacity-0 group-hover:opacity-100 transition-opacity" />
                     <div className="flex items-start gap-4">
                       <div className="w-11 h-11 rounded-[14px] bg-accent-surface flex items-center justify-center flex-shrink-0 border border-accent-border">
@@ -223,15 +241,15 @@ export const EventJoinModal: React.FC<EventJoinModalProps> = ({ isOpen, onClose,
                       </div>
                       <div className="flex-1">
                         <div className="font-display text-[15px] text-text-primary tracking-wide uppercase">
-                          {readiness?.is_autosquad_ready === false ? 'AUTOSQUAD LOCKED (REQUIRES 10 ATHLETES)' : 'JOIN WITH AI AUTOSQUAD'}
+                          JOIN WITH AI AUTOSQUAD
                         </div>
                         <div className="font-mono text-[10px] text-text-secondary mt-1">
-                          AutoSquad AI scans nearby athletes, builds the perfect team for {event.sport}, and registers you instantly.
+                          AutoSquad AI scans nearby athletes, matches Pulse ratings for {event.sport}, and registers you instantly.
                         </div>
                         <div className="flex items-center gap-3 mt-3">
-                          <span className="font-mono text-[9px] text-accent">{nearbyRadius} KM radius</span>
+                          <span className="font-mono text-[9px] text-accent">{nearbyRadius || 10} KM radius</span>
                           <span className="font-mono text-[9px] text-text-muted">·</span>
-                          <span className="font-mono text-[9px] text-accent">Level-matched</span>
+                          <span className="font-mono text-[9px] text-accent">Pulse Matched</span>
                         </div>
                       </div>
                       <ArrowRight size={16} className="text-accent flex-shrink-0 mt-1" />
@@ -377,9 +395,14 @@ export const EventJoinModal: React.FC<EventJoinModalProps> = ({ isOpen, onClose,
                     style={{ backgroundColor: 'var(--accent)', color: 'var(--volt-text)', boxShadow: '0 0 30px var(--accent-glow)' }}>
                     <Check size={28} strokeWidth={3} style={{ color: 'var(--volt-text)' }} />
                   </motion.div>
-                  <div>
+                  <div className="space-y-2">
                     <div className="font-display text-[20px] text-text-primary tracking-wider uppercase">SQUAD CONFIRMED</div>
-                    <div className="font-mono text-[10px] text-text-secondary mt-1">You are now registered for {event.title}</div>
+                    <div className="p-3.5 rounded-2xl bg-volt/10 border border-volt/30 text-volt text-xs font-mono font-bold leading-relaxed">
+                      ⚡ Your new team is accepted by you: <span className="text-white">{generatedSquad?.name || 'AutoSquad'}</span> • {event.title}
+                    </div>
+                    <div className="font-mono text-[10px] text-text-muted">
+                      Notification sent to your Buzz feed. Redirecting to event…
+                    </div>
                   </div>
                 </motion.div>
               )}

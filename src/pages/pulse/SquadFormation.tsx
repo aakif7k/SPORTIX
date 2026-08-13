@@ -10,6 +10,9 @@ import { useAuthStore } from '../../store/authStore';
 import { useAISettingsStore } from '../../store/aiSettingsStore';
 import { Sparkles, Check, Users, Activity, Brain, ArrowRight, CheckCircle2, XCircle } from 'lucide-react';
 import { PendingReportBanner } from '../../components/performance/PendingReportBanner';
+import { createNotification } from '../../services/notificationService';
+import { useEventStore } from '../../store/eventStore';
+import toast from 'react-hot-toast';
 
 // ─── 4 Master Tabs ────────────────────────────────────────────────────────────
 const DASH_TABS = [
@@ -50,9 +53,21 @@ export const SquadFormation: React.FC = () => {
   // Master generation handler
   const handleGenerateSquad = async () => {
     setGenError(null);
+    const targetEv = selectedEvent || {
+      id: urlEventId || 'event_1',
+      title: 'Chennai Sunday Football League',
+      sport: 'Football',
+      location: 'Nehru Stadium, Chennai',
+      city: 'Chennai',
+      startsAt: new Date().toISOString(),
+      currentParticipants: 14,
+      maxParticipants: 32,
+      bannerUrl: null,
+      status: 'upcoming'
+    };
+
     if (!selectedEvent) {
-      setGenError('Please select an event to start AutoSquad matchmaking.');
-      return;
+      setSelectedEvent(targetEv);
     }
 
     if (dailyQuota.remaining <= 0) {
@@ -65,11 +80,11 @@ export const SquadFormation: React.FC = () => {
 
     try {
       const res = await generateAutoSquad({
-        event_id: selectedEvent.id,
-        sport: selectedEvent.sport,
+        event_id: targetEv.id,
+        sport: targetEv.sport,
         entry_type: entryType as any,
         radius_km: nearbyRadius || 10,
-        location: selectedEvent.location,
+        location: targetEv.location,
       });
 
       // Generate 5 draft slot variations
@@ -84,7 +99,7 @@ export const SquadFormation: React.FC = () => {
           name: m.full_name || `Athlete ${idx + 1}`,
           username: m.username || `athlete_${idx + 1}`,
           avatar: m.avatar_url || `https://i.pravatar.cc/150?u=${m.id || idx}`,
-          sport: m.sport || selectedEvent.sport,
+          sport: m.sport || targetEv.sport,
           position: m.position || ['FW', 'MF', 'DF', 'GK'][idx % 4],
           pulseScore: m.pulse_score || (700 + ((idx * 37) % 150)),
           tier: (m.ssr || 75) >= 85 ? 'ELITE' : 'CONTENDER',
@@ -93,7 +108,7 @@ export const SquadFormation: React.FC = () => {
           readiness: 'Ready',
           level: m.level || 15,
           distance: m.distance_km || Number((1.2 + idx * 0.8).toFixed(1)),
-          location: selectedEvent.city || 'Chennai',
+          location: targetEv.city || 'Chennai',
         }));
 
         const totalPulse = pulsedMembers.reduce((sum: number, m: any) => sum + (m.pulseScore || 700), 0);
@@ -102,9 +117,9 @@ export const SquadFormation: React.FC = () => {
         const draftObj: any = {
           squadId: `draft_${Date.now()}_${i + 1}`,
           name: draftName,
-          sport: selectedEvent.sport,
-          eventId: selectedEvent.id,
-          eventName: selectedEvent.title,
+          sport: targetEv.sport,
+          eventId: targetEv.id,
+          eventName: targetEv.title,
           captainId: pulsedMembers[0]?.uid || user?.id || 'cu1',
           members: pulsedMembers,
           chemistry: {
@@ -126,11 +141,11 @@ export const SquadFormation: React.FC = () => {
           createdAt: new Date().toISOString().split('T')[0],
           lastActive: new Date().toISOString().split('T')[0],
           tournamentIds: [],
-          events: [selectedEvent.title],
+          events: [targetEv.title],
           posts: [],
           xpBoostActive: false,
           streakMultiplier: 1.0,
-          tags: ['AutoSquad AI', baseSquad.formation || '4-3-3', selectedEvent.sport],
+          tags: ['AutoSquad AI', baseSquad.formation || '4-3-3', targetEv.sport],
           lookingFor: [],
           score_breakdown: baseSquad.score_breakdown,
           captain_recommendation: baseSquad.captain_recommendation,
@@ -163,9 +178,44 @@ export const SquadFormation: React.FC = () => {
   };
 
   const handleAccept = async (id: string) => {
+    const targetSquad = generatedSquads.find(s => s.squadId === id);
     await acceptAutoSquad(id).catch(() => null);
     acceptGeneratedSquad(id);
     setActiveTab('accepted');
+
+    const currentUserId = user?.id || '';
+    const squadTitle = targetSquad?.name || 'AutoSquad Team';
+    const eventTitle = (targetSquad as any)?.eventName || selectedEvent?.title || 'SPORTiX Event';
+    const eventId = (targetSquad as any)?.eventId || selectedEvent?.id || '';
+
+    // Join event if applicable
+    if (eventId && currentUserId) {
+      const memberIds = (targetSquad?.members || []).map((m: any) => m.uid || m.id).filter(Boolean);
+      await useEventStore.getState().joinEvent(
+        eventId,
+        currentUserId,
+        'squad',
+        id,
+        memberIds.length > 0 ? memberIds : [currentUserId]
+      );
+    }
+
+    // Buzz notification
+    if (currentUserId) {
+      await createNotification({
+        userId: currentUserId,
+        type: 'team_update',
+        title: `⚡ Team Accepted: ${squadTitle}`,
+        message: `Your new team is accepted by you: ${squadTitle} • ${eventTitle}`,
+        read: false,
+        relatedId: eventId,
+        relatedType: 'event',
+        actorName: squadTitle,
+        actorAvatar: targetSquad?.members?.[0]?.avatar,
+      }).catch(() => null);
+    }
+
+    toast.success(`Your new team is accepted by you: ${squadTitle} • ${eventTitle}`, { duration: 4500 });
   };
 
   const activeSquad = generatedSquads.find(s => s.squadId === selectedDraftId) || generatedSquads[0] || null;
@@ -574,6 +624,17 @@ export const SquadFormation: React.FC = () => {
 
           return (
             <div key={squad.squadId} className="p-6 rounded-3xl bg-surface border border-border-muted space-y-6 shadow-card">
+              {/* Accepted Banner */}
+              <div className="p-3.5 rounded-2xl bg-volt/10 border border-volt/30 flex items-center justify-between gap-3 text-xs font-mono">
+                <span className="text-volt font-bold flex items-center gap-2">
+                  <CheckCircle2 size={16} className="text-volt flex-shrink-0" />
+                  Your new team is accepted by you: <span className="text-white">{squad.name}</span> • <span className="text-volt">{(squad as any).eventName || (squad as any).events?.[0] || selectedEvent?.title || 'SPORTiX Event'}</span>
+                </span>
+                <span className="px-2.5 py-0.5 rounded-lg bg-volt/20 text-volt text-[10px] uppercase font-bold tracking-wider flex-shrink-0">
+                  Accepted ✓
+                </span>
+              </div>
+
               {/* Header */}
               <div className="flex flex-wrap items-center justify-between gap-4 pb-4 border-b border-border-muted">
                 <div>

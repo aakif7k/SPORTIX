@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { motion } from 'framer-motion';
 import { 
   CheckCheck, Trash2, Calendar, Brain, User2, Heart, Clock, Trophy, 
-  Bell, CheckCircle2
+  Bell, CheckCircle2, Zap
 } from 'lucide-react';
 import { useNotificationStore } from '../../store/notificationStore';
 import type { Notification, NotificationType } from '../../types';
@@ -50,7 +50,7 @@ const TYPE_CONFIG: Record<NotificationType, { icon: React.ComponentType<{ size?:
   like: { icon: Heart, color: 'text-red-400', bg: 'bg-red-500/10 border-red-500/30' },
   comment: { icon: Heart, color: 'text-pink-400', bg: 'bg-pink-500/10 border-pink-500/30' },
   match_reminder: { icon: Clock, color: 'text-[#FF6B00]', bg: 'bg-[#FF6B00]/10 border-[#FF6B00]/30' },
-  team_update: { icon: Brain, color: 'text-blue-400', bg: 'bg-blue-500/10 border-blue-500/30' },
+  team_update: { icon: Zap, color: 'text-[#CCFF00]', bg: 'bg-[#CCFF00]/10 border-[#CCFF00]/30 shadow-[0_0_12px_rgba(204,255,0,0.15)]' },
   achievement: { icon: Trophy, color: 'text-yellow-400', bg: 'bg-yellow-500/10 border-yellow-500/30' },
 };
 
@@ -78,12 +78,21 @@ const NotifItem: React.FC<{ notif: Notification }> = ({ notif }) => {
       whileHover={{ y: -2 }}
       onClick={() => markRead(notif.id)}
       className={`flex items-start gap-4 p-4 rounded-2xl border cursor-pointer transition-all ${
-        notif.read ? 'bg-surface/50 border-border-muted/50 opacity-60' : 'bg-surface border-[#FF3B00]/30 shadow-md'
+        notif.read ? 'bg-surface/50 border-border-muted/50 opacity-60' : 'bg-surface border-volt/20 shadow-md'
       }`}
     >
-      <div className={`w-10 h-10 rounded-xl flex items-center justify-center border flex-shrink-0 ${config.bg}`}>
-        <Icon size={18} className={config.color} />
-      </div>
+      {notif.actorAvatar ? (
+        <div className="relative w-10 h-10 flex-shrink-0">
+          <img src={notif.actorAvatar} alt={notif.actorName || 'Actor'} className="w-10 h-10 rounded-xl object-cover border border-border" />
+          <div className="absolute -bottom-1 -right-1 w-4 h-4 rounded-full bg-black flex items-center justify-center border border-volt">
+            <Icon size={10} className={config.color} />
+          </div>
+        </div>
+      ) : (
+        <div className={`w-10 h-10 rounded-xl flex items-center justify-center border flex-shrink-0 ${config.bg}`}>
+          <Icon size={18} className={config.color} />
+        </div>
+      )}
       <div className="flex-1 min-w-0">
         <div className="flex items-start justify-between gap-2">
           <p className="font-sans font-bold text-sm text-white">{notif.title}</p>
@@ -91,7 +100,7 @@ const NotifItem: React.FC<{ notif: Notification }> = ({ notif }) => {
         </div>
         <p className="text-xs text-text-secondary font-sans mt-1 leading-relaxed">{notif.message}</p>
       </div>
-      {!notif.read && <div className="w-2.5 h-2.5 rounded-full bg-[#FF3B00] shadow-[0_0_8px_rgba(255,59,0,0.8)] flex-shrink-0 mt-1.5" />}
+      {!notif.read && <div className="w-2.5 h-2.5 rounded-full bg-volt shadow-[0_0_8px_rgba(204,255,0,0.8)] flex-shrink-0 mt-1.5" />}
     </motion.div>
   );
 };

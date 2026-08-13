@@ -3,6 +3,8 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { Calendar, MapPin, Users, Trophy, Search, ChevronDown, Check, Flame, ShieldCheck, Lock } from 'lucide-react';
 import { databases, DATABASE_ID, COLLECTIONS, Query } from '@/lib/appwrite';
 
+import { MOCK_EVENTS } from '../../services/mockData';
+
 export interface EventOption {
   id: string;
   title: string;
@@ -39,8 +41,9 @@ export const AutoSquadEventSelector: React.FC<Props> = ({ selectedEvent, onSelec
           [Query.orderDesc('starts_at'), Query.limit(30)]
         );
 
-        if (mounted && res.documents) {
-          const mapped: EventOption[] = res.documents.map((d: any) => ({
+        let mapped: EventOption[] = [];
+        if (res.documents && res.documents.length > 0) {
+          mapped = res.documents.map((d: any) => ({
             id: d.$id,
             title: d.title || 'SPORTiX Tournament',
             sport: d.sport || 'Football',
@@ -52,7 +55,23 @@ export const AutoSquadEventSelector: React.FC<Props> = ({ selectedEvent, onSelec
             bannerUrl: d.banner_url || null,
             status: d.status || 'upcoming',
           }));
+        } else {
+          // Fallback to MOCK_EVENTS if Appwrite collection has 0 events
+          mapped = MOCK_EVENTS.map(m => ({
+            id: m.id,
+            title: m.title,
+            sport: m.sport,
+            location: m.location,
+            city: m.location.split(',')[0] || 'Chennai',
+            startsAt: new Date(Date.now() + 86400000 * 2).toISOString(),
+            currentParticipants: m.participants?.length || 14,
+            maxParticipants: m.maxParticipants || 32,
+            bannerUrl: m.bannerImage || m.banner_image_url || null,
+            status: m.status || 'upcoming',
+          }));
+        }
 
+        if (mounted) {
           setEvents(mapped);
 
           // Auto-select preselected event ID if provided, otherwise first available
@@ -66,6 +85,24 @@ export const AutoSquadEventSelector: React.FC<Props> = ({ selectedEvent, onSelec
         }
       } catch (err) {
         console.error('[AutoSquadEventSelector] Failed to load events:', err);
+        const fallback = MOCK_EVENTS.map(m => ({
+          id: m.id,
+          title: m.title,
+          sport: m.sport,
+          location: m.location,
+          city: m.location.split(',')[0] || 'Chennai',
+          startsAt: new Date(Date.now() + 86400000 * 2).toISOString(),
+          currentParticipants: m.participants?.length || 14,
+          maxParticipants: m.maxParticipants || 32,
+          bannerUrl: m.bannerImage || m.banner_image_url || null,
+          status: m.status || 'upcoming',
+        }));
+        if (mounted) {
+          setEvents(fallback);
+          if (!selectedEvent && fallback.length > 0) {
+            onSelectEvent(fallback[0]);
+          }
+        }
       } finally {
         if (mounted) setLoading(false);
       }
