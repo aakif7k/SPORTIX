@@ -189,6 +189,7 @@ export async function ensureUserProfile(appwriteAcc: {
   const cleanName = appwriteAcc.name && appwriteAcc.name.trim() ? appwriteAcc.name.trim() : emailPrefix;
   const cleanUsername = (cleanName.toLowerCase().replace(/[^a-z0-9]/g, '_').slice(0, 20) || `user_${uid.slice(0, 6)}`);
 
+  const nowIso = new Date().toISOString();
   const newDocData = {
     full_name: cleanName,
     username: cleanUsername,
@@ -207,6 +208,8 @@ export async function ensureUserProfile(appwriteAcc: {
     level: 1,
     coins_balance: 0,
     login_streak: 0,
+    created_at: nowIso,
+    updated_at: nowIso,
   };
 
   try {
@@ -390,12 +393,18 @@ export async function createProfile(
   data: ProfileWriteData,
 ): Promise<UserProfile | null> {
   try {
-    const { id, created_at, updated_at, ...cleanData } = data as any;
+    const nowIso = new Date().toISOString();
+    const { id, ...cleanData } = data as any;
+    const payload = {
+      ...cleanData,
+      created_at: cleanData.created_at || nowIso,
+      updated_at: cleanData.updated_at || nowIso,
+    };
     const doc = await databases.createDocument(
       DATABASE_ID,
       COLLECTIONS.PROFILES,
       uid,
-      cleanData,
+      payload,
     );
     return docToProfile(doc as AppwriteDocument);
   } catch (err: any) {

@@ -84,7 +84,8 @@ export async function registerUser(data: RegisterData): Promise<AuthUser> {
   // 2. Create email session immediately (log them in)
   await account.createEmailPasswordSession(data.email, data.password);
 
-  // 3. Create profile document in Appwrite Database (graceful fallback if collection is pending)
+  // 3. Create profile document in Appwrite Database
+  const nowIso = new Date().toISOString();
   try {
     await databases.createDocument(
       DATABASE_ID,
@@ -94,11 +95,11 @@ export async function registerUser(data: RegisterData): Promise<AuthUser> {
         full_name:              data.fullName,
         username:               data.username.toLowerCase().trim(),
         email:                  data.email,
-        role:                   data.role,
-        sport:                  data.sport,
-        sports:                 data.sports,
-        experience_level:       data.experienceLevel,
-        location:               data.location,
+        role:                   data.role || 'athlete',
+        sport:                  data.sport || 'Multi-Sport',
+        sports:                 data.sports || [],
+        experience_level:       data.experienceLevel || 'amateur',
+        location:               data.location || '',
         avatar_url:             null,
         bio:                    '',
         is_open_to_recruit:     false,
@@ -108,10 +109,14 @@ export async function registerUser(data: RegisterData): Promise<AuthUser> {
         level:                  1,
         coins_balance:          0,
         login_streak:           0,
+        created_at:             nowIso,
+        updated_at:             nowIso,
       },
     );
   } catch (err: any) {
-    console.warn('Appwrite profiles document creation skipped (collection pending):', err?.message);
+    console.error('Appwrite profiles document creation failed:', err?.message || err);
+    // User-friendly error message if write fails
+    throw new Error(err?.message || "Couldn't create your profile. Please try again.");
   }
 
   return toAuthUser(user);

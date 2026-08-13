@@ -1,10 +1,9 @@
 import React from 'react';
 import { motion } from 'framer-motion';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { Zap, Gift, Target, Check, Lock, Trophy, ArrowRight, Star, History, Activity } from 'lucide-react';
+import { Zap, Gift, Target, Check, Lock, Trophy, ArrowRight, Star, History, Activity, Calendar } from 'lucide-react';
 import { useGamificationStore } from '../../store/gamificationStore';
-import { useCareerStats } from '../../hooks/useCareerStats';
-import { useMatchReportStore } from '../../store/matchReportStore';
+import { useClashHubSidebar, type SidebarMatchItem } from '../../hooks/useClashHubSidebar';
 
 // ─── Daily Rewards Panel ─────────────────────────────────────────────────────
 const DailyRewardsPanel: React.FC = () => {
@@ -15,10 +14,8 @@ const DailyRewardsPanel: React.FC = () => {
 
   return (
     <div className="space-y-4">
-
       {/* Daily Rewards */}
       <div className="rounded-[20px] p-4" style={{ background: 'var(--bg-surface)', border: '1px solid var(--border)' }}>
-        <div className="absolute top-0 left-0 right-0 h-px" />
         <div className="flex items-center gap-2 mb-3">
           <div className="w-6 h-6 rounded-lg flex items-center justify-center flex-shrink-0" style={{ background: 'rgba(255,213,74,0.12)', border: '1px solid rgba(255,213,74,0.25)' }}>
             <Gift size={12} style={{ color: '#FFD700' }} />
@@ -46,7 +43,7 @@ const DailyRewardsPanel: React.FC = () => {
               <span className="font-mono text-[8px]" style={{ color: reward.claimed ? 'var(--accent-text)' : 'var(--text-muted)' }}>D{reward.day}</span>
             </motion.div>
           ))}
-          {/* 8th slot = tomorrow preview */}
+          {/* 8th slot = preview */}
           <div className="flex flex-col items-center gap-1 p-2 rounded-[12px]" style={{ background: 'var(--bg-elevated)', border: '1px solid var(--border)' }}>
             <Star size={12} style={{ color: 'var(--text-muted)' }} />
             <span className="font-mono text-[8px]" style={{ color: 'var(--text-muted)' }}>D8</span>
@@ -107,14 +104,111 @@ const DailyRewardsPanel: React.FC = () => {
   );
 };
 
+// ─── Real ClashHub Events & Match Panel ──────────────────────────────────────
 export const EventsPanel: React.FC = () => {
   const navigate = useNavigate();
-  const careerStats = useCareerStats();
-  const { matchHistory } = useMatchReportStore();
+  const {
+    upcomingEvents,
+    previousMatches,
+    performance,
+    loading,
+    eventsError,
+    matchesError,
+    dismissEvent,
+    refresh,
+  } = useClashHubSidebar();
+
+  const renderReportBadge = (match: SidebarMatchItem) => {
+    switch (match.reportStatus) {
+      case 'NO_REPORT':
+        return (
+          <div className="flex items-center justify-between mt-1 pt-1.5 border-t border-border-muted/60">
+            <span className="font-mono text-[9px] font-bold text-amber-400 flex items-center gap-1">
+              ⚠ REPORT INCOMPLETE
+            </span>
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                navigate(`/app/clashhub/report/${match.matchId}`);
+              }}
+              className="font-mono text-[9px] text-amber-400 font-bold hover:underline"
+            >
+              Complete Report →
+            </button>
+          </div>
+        );
+      case 'DRAFT':
+        return (
+          <div className="flex items-center justify-between mt-1 pt-1.5 border-t border-border-muted/60">
+            <span className="font-mono text-[9px] font-bold text-amber-400 flex items-center gap-1">
+              📝 REPORT DRAFT
+            </span>
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                navigate(`/app/clashhub/report/${match.matchId}`);
+              }}
+              className="font-mono text-[9px] text-amber-400 font-bold hover:underline"
+            >
+              Continue Report →
+            </button>
+          </div>
+        );
+      case 'SUBMITTED':
+        return (
+          <div className="mt-1 pt-1 border-t border-border-muted/40">
+            <span className="font-mono text-[9px] font-bold text-emerald-400">✓ REPORT SUBMITTED</span>
+          </div>
+        );
+      case 'VERIFICATION_PENDING':
+        return (
+          <div className="mt-1 pt-1 border-t border-border-muted/40">
+            <span className="font-mono text-[9px] font-bold text-sky-400">⏳ VERIFICATION PENDING</span>
+          </div>
+        );
+      case 'VERIFIED':
+        return (
+          <div className="mt-1 pt-1 border-t border-border-muted/40">
+            <span className="font-mono text-[9px] font-bold text-emerald-400">✓ VERIFIED</span>
+          </div>
+        );
+      case 'CORRECTION_REQUESTED':
+        return (
+          <div className="flex items-center justify-between mt-1 pt-1.5 border-t border-border-muted/60">
+            <span className="font-mono text-[9px] font-bold text-orange-400 flex items-center gap-1">
+              ↻ CORRECTION REQUESTED
+            </span>
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                navigate(`/app/clashhub/report/${match.matchId}`);
+              }}
+              className="font-mono text-[9px] text-orange-400 font-bold hover:underline"
+            >
+              Update Report →
+            </button>
+          </div>
+        );
+      case 'DISPUTED':
+        return (
+          <div className="mt-1 pt-1 border-t border-border-muted/40">
+            <span className="font-mono text-[9px] font-bold text-rose-400">⚠ REPORT DISPUTED</span>
+          </div>
+        );
+      case 'RESOLVED':
+        return (
+          <div className="mt-1 pt-1 border-t border-border-muted/40">
+            <span className="font-mono text-[9px] font-bold text-emerald-400">✓ REPORT RESOLVED</span>
+          </div>
+        );
+      default:
+        return null;
+    }
+  };
 
   return (
     <div className="space-y-4">
-      {/* YOUR PERFORMANCE */}
+      {/* 1. YOUR PERFORMANCE */}
       <div className="rounded-[20px] p-4" style={{ background: 'var(--bg-surface)', border: '1px solid var(--border)' }}>
         <div className="flex items-center gap-2 mb-3">
           <div className="w-6 h-6 rounded-lg flex items-center justify-center flex-shrink-0" style={{ background: 'var(--accent-surface)', border: '1px solid var(--accent-border)' }}>
@@ -122,13 +216,13 @@ export const EventsPanel: React.FC = () => {
           </div>
           <span className="font-display text-[13px] tracking-widest" style={{ color: 'var(--text-primary)' }}>YOUR PERFORMANCE</span>
         </div>
-        
+
         <div className="grid grid-cols-2 gap-2">
           {[
-            { icon: <Trophy size={12} />,    label: 'MATCHES',      value: matchHistory.length,         color: 'var(--accent)', onClick: () => navigate('/app/clashhub/history') },
-            { icon: <Zap size={12} />,       label: 'PULSE',        value: careerStats.totalPulseEarned, color: '#60A5FA',      onClick: () => navigate('/app/clashhub/performance') },
-            { icon: <Target size={12} />,    label: 'WIN RATE',     value: `${careerStats.winRate}%`,   color: '#4ADE80',      onClick: () => navigate('/app/clashhub/performance') },
-            { icon: <Activity size={12} />,  label: 'SSR RATING',   value: careerStats.currentSSR,      color: '#FBBF24',      onClick: () => navigate('/app/clashhub/performance') },
+            { icon: <Trophy size={12} />,   label: 'MATCHES',    value: performance.matchesCount,   color: 'var(--accent)', onClick: () => navigate('/app/clashhub/history') },
+            { icon: <Zap size={12} />,      label: 'PULSE',      value: performance.pulse,          color: '#60A5FA',      onClick: () => navigate('/app/clashhub/performance') },
+            { icon: <Target size={12} />,   label: 'WIN RATE',   value: `${performance.winRate}%`,  color: '#4ADE80',      onClick: () => navigate('/app/clashhub/performance') },
+            { icon: <Activity size={12} />, label: 'SSR RATING', value: performance.ssr,           color: '#FBBF24',      onClick: () => navigate('/app/clashhub/performance') },
           ].map((stat, i) => (
             <motion.button
               key={i}
@@ -139,14 +233,90 @@ export const EventsPanel: React.FC = () => {
               style={{ background: 'var(--bg-elevated)', border: '1px solid var(--border)' }}
             >
               <div className="flex items-center justify-center" style={{ color: stat.color }}>{stat.icon}</div>
-              <div className="font-display text-[18px] leading-none font-bold" style={{ color: stat.color }}>{stat.value}</div>
+              <div className="font-display text-[16px] leading-none font-bold truncate" style={{ color: stat.color }}>{stat.value}</div>
               <div className="font-mono text-[8px] uppercase tracking-widest text-[var(--text-muted)]">{stat.label}</div>
             </motion.button>
           ))}
         </div>
       </div>
 
-      {/* PREVIOUS MATCHES */}
+      {/* 2. YOUR UPCOMING EVENTS */}
+      <div className="rounded-[20px] p-4" style={{ background: 'var(--bg-surface)', border: '1px solid var(--border)' }}>
+        <div className="flex items-center justify-between mb-3">
+          <div className="flex items-center gap-2">
+            <div className="w-6 h-6 rounded-lg flex items-center justify-center flex-shrink-0" style={{ background: 'rgba(255,107,0,0.12)', border: '1px solid rgba(255,107,0,0.25)' }}>
+              <Calendar size={12} style={{ color: '#FF6B00' }} />
+            </div>
+            <span className="font-display text-[13px] tracking-widest" style={{ color: 'var(--text-primary)' }}>YOUR UPCOMING EVENTS</span>
+          </div>
+        </div>
+
+        {loading ? (
+          <div className="space-y-2">
+            <div className="h-20 rounded-[12px] bg-elevated animate-pulse border border-border" />
+            <div className="h-20 rounded-[12px] bg-elevated animate-pulse border border-border" />
+          </div>
+        ) : eventsError ? (
+          <div className="p-3 rounded-[12px] text-center space-y-2" style={{ background: 'rgba(248,113,113,0.1)', border: '1px solid rgba(248,113,113,0.3)' }}>
+            <p className="font-mono text-[10px] text-red-400">Unable to load your events.</p>
+            <button onClick={refresh} className="px-3 py-1 rounded bg-red-500/20 text-red-300 font-mono text-[10px] font-bold hover:bg-red-500/30 transition-colors">
+              Retry
+            </button>
+          </div>
+        ) : upcomingEvents.length === 0 ? (
+          <div className="p-4 rounded-[16px] text-center border border-dashed border-border-muted" style={{ background: 'var(--bg-elevated)' }}>
+            <p className="font-mono text-[11px] text-text-muted">No upcoming registered events.</p>
+          </div>
+        ) : (
+          <div className="space-y-2.5">
+            {upcomingEvents.map(ev => (
+              <motion.div
+                key={ev.id}
+                whileHover={{ y: -2 }}
+                onClick={() => navigate(`/app/events/${ev.id}`)}
+                className="rounded-[14px] p-3 cursor-pointer relative overflow-hidden transition-all group"
+                style={{ background: 'var(--bg-elevated)', border: '1px solid var(--border)' }}
+              >
+                <div className="flex items-start justify-between gap-2 mb-1">
+                  <div className="flex items-center gap-1.5 min-w-0">
+                    <span className="w-1.5 h-1.5 rounded-full flex-shrink-0" style={{ background: ev.status === 'LIVE NOW' ? '#00D4FF' : '#FF6B00' }} />
+                    <span className="font-mono text-[9px] font-bold uppercase truncate" style={{ color: ev.status === 'LIVE NOW' ? '#00D4FF' : '#FF6B00' }}>
+                      {ev.sport} · {ev.status}
+                    </span>
+                  </div>
+                  <span className="font-mono text-[8px] px-1.5 py-0.5 rounded bg-surface border border-border font-bold text-text-muted whitespace-nowrap">
+                    ⏱ {ev.daysLeftText}
+                  </span>
+                </div>
+
+                <h4 className="font-condensed font-bold text-[13px] text-text-primary group-hover:text-accent transition-colors truncate">
+                  {ev.title}
+                </h4>
+                <p className="font-sans text-[10px] text-text-muted truncate mb-2">
+                  📅 {ev.dateStr} · 📍 {ev.venue}
+                </p>
+
+                <div className="flex items-center justify-between pt-2 border-t border-border-muted/60">
+                  <span className="font-mono text-[8px] font-bold text-text-secondary">
+                    {ev.currentParticipants} / {ev.maxParticipants} REGISTERED
+                  </span>
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      dismissEvent(ev.id);
+                    }}
+                    className="font-mono text-[9px] font-bold text-text-muted hover:text-red-400 transition-colors"
+                  >
+                    Dismiss
+                  </button>
+                </div>
+              </motion.div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* 3. PREVIOUS MATCHES */}
       <div className="rounded-[20px] p-4" style={{ background: 'var(--bg-surface)', border: '1px solid var(--border)' }}>
         <div className="flex items-center justify-between mb-3">
           <div className="flex items-center gap-2">
@@ -160,47 +330,64 @@ export const EventsPanel: React.FC = () => {
           </button>
         </div>
 
-        <div className="space-y-2">
-          {matchHistory.slice(0, 4).map((match) => {
-            const resultColor = match.matchResult === 'win' ? '#4ADE80' : match.matchResult === 'loss' ? '#F87171' : '#FBBF24';
-            const resultLabel = match.matchResult.toUpperCase();
-            return (
-              <motion.div
-                key={match.id}
-                whileHover={{ x: 3 }}
-                onClick={() => navigate('/app/clashhub/history')}
-                className="flex items-center justify-between p-2.5 rounded-[12px] cursor-pointer gap-3 transition-all"
-                style={{ background: 'var(--bg-elevated)', border: '1px solid var(--border)' }}
-              >
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-1.5 mb-0.5">
-                    <span className="font-mono text-[9px] text-[var(--text-muted)] capitalize">{match.sport}</span>
-                    <span className="font-mono text-[9px]" style={{ color: 'var(--accent)' }}>+{match.pulseEarned} ⚡</span>
-                  </div>
-                  <p className="font-condensed font-semibold text-[12px] text-[var(--text-primary)] truncate leading-snug">{match.eventName}</p>
-                </div>
-                <span className="px-2 py-0.5 rounded-full font-mono text-[8px] font-bold"
-                  style={{ background: `${resultColor}18`, color: resultColor, border: `1px solid ${resultColor}55` }}>
-                  {resultLabel}
-                </span>
-              </motion.div>
-            );
-          })}
+        {loading ? (
+          <div className="space-y-2">
+            <div className="h-16 rounded-[12px] bg-elevated animate-pulse border border-border" />
+            <div className="h-16 rounded-[12px] bg-elevated animate-pulse border border-border" />
+          </div>
+        ) : matchesError ? (
+          <div className="p-3 rounded-[12px] text-center space-y-2" style={{ background: 'rgba(248,113,113,0.1)', border: '1px solid rgba(248,113,113,0.3)' }}>
+            <p className="font-mono text-[10px] text-red-400">Unable to load your match history.</p>
+            <button onClick={refresh} className="px-3 py-1 rounded bg-red-500/20 text-red-300 font-mono text-[10px] font-bold hover:bg-red-500/30 transition-colors">
+              Retry
+            </button>
+          </div>
+        ) : previousMatches.length === 0 ? (
+          <div className="p-4 rounded-[16px] text-center border border-dashed border-border-muted" style={{ background: 'var(--bg-elevated)' }}>
+            <p className="font-mono text-[11px] text-text-muted font-medium">No previous matches yet.</p>
+            <p className="font-mono text-[9px] text-text-muted/70 mt-1">Your match journey starts here.</p>
+          </div>
+        ) : (
+          <div className="space-y-2">
+            {previousMatches.map((match) => {
+              const resultColor = match.result === 'WIN' ? '#4ADE80' : match.result === 'LOSS' ? '#F87171' : '#FBBF24';
+              return (
+                <motion.div
+                  key={match.id}
+                  whileHover={{ x: 3 }}
+                  onClick={() => {
+                    if (match.reportStatus === 'NO_REPORT' || match.reportStatus === 'DRAFT' || match.reportStatus === 'CORRECTION_REQUESTED') {
+                      navigate(`/app/clashhub/report/${match.matchId}`);
+                    } else {
+                      navigate('/app/clashhub/history');
+                    }
+                  }}
+                  className="flex flex-col p-2.5 rounded-[12px] cursor-pointer gap-1 transition-all"
+                  style={{ background: 'var(--bg-elevated)', border: '1px solid var(--border)' }}
+                >
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-1.5 mb-0.5">
+                        <span className="font-mono text-[9px] font-bold text-text-muted uppercase">{match.sport}</span>
+                        {match.pulseEarned ? (
+                          <span className="font-mono text-[9px]" style={{ color: 'var(--accent-text)' }}>+{match.pulseEarned} ⚡</span>
+                        ) : null}
+                      </div>
+                      <p className="font-condensed font-semibold text-[12px] text-text-primary truncate leading-snug">{match.eventName}</p>
+                    </div>
 
-          {/* Report pending card */}
-          <motion.div
-            whileHover={{ x: 3 }}
-            onClick={() => navigate(`/app/clashhub/report/match-pending-001`)}
-            className="flex flex-col gap-1 p-2.5 rounded-[12px] cursor-pointer transition-all"
-            style={{ background: 'rgba(251,191,36,0.03)', border: '1.5px dashed rgba(251,191,36,0.3)' }}
-          >
-            <div className="flex justify-between items-center">
-              <span className="font-mono text-[9px] font-bold" style={{ color: '#FBBF24' }}>⚠ PENDING REPORT</span>
-              <span className="font-mono text-[9px]" style={{ color: '#FBBF24' }}>Report now →</span>
-            </div>
-            <p className="font-condensed font-semibold text-[12px] text-[var(--text-primary)] leading-snug truncate">Iron Pulse FC vs Rapid XI</p>
-          </motion.div>
-        </div>
+                    <span className="px-2 py-0.5 rounded-full font-mono text-[8px] font-bold"
+                      style={{ background: `${resultColor}18`, color: resultColor, border: `1px solid ${resultColor}55` }}>
+                      {match.result}
+                    </span>
+                  </div>
+
+                  {renderReportBadge(match)}
+                </motion.div>
+              );
+            })}
+          </div>
+        )}
       </div>
     </div>
   );
@@ -210,7 +397,7 @@ export const EventsPanel: React.FC = () => {
 export const RightPanel: React.FC = () => {
   const location = useLocation();
   const isFeed   = location.pathname === '/app/feed';
-  const isEvents = location.pathname.startsWith('/app/events');
+  const isEvents = location.pathname.startsWith('/app/events') || location.pathname.startsWith('/app/clashhub');
 
   return (
     <aside className="hidden xl:flex flex-col w-72 flex-shrink-0 gap-0 py-4 pr-4 pl-0 sticky top-14 h-[calc(100vh-56px)] overflow-y-auto" style={{ scrollbarWidth: 'none' }}>

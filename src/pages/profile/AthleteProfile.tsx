@@ -13,8 +13,9 @@ import type { User } from '../../types';
 import { VerifiedBadge } from '../../components/ui/Badge';
 import { Toggle } from '../../components/ui/index';
 import { ProfileEditDrawer } from '../../components/profile/ProfileEditDrawer';
+import { VaultTab } from '../../components/vault/VaultTab';
 
-const TABS = ['Overview', 'PlayerDNA', 'Peak Stats', 'Match History', 'Glory Board'];
+const TABS = ['Overview', 'Vault', 'Peak Stats', 'Match History', 'Glory Board'];
 
 export const AthleteProfile: React.FC = () => {
   const { uid } = useParams<{ uid: string }>();
@@ -397,38 +398,16 @@ export const AthleteProfile: React.FC = () => {
             </div>
           )}
 
-          {/* PLAYERDNA RADAR TAB */}
-          {activeTab === 'PlayerDNA' && (
-            <div className="p-6 sm:p-8 rounded-3xl bg-surface border border-border-muted space-y-6">
-              <div className="flex items-center justify-between">
-                <div>
-                  <h2 className="font-sans font-bold text-base text-text-primary uppercase tracking-wider">Comprehensive Attribute Radar</h2>
-                  <p className="font-mono text-xs text-text-muted">Algorithmic rating calculated from tournament match performance</p>
-                </div>
-                <span className="px-3 py-1 rounded-xl bg-accent/10 border border-accent/30 font-mono text-xs font-bold text-accent">
-                  SSR: 94.8
-                </span>
-              </div>
-
-              <div className="h-80 w-full">
-                <ResponsiveContainer width="100%" height="100%">
-                  <RadarChart data={radarData}>
-                    <PolarGrid stroke="var(--border)" />
-                    <PolarAngleAxis dataKey="subject" tick={{ fill: 'var(--text-primary)', fontSize: 13, fontFamily: 'Urbanist' }} />
-                    <Radar name={profileUser.name} dataKey="A" stroke="var(--accent)" fill="var(--accent)" fillOpacity={0.35} />
-                  </RadarChart>
-                </ResponsiveContainer>
-              </div>
-
-              <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-                {radarData.map(item => (
-                  <div key={item.subject} className="p-3.5 rounded-2xl bg-elevated border border-border-muted flex items-center justify-between">
-                    <span className="font-mono text-xs text-text-muted">{item.subject}</span>
-                    <span className="font-mono text-sm font-bold text-accent">{item.A}</span>
-                  </div>
-                ))}
-              </div>
-            </div>
+          {/* VAULT TAB */}
+          {activeTab === 'Vault' && targetId && (
+            <VaultTab
+              targetId={targetId}
+              isMe={isMe}
+              athleteName={profileUser.name}
+              athleteUsername={profileUser.username || ''}
+              athleteAvatar={profileUser.avatar}
+              athleteSport={profileUser.sport}
+            />
           )}
 
           {/* PEAK STATS TAB */}

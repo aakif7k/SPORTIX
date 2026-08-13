@@ -8,6 +8,8 @@ import {
 import type { User as UserType, SportCategory, ExperienceLevel, PerformanceData } from '../../types';
 import { useAuthStore } from '../../store/authStore';
 import { uploadProfilePicture } from '../../services/storageService';
+import { updateProfile as updateProfileService } from '../../services/profileService';
+import toast from 'react-hot-toast';
 import { SPORT_CATEGORIES, SPORT_POSITIONS } from '../../services/mockData';
 import { Toggle } from '../ui/index';
 
@@ -180,7 +182,6 @@ type DraftState = UserType & {
 const DEFAULT_SOCIALS = { instagram: '', twitter: '', youtube: '', linkedin: '', website: '' };
 
 export const ProfileEditDrawer: React.FC<Props> = ({ athlete, onClose }) => {
-  const { updateProfile } = useAuthStore();
   const [openSection, setOpenSection] = useState<string>('identity');
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
@@ -242,44 +243,49 @@ export const ProfileEditDrawer: React.FC<Props> = ({ athlete, onClose }) => {
   const toggle = (section: string) =>
     setOpenSection(s => (s === section ? '' : section));
 
+  const { updateProfile: updateProfileStore } = useAuthStore();
+
   const handleSave = async () => {
     setSaving(true);
-    await new Promise(r => setTimeout(r, 900));
-    updateProfile({
-      name: draft.name,
-      username: draft.username,
-      bio: draft.bio,
-      location: draft.location,
-      sport: draft.sport,
-      sports: draft.sports,
-      experienceLevel: draft.experienceLevel,
-      openToRecruit: draft.openToRecruit,
-      performanceData: draft.performanceData,
-      jersey: draft.jersey,
-      position: draft.position,
-      height: draft.height,
-      weight: draft.weight,
-      nationality: draft.nationality,
-      phone: draft.phone,
-      dateOfBirth: draft.dateOfBirth,
-      club: draft.club,
-      agent: draft.agent,
-      preferredFoot: draft.preferredFoot,
-      trainingSchedule: draft.trainingSchedule,
-      injuryHistory: draft.injuryHistory,
-      socials: draft.socials,
-      privateProfile: draft.privateProfile,
-      showStats: draft.showStats,
-      showLocation: draft.showLocation,
-      emailNotif: draft.emailNotif,
-      pushNotif: draft.pushNotif,
-      matchAlerts: draft.matchAlerts,
-      recruitAlerts: draft.recruitAlerts,
-      themePref: draft.theme,
-    });
-    setSaving(false);
-    setSaved(true);
-    setTimeout(() => { setSaved(false); onClose(); }, 1400);
+    const userId = athlete.id || (athlete as any).uid;
+    try {
+      if (userId) {
+        await updateProfileService(userId, {
+          full_name: draft.name,
+          username: draft.username,
+          bio: draft.bio,
+          location: draft.location,
+          sport: draft.sport,
+          sports: draft.sports,
+          experience_level: draft.experienceLevel,
+          is_open_to_recruit: draft.openToRecruit,
+          position: draft.position,
+          avatar_url: draft.avatar,
+        } as any);
+      }
+
+      updateProfileStore({
+        name: draft.name,
+        username: draft.username,
+        bio: draft.bio,
+        location: draft.location,
+        sport: draft.sport,
+        sports: draft.sports,
+        experienceLevel: draft.experienceLevel,
+        openToRecruit: draft.openToRecruit,
+        avatar: draft.avatar,
+        position: draft.position,
+      });
+
+      toast.success('Profile Updated! ⚡ Your changes have been saved.');
+      setSaving(false);
+      setSaved(true);
+      setTimeout(() => { setSaved(false); onClose(); }, 1200);
+    } catch (err: any) {
+      console.error('[ProfileEditDrawer] save error:', err);
+      toast.error(err?.message || "Couldn't update profile. Please try again.");
+      setSaving(false);
+    }
   };
 
   const positions = SPORT_POSITIONS[draft.sport] || SPORT_POSITIONS.default;

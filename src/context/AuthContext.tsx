@@ -165,43 +165,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   // ─── REGISTER ──────────────────────────────────────────────────────────────
-  // Registration still goes through FastAPI (creates auth + profile).
-  // After success we create an Appwrite session and load the profile from Appwrite.
   const register = async (data: RegisterData) => {
-    const res = await fetch(
-      `${import.meta.env.VITE_API_URL}/api/auth/register`,
-      {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          email: data.email,
-          password: data.password,
-          full_name: data.fullName,
-          username: data.username,
-          role: data.role,
-          sport: data.sport,
-          sports: data.sports,
-          experience_level: data.experienceLevel,
-          location: data.location,
-          city: data.city,
-        }),
-      }
-    );
+    const { registerUser } = await import('@/lib/authService');
+    await registerUser({
+      email: data.email,
+      password: data.password,
+      fullName: data.fullName,
+      username: data.username,
+      role: (data.role as any) || 'athlete',
+      sport: data.sport || 'Multi-Sport',
+      sports: data.sports || [],
+      experienceLevel: data.experienceLevel || 'amateur',
+      location: data.location || '',
+    });
 
-    if (!res.ok) {
-      const err = await res.json();
-      throw new Error(err.error?.message || 'Registration failed');
-    }
-
-    const result = await res.json();
-    if (result.data?.jwt) {
-      localStorage.setItem('sportix_jwt', result.data.jwt);
-    }
-
-    // Create Appwrite session (so the SDK can authenticate further calls)
-    await account.createEmailPasswordSession(data.email, data.password);
-
-    // Load profile from Appwrite (the FastAPI endpoint already created it)
     await checkSession();
   };
 

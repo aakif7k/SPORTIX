@@ -330,6 +330,65 @@ export async function deletePost(postId: string, authUid: string): Promise<void>
   await databases.deleteDocument(DATABASE_ID, COLLECTIONS.POSTS, postId);
 }
 
+export async function updatePost(
+  postId: string,
+  authUid: string,
+  updates: {
+    content?: string;
+    post_type?: string;
+    sport_tag?: string | null;
+    location_tag?: string | null;
+    media_urls?: string[];
+  }
+): Promise<DbPost> {
+  const doc = await databases.getDocument(DATABASE_ID, COLLECTIONS.POSTS, postId);
+  if (doc.author_id !== authUid) throw new Error('Not authorised to edit this post.');
+
+  const updatedDoc = await databases.updateDocument(
+    DATABASE_ID,
+    COLLECTIONS.POSTS,
+    postId,
+    {
+      ...updates,
+      updated_at: new Date().toISOString(),
+    }
+  );
+
+  return docToPost(updatedDoc, false);
+}
+
+export async function deleteReel(reelId: string, authUid: string): Promise<void> {
+  const doc = await databases.getDocument(DATABASE_ID, COLLECTIONS.REELS, reelId);
+  if (doc.author_id !== authUid) throw new Error('Not authorised to delete this reel.');
+  await databases.deleteDocument(DATABASE_ID, COLLECTIONS.REELS, reelId);
+}
+
+export async function updateReel(
+  reelId: string,
+  authUid: string,
+  updates: {
+    caption?: string | null;
+    sport_tag?: string | null;
+    video_url?: string;
+    thumbnail_url?: string | null;
+  }
+): Promise<DbReel> {
+  const doc = await databases.getDocument(DATABASE_ID, COLLECTIONS.REELS, reelId);
+  if (doc.author_id !== authUid) throw new Error('Not authorised to edit this reel.');
+
+  const updatedDoc = await databases.updateDocument(
+    DATABASE_ID,
+    COLLECTIONS.REELS,
+    reelId,
+    {
+      ...updates,
+      updated_at: new Date().toISOString(),
+    }
+  );
+
+  return docToReel(updatedDoc, false);
+}
+
 export async function togglePostLike(
   postId: string,
   authUid: string,

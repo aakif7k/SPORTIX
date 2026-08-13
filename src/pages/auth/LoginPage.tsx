@@ -2,25 +2,32 @@ import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { Zap, Mail, Lock, Eye, EyeOff, AlertTriangle, AlertCircle, Loader2, ArrowRight, ShieldCheck } from 'lucide-react';
-import { useAuth } from '@/context/AuthContext';
+import { useLogin } from '@/hooks/useLogin';
+import { FormField } from '@/components/ui/FormField';
 import { MissingFieldsModal } from '../../components/ui/MissingFieldsModal';
-import toast from 'react-hot-toast';
 
 export const LoginPage: React.FC = () => {
-  const [email, setEmail]               = useState('');
-  const [password, setPassword]         = useState('');
-  const [showPassword, setShowPassword] = useState(false);
-  const [error, setError]               = useState('');
-  const [noAccount, setNoAccount]       = useState(false);
-  const [isLoading, setIsLoading]       = useState(false);
-  const [showMissingModal, setShowMissingModal] = useState(false);
-  const [missingFields, setMissingFields]       = useState<string[]>([]);
-  const { login } = useAuth();
   const navigate = useNavigate();
+  const {
+    email,
+    password,
+    emailError,
+    generalError,
+    noAccount,
+    isSubmitting,
+    showPassword,
+    handleEmailChange,
+    handlePasswordChange,
+    toggleShowPassword,
+    handleGoogleLogin,
+    submit,
+  } = useLogin();
 
-  const handleLogin = async (e: React.FormEvent) => {
+  const [showMissingModal, setShowMissingModal] = useState(false);
+  const [missingFields, setMissingFields] = useState<string[]>([]);
+
+  const onSubmitForm = (e: React.FormEvent) => {
     e.preventDefault();
-
     const missing: string[] = [];
     if (!email.trim()) missing.push('Email Address');
     if (!password.trim()) missing.push('Password');
@@ -31,52 +38,7 @@ export const LoginPage: React.FC = () => {
       return;
     }
 
-    setIsLoading(true);
-    setError('');
-    setNoAccount(false);
-    try {
-      await login(email, password);
-      // AuthContext.login() → checkSession() → loadProfileFromAppwrite()
-      // BUT: React state updates from checkSession are batched and won't be visible
-      // in this closure synchronously. We fetch the fresh profile directly from Appwrite
-      // for our routing decision, then let route guards confirm it.
-      const { getUserProfile, getCurrentUser } = await import('@/lib/authService');
-      const freshUser = await getCurrentUser();
-      let freshProfile = null;
-      if (freshUser?.id) {
-        freshProfile = await getUserProfile(freshUser.id);
-      }
-      console.log('[AUTH TRACE] Login success | user=', freshUser?.id, '| is_onboarding_complete=', freshProfile?.is_onboarding_complete);
-      toast.success('Welcome back to SPORTiX! ⚡');
-      if (freshProfile && freshProfile.is_onboarding_complete) {
-        navigate('/app/feed', { replace: true });
-      } else {
-        navigate('/onboarding', { replace: true });
-      }
-    } catch (err: any) {
-      const raw: string = err?.message || '';
-      const isNotFound =
-        raw.toLowerCase().includes('user_not_found') ||
-        raw.toLowerCase().includes('invalid credentials') ||
-        (raw.toLowerCase().includes('not found') &&
-         (raw.toLowerCase().includes('user') || raw.toLowerCase().includes('account')));
-      if (isNotFound) {
-        setNoAccount(true);
-      } else {
-        setError(err.message || 'Login failed. Check your email and password.');
-      }
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  const handleGoogleLogin = async () => {
-    try {
-      const { loginWithGoogle } = await import('@/lib/authService');
-      loginWithGoogle();
-    } catch (err) {
-      setError('Google sign-in unavailable');
-    }
+    submit(e);
   };
 
 
@@ -138,56 +100,54 @@ export const LoginPage: React.FC = () => {
           </div>
 
           {/* Form */}
-          <form className="space-y-4" onSubmit={handleLogin}>
+          <form className="space-y-4" onSubmit={onSubmitForm}>
             {/* Email Field */}
-            <div className="space-y-1.5">
-              <label className="text-xs font-mono text-text-secondary uppercase tracking-wider block">
-                Email Address <span className="text-red-500 font-bold ml-0.5">*</span>
-              </label>
+            <FormField id="login-email" label="Email Address" required error={emailError}>
               <div className="relative">
                 <input
+                  id="login-email"
                   type="email"
                   value={email}
-                  onChange={e => setEmail(e.target.value)}
-                  className="w-full pl-11 pr-4 py-3.5 bg-[#181818] border border-white/10 rounded-2xl focus:border-[#CCFF00] focus:ring-1 focus:ring-[#CCFF00] text-white text-sm outline-none transition-all placeholder:text-text-muted font-mono"
+                  onChange={e => handleEmailChange(e.target.value)}
+                  className={`w-full pl-11 pr-4 py-3.5 bg-[#181818] border ${emailError ? 'border-red-500' : 'border-white/10'} rounded-2xl focus:border-[#CCFF00] focus:ring-1 focus:ring-[#CCFF00] text-white text-sm outline-none transition-all placeholder:text-text-muted font-mono`}
                   placeholder="athlete@sportix.io"
                   autoComplete="email"
                   required
                 />
                 <Mail size={18} className="absolute left-4 top-1/2 -translate-y-1/2 text-text-muted" />
               </div>
-            </div>
+            </FormField>
 
             {/* Password Field */}
-            <div className="space-y-1.5">
-              <div className="flex justify-between items-center">
-                <label className="text-xs font-mono text-text-secondary uppercase tracking-wider block">
-                  Password <span className="text-red-500 font-bold ml-0.5">*</span>
-                </label>
-                <Link to="/forgot-password" className="text-[11px] font-mono text-[#CCFF00] hover:underline">
-                  Forgot password?
-                </Link>
+            <FormField id="login-password" label="Password" required>
+              <div className="space-y-1">
+                <div className="flex justify-end">
+                  <Link to="/forgot-password" className="text-[11px] font-mono text-[#CCFF00] hover:underline -mt-6 z-10">
+                    Forgot password?
+                  </Link>
+                </div>
+                <div className="relative">
+                  <input
+                    id="login-password"
+                    type={showPassword ? 'text' : 'password'}
+                    value={password}
+                    onChange={e => handlePasswordChange(e.target.value)}
+                    className="w-full pl-11 pr-11 py-3.5 bg-[#181818] border border-white/10 rounded-2xl focus:border-[#CCFF00] focus:ring-1 focus:ring-[#CCFF00] text-white text-sm outline-none transition-all placeholder:text-text-muted font-mono"
+                    placeholder="••••••••"
+                    autoComplete="current-password"
+                    required
+                  />
+                  <Lock size={18} className="absolute left-4 top-1/2 -translate-y-1/2 text-text-muted" />
+                  <button
+                    type="button"
+                    onClick={toggleShowPassword}
+                    className="absolute right-4 top-1/2 -translate-y-1/2 text-text-muted hover:text-white transition-colors"
+                  >
+                    {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                  </button>
+                </div>
               </div>
-              <div className="relative">
-                <input
-                  type={showPassword ? 'text' : 'password'}
-                  value={password}
-                  onChange={e => setPassword(e.target.value)}
-                  className="w-full pl-11 pr-11 py-3.5 bg-[#181818] border border-white/10 rounded-2xl focus:border-[#CCFF00] focus:ring-1 focus:ring-[#CCFF00] text-white text-sm outline-none transition-all placeholder:text-text-muted font-mono"
-                  placeholder="••••••••"
-                  autoComplete="current-password"
-                  required
-                />
-                <Lock size={18} className="absolute left-4 top-1/2 -translate-y-1/2 text-text-muted" />
-                <button
-                  type="button"
-                  onClick={() => setShowPassword(!showPassword)}
-                  className="absolute right-4 top-1/2 -translate-y-1/2 text-text-muted hover:text-white transition-colors"
-                >
-                  {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
-                </button>
-              </div>
-            </div>
+            </FormField>
 
             {/* Account Not Found Alert */}
             {noAccount && (
@@ -210,22 +170,22 @@ export const LoginPage: React.FC = () => {
             )}
 
             {/* General Error Alert */}
-            {error && (
+            {generalError && !noAccount && (
               <div className="flex items-center gap-2.5 p-3.5 bg-red-500/10 border border-red-500/30 rounded-2xl text-red-300 text-xs font-mono">
                 <AlertCircle size={16} className="text-red-400 flex-shrink-0" />
-                <span>{error}</span>
+                <span>{generalError}</span>
               </div>
             )}
 
             {/* Submit Button */}
             <motion.button
               type="submit"
-              disabled={isLoading}
+              disabled={isSubmitting}
               whileHover={{ scale: 1.01 }}
               whileTap={{ scale: 0.98 }}
-              className="w-full py-4 bg-[#CCFF00] hover:bg-[#b8e600] text-black font-mono font-bold text-sm uppercase tracking-wider rounded-2xl shadow-[0_0_25px_rgba(204,255,0,0.3)] transition-all flex items-center justify-center gap-2 mt-2"
+              className="w-full py-4 bg-[#CCFF00] hover:bg-[#b8e600] text-black font-mono font-bold text-sm uppercase tracking-wider rounded-2xl shadow-[0_0_25px_rgba(204,255,0,0.3)] transition-all flex items-center justify-center gap-2 mt-2 disabled:opacity-50"
             >
-              {isLoading ? (
+              {isSubmitting ? (
                 <>
                   <Loader2 size={18} className="animate-spin" />
                   <span>Signing In...</span>
@@ -249,7 +209,7 @@ export const LoginPage: React.FC = () => {
           {/* Google Sign-in Button */}
           <motion.button
             onClick={handleGoogleLogin}
-            disabled={isLoading}
+            disabled={isSubmitting}
             whileHover={{ scale: 1.01 }}
             whileTap={{ scale: 0.98 }}
             className="w-full py-3.5 bg-[#181818] hover:bg-[#222222] border border-white/10 rounded-2xl flex items-center justify-center gap-3 transition-all group"

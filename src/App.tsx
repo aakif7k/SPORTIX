@@ -52,10 +52,12 @@ import { TournamentHub } from './pages/pulse/TournamentHub';
 
 // Auth Guards
 import { ProtectedRoute, PublicRoute, OnboardingRoute } from './components/ProtectedRoute';
+import { ToastContainer } from './components/ui/SportixToast';
 
 const App: React.FC = () => {
   return (
     <BrowserRouter>
+      <ToastContainer />
       <AnimatePresence mode="wait">
         <Routes>
           {/* Public */}
