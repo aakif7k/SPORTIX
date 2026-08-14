@@ -1,8 +1,13 @@
 import { create } from 'zustand';
 import type { PulseScore } from '../types/pulse.types';
+import { getPulseScore, updatePulseScore, subscribeToPulseScore } from '../services/pulseService';
+import { useAuthStore } from './authStore';
 
 interface PulseStoreState {
   pulseScore: PulseScore;
+  isLoading: boolean;
+  activeSubscription: (() => void) | null;
+  loadUserPulse: (userId?: string) => Promise<void>;
   addScoreDelta: (deltas: {
     matchPerf: number;
     consistency: number;
@@ -10,53 +15,84 @@ interface PulseStoreState {
     reliability: number;
     activity: number;
     leadership: number;
-  }, totalDelta: number) => void;
+  }, totalDelta: number, reason?: string) => Promise<void>;
   reset: () => void;
 }
 
-const initialHistory = [
-  { date: '2026-05-10', score: 680, delta: 12, matchId: 'm1' },
-  { date: '2026-05-12', score: 695, delta: 15, matchId: 'm2' },
-  { date: '2026-05-15', score: 710, delta: 15, matchId: 'm3' },
-  { date: '2026-05-18', score: 721, delta: 11, matchId: 'm4' },
-];
-
-const getInitialPulseScore = (): PulseScore => ({
-  userId: '', // Will be set to real uid when user logs in
-  score: 721,
+const getInitialPulseScore = (userId: string = ''): PulseScore => ({
+  userId,
+  score: 100,
   tier: 'CONTENDER',
   breakdown: {
-    matchPerf: 74,
-    consistency: 78,
-    chemistry: 82,
-    reliability: 90,
-    activity: 85,
-    leadership: 68,
+    matchPerf: 0,
+    consistency: 0,
+    chemistry: 0,
+    reliability: 0,
+    activity: 0,
+    leadership: 0,
   },
-  history: initialHistory,
-  lastUpdated: '2026-05-18T18:00:00Z',
+  history: [],
+  lastUpdated: new Date().toISOString(),
 });
 
-export const usePulseStore = create<PulseStoreState>((set) => ({
+export const usePulseStore = create<PulseStoreState>((set, get) => ({
   pulseScore: getInitialPulseScore(),
-  addScoreDelta: (deltas, totalDelta) => set((state) => {
-    const newScore = Math.max(0, Math.min(1000, state.pulseScore.score + totalDelta));
-    let newTier: 'CONTENDER' | 'ELITE' | 'PULSE ELITE' = 'CONTENDER';
-    if (newScore >= 900) {
-      newTier = 'PULSE ELITE';
-    } else if (newScore >= 800) {
-      newTier = 'ELITE';
+  isLoading: false,
+  activeSubscription: null,
+
+  loadUserPulse: async (targetUserId?: string) => {
+    const userId = targetUserId || useAuthStore.getState().user?.id;
+    if (!userId) return;
+
+    set({ isLoading: true });
+    try {
+      const data = await getPulseScore(userId);
+      
+      // Cleanup previous subscription if any
+      const existingSub = get().activeSubscription;
+      if (existingSub) existingSub();
+
+      // Subscribe to live changes on pulse_scores collection
+      const unsubscribe = subscribeToPulseScore(userId, (updated) => {
+        set((state) => ({
+          pulseScore: {
+            ...state.pulseScore,
+            ...updated,
+            history: state.pulseScore.history,
+          }
+        }));
+      });
+
+      set({
+        pulseScore: data,
+        isLoading: false,
+        activeSubscription: unsubscribe,
+      });
+    } catch (err) {
+      console.warn('[pulseStore] Error loading user pulse:', err);
+      set({ isLoading: false });
     }
+  },
+
+  addScoreDelta: async (deltas, totalDelta, reason = 'Match Performance') => {
+    const current = get().pulseScore;
+    const userId = current.userId || useAuthStore.getState().user?.id || '';
+
+    // Optimistic local state update
+    const newScore = Math.max(0, Math.min(1000, current.score + totalDelta));
+    let newTier: 'CONTENDER' | 'ELITE' | 'PULSE ELITE' = 'CONTENDER';
+    if (newScore >= 900) newTier = 'PULSE ELITE';
+    else if (newScore >= 800) newTier = 'ELITE';
 
     const todayStr = new Date().toISOString().split('T')[0];
     const newHistoryItem = {
       date: todayStr,
       score: newScore,
       delta: totalDelta,
-      matchId: `m${state.pulseScore.history.length + 1}`
+      matchId: `m_${Date.now()}`
     };
 
-    return {
+    set((state) => ({
       pulseScore: {
         ...state.pulseScore,
         score: newScore,
@@ -69,12 +105,24 @@ export const usePulseStore = create<PulseStoreState>((set) => ({
           activity: Math.max(0, Math.min(100, state.pulseScore.breakdown.activity + deltas.activity)),
           leadership: Math.max(0, Math.min(100, state.pulseScore.breakdown.leadership + deltas.leadership)),
         },
-        history: [...state.pulseScore.history, newHistoryItem],
+        history: [newHistoryItem, ...state.pulseScore.history],
         lastUpdated: new Date().toISOString(),
       }
-    };
-  }),
+    }));
 
-  reset: () => set({ pulseScore: getInitialPulseScore() }),
+    // Persist to Appwrite database collection pulse_scores and profiles
+    if (userId) {
+      try {
+        await updatePulseScore(userId, deltas, totalDelta, reason);
+      } catch (err) {
+        console.error('[pulseStore] Failed to persist pulse delta to Appwrite:', err);
+      }
+    }
+  },
+
+  reset: () => {
+    const existingSub = get().activeSubscription;
+    if (existingSub) existingSub();
+    set({ pulseScore: getInitialPulseScore(), activeSubscription: null });
+  },
 }));
-

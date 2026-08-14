@@ -129,10 +129,10 @@ async def get_chemistry(squad_id: str) -> dict:
         try:
             res = db.list_documents(
                 DB_ID, settings.collection_pulse_scores,
-                queries=[Q.equal("userId", uid), Q.limit(1)],
+                queries=[Q.equal("user_id", uid), Q.limit(1)],
             )
             if res.get("documents"):
-                pulses.append(res["documents"][0].get("totalPulse", 100))
+                pulses.append(float(res["documents"][0].get("total_pulse", 100)))
         except Exception:
             pulses.append(100.0)
     avg_pulse = sum(pulses) / len(pulses) if pulses else 0

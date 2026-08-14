@@ -10,7 +10,8 @@ import { useAuthStore } from '../../store/authStore';
 import { uploadProfilePicture } from '../../services/storageService';
 import { updateProfile as updateProfileService } from '../../services/profileService';
 import toast from 'react-hot-toast';
-import { SPORT_CATEGORIES, SPORT_POSITIONS } from '../../services/mockData';
+import { SPORT_CATEGORIES } from '../../services/mockData';
+import { getSportRolesSync } from '../../services/sportsRoleService';
 import { Toggle } from '../ui/index';
 
 // ─── TYPES ─────────────────────────────────────────────────────────────────
@@ -188,7 +189,7 @@ export const ProfileEditDrawer: React.FC<Props> = ({ athlete, onClose }) => {
   const [draft, setDraft] = useState<DraftState>({
     ...athlete,
     socials: athlete?.socials || DEFAULT_SOCIALS,
-    position: athlete?.position || (athlete?.sport ? SPORT_POSITIONS[athlete.sport]?.[0] : 'Member') || 'Member',
+    position: athlete?.position || (athlete?.sport ? getSportRolesSync(athlete.sport)[0] : 'Member') || 'Member',
     height: athlete?.height || '',
     weight: athlete?.weight || '',
     nationality: athlete?.nationality || '',
@@ -291,7 +292,7 @@ export const ProfileEditDrawer: React.FC<Props> = ({ athlete, onClose }) => {
     }
   };
 
-  const positions = SPORT_POSITIONS[draft.sport] || SPORT_POSITIONS.default;
+  const positions = getSportRolesSync(draft.sport);
 
   return (
     <>

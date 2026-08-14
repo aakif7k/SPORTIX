@@ -152,7 +152,7 @@ export const AutoSquadEventSelector: React.FC<Props> = ({ selectedEvent, onSelec
         >
           {selectedEvent ? (
             <div className="flex items-center gap-3.5 min-w-0">
-              <div className="w-11 h-11 rounded-xl bg-accent/10 border border-accent/30 flex items-center justify-center text-accent flex-shrink-0 group-hover:scale-105 transition-transform">
+              <div className="w-11 h-11 rounded-xl bg-accent/10 border border-accent/30 flex items-center justify-center text-accent flex-shrink-0 transition-colors">
                 <Flame size={22} />
               </div>
               <div className="min-w-0">

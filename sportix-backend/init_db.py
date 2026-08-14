@@ -45,6 +45,7 @@ def init_db():
         settings.collection_post_likes,
         settings.collection_story_views,
         settings.collection_reel_likes,
+        settings.collection_sports_roles,
         "squad_messages",
         "event_comments",
         "conversations",

@@ -125,14 +125,21 @@ def _update_pulse_from_match(user_id: str, rating: float):
     try:
         res = db.list_documents(
             DB_ID, settings.collection_pulse_scores,
-            queries=[Q.equal("userId", user_id), Q.limit(1)],
+            queries=[Q.equal("user_id", user_id), Q.limit(1)],
         )
         if res.get("documents"):
             doc = res["documents"][0]
-            current = doc.get("totalPulse", 100.0)
-            new_total = min(1000, current + pulse_award)
-            db.update_document(DB_ID, settings.collection_pulse_scores, doc["$id"],
-                               {"totalPulse": new_total, "matchPerformance": doc.get("matchPerformance", 0) + pulse_award})
+            current = float(doc.get("total_pulse", 100.0))
+            new_total = min(1000.0, current + pulse_award)
+            db.update_document(DB_ID, settings.collection_pulse_scores, doc["$id"], {
+                "total_pulse": new_total,
+                "match_performance": min(100.0, float(doc.get("match_performance", 0)) + pulse_award),
+            })
+            # Sync profiles
+            try:
+                db.update_document(DB_ID, settings.collection_users, user_id, {"pulse_score": int(new_total)})
+            except Exception:
+                pass
     except Exception:
         pass
 
@@ -142,12 +149,20 @@ def _award_pulse_for_validation(user_id: str):
     try:
         res = db.list_documents(
             DB_ID, settings.collection_pulse_scores,
-            queries=[Q.equal("userId", user_id), Q.limit(1)],
+            queries=[Q.equal("user_id", user_id), Q.limit(1)],
         )
         if res.get("documents"):
             doc = res["documents"][0]
-            db.update_document(DB_ID, settings.collection_pulse_scores, doc["$id"],
-                               {"totalPulse": doc.get("totalPulse", 100) + 5,
-                                "reliability": doc.get("reliability", 0) + 2})
+            current = float(doc.get("total_pulse", 100.0))
+            new_total = min(1000.0, current + 5)
+            db.update_document(DB_ID, settings.collection_pulse_scores, doc["$id"], {
+                "total_pulse": new_total,
+                "reliability": min(100.0, float(doc.get("reliability", 0)) + 2),
+            })
+            # Sync profiles
+            try:
+                db.update_document(DB_ID, settings.collection_users, user_id, {"pulse_score": int(new_total)})
+            except Exception:
+                pass
     except Exception:
         pass

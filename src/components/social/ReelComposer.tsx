@@ -3,7 +3,12 @@ import { X, Video, Upload, Music, Tag, Type } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import type { Reel } from '../../types/social.types';
 
-const SPORTS = ['Football', 'Basketball', 'Cricket', 'Athletics', 'Tennis', 'Swimming', 'Boxing', 'Rugby', 'Volleyball', 'Cycling'];
+import { OFFICIAL_SPORTIX_SPORTS_ROLES } from '@/services/sportsRoleService';
+
+const SPORTS = [
+  'Multi-Sport',
+  ...OFFICIAL_SPORTIX_SPORTS_ROLES.map(s => s.sport)
+];
 
 interface ReelComposerProps {
   currentUserId: string;

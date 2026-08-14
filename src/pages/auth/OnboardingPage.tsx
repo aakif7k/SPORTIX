@@ -8,6 +8,7 @@ import {
   LocateFixed, Loader, Sparkles, ShieldCheck
 } from 'lucide-react';
 import { GLOBAL_SPORTS } from '../../services/mockData';
+import { getSportRolesSync } from '../../services/sportsRoleService';
 import { Button } from '../../components/ui/Button';
 import { databases, DATABASE_ID, COLLECTIONS } from '@/lib/appwrite';
 import { useAuth } from '@/context/AuthContext';
@@ -833,6 +834,31 @@ export const OnboardingPage: React.FC = () => {
                     );
                   })}
                 </div>
+
+                {primarySport && (
+                  <motion.div
+                    initial={{ opacity: 0, y: 6 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    className="p-3 rounded-xl bg-volt/5 border border-volt/20 mb-4"
+                  >
+                    <div className="flex items-center justify-between mb-2">
+                      <span className="text-[11px] font-mono font-bold text-volt uppercase tracking-wider flex items-center gap-1.5">
+                        <Sparkles size={12} /> Tactical Roles ({primarySport})
+                      </span>
+                      <span className="text-[10px] font-mono text-text-muted">SPORTiX Dataset</span>
+                    </div>
+                    <div className="flex flex-wrap gap-1.5">
+                      {getSportRolesSync(primarySport).map((r, idx) => (
+                        <span
+                          key={idx}
+                          className="px-2.5 py-1 rounded-lg bg-surface border border-white/10 text-xs font-mono text-white/90 font-medium shadow-sm"
+                        >
+                          {r}
+                        </span>
+                      ))}
+                    </div>
+                  </motion.div>
+                )}
 
                 <div className="flex gap-4 text-[10px] text-text-muted font-mono mb-5">
                   <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-sm bg-volt inline-block" />Primary sport (tap first)</span>

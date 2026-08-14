@@ -1,12 +1,14 @@
 /**
  * eventReadinessService.ts
  * ─────────────────────────────────────────────────────────────────────────────
- * Frontend client service for Event AutoSquad Readiness & Partial Squad Progress.
+ * Frontend client service for Event AutoSquad Readiness & Universal Role Allocation.
  * Queries backend API (http://localhost:8000/api/events/{event_id}/readiness)
- * with direct Appwrite fallback.
+ * with direct Appwrite fallback and in-memory universal role engine execution.
  */
 
 import { account, databases, Query, DATABASE_ID, COLLECTIONS } from '@/lib/appwrite';
+import { getSportRoleDataSync, OFFICIAL_SPORTIX_SPORTS_ROLES } from './sportsRoleService';
+import { allocateEventParticipants, type EventAllocationResult } from './roleAllocationEngine';
 
 function getBackendUrl(): string {
   const envUrl = import.meta.env.VITE_BACKEND_URL || import.meta.env.VITE_API_URL;
@@ -23,6 +25,7 @@ const BACKEND_URL = getBackendUrl();
 export interface EventReadinessData {
   event_id: string;
   sport: string;
+  sport_id?: string;
   format: string;
   eligible_count: number;
   min_required: number;
@@ -33,12 +36,17 @@ export interface EventReadinessData {
   target_squad_size: number;
   matched_players: number;
   remaining_needed: number;
+  user_team_index?: number | null;
+  user_role_assignment?: string | null;
+  user_is_waiting?: boolean;
+  user_waiting_reason?: string | null;
+  allocation?: EventAllocationResult;
 }
 
 /**
- * Fetch Event AutoSquad readiness and user squad forming progress
+ * Fetch Event AutoSquad readiness and universal team/group role allocation.
  */
-export async function getEventReadiness(eventId: string): Promise<EventReadinessData> {
+export async function getEventReadiness(eventId: string, currentUserId?: string): Promise<EventReadinessData> {
   try {
     const session = await account.getSession('current').catch(() => null);
     const token = session ? (session as any).jwt || '' : '';
@@ -52,18 +60,20 @@ export async function getEventReadiness(eventId: string): Promise<EventReadiness
 
     if (res.ok) {
       const data = await res.json();
-      return data.data;
+      if (data && data.data) {
+        return data.data;
+      }
     }
   } catch (err) {
-    console.warn('[EventReadinessService] Backend offline, falling back to direct Appwrite check:', err);
+    console.warn('[EventReadinessService] Backend offline, calculating allocation in-memory with Appwrite fallback:', err);
   }
 
-  // Direct Appwrite fallback
+  // Direct Appwrite fallback + Client Universal Role Engine
   try {
     const eventDoc = await databases.getDocument(DATABASE_ID, COLLECTIONS.EVENTS, eventId).catch(() => null);
     const sport = eventDoc?.sport || 'Football';
     const format = eventDoc?.format || 'team';
-    const maxParts = eventDoc?.max_participants || 32;
+    const maxParts = Number(eventDoc?.max_participants || 32);
 
     const parts = await databases.listDocuments(
       DATABASE_ID,
@@ -71,13 +81,60 @@ export async function getEventReadiness(eventId: string): Promise<EventReadiness
       [Query.equal('event_id', eventId), Query.limit(200)]
     ).catch(() => ({ total: 0, documents: [] }));
 
-    const eligibleCount = parts.total || parts.documents.length;
+    const documents = parts.documents || [];
+    const eligibleCount = documents.filter((p: any) => {
+      const s = (p.status || 'registered').toLowerCase();
+      return s !== 'withdrawn' && s !== 'cancelled' && s !== 'removed';
+    }).length;
+
     const isReady = eligibleCount >= 10;
-    const targetSize = sport === 'Football' ? 5 : sport === 'Basketball' ? 5 : 11;
+
+    // Load sport configuration
+    const sportConfig = getSportRoleDataSync(sport) || OFFICIAL_SPORTIX_SPORTS_ROLES[0];
+    const targetSize = Number(sportConfig.total_players || 11);
+
+    // Compute universal allocation in memory
+    const allocation = allocateEventParticipants(sportConfig, documents, maxParts, eventId);
+
+    // Identify current user's team / slot
+    let userTeamIndex: number | null = null;
+    let userRoleAssignment: string | null = null;
+    let userIsWaiting = false;
+    let userWaitingReason: string | null = null;
+
+    if (currentUserId) {
+      for (const t of allocation.teams) {
+        for (const pl of t.players) {
+          if (pl.user_id === currentUserId) {
+            userTeamIndex = t.team_index;
+            userRoleAssignment = pl.assigned_role;
+            break;
+          }
+        }
+        if (userTeamIndex !== null) break;
+      }
+
+      if (userTeamIndex === null) {
+        const wp = allocation.waiting_players.find((w) => w.user_id === currentUserId);
+        if (wp) {
+          userIsWaiting = true;
+          userWaitingReason = wp.reason;
+        }
+      }
+    }
+
+    const matchedPlayers = userTeamIndex
+      ? allocation.teams.find((t) => t.team_index === userTeamIndex)?.current_players || 1
+      : allocation.teams[0]?.current_players || 0;
+
+    const remainingNeeded = userTeamIndex
+      ? allocation.teams.find((t) => t.team_index === userTeamIndex)?.remaining_players || 0
+      : allocation.teams[0]?.remaining_players || targetSize;
 
     return {
       event_id: eventId,
       sport,
+      sport_id: sportConfig.sport_id,
       format,
       eligible_count: eligibleCount,
       min_required: 10,
@@ -86,13 +143,21 @@ export async function getEventReadiness(eventId: string): Promise<EventReadiness
       readiness_state: eligibleCount >= maxParts ? 'FULL' : isReady ? 'AUTOSQUAD_READY' : 'WAITING_FOR_PLAYERS',
       matching_state: isReady ? 'AUTOSQUAD_READY' : 'WAITING_FOR_PLAYERS',
       target_squad_size: targetSize,
-      matched_players: isReady ? Math.min(targetSize, eligibleCount) : 1,
-      remaining_needed: isReady ? Math.max(0, targetSize - eligibleCount) : targetSize - 1,
+      matched_players: matchedPlayers,
+      remaining_needed: remainingNeeded,
+      user_team_index: userTeamIndex,
+      user_role_assignment: userRoleAssignment,
+      user_is_waiting: userIsWaiting,
+      user_waiting_reason: userWaitingReason,
+      allocation,
     };
-  } catch {
+  } catch (e) {
+    console.error('[EventReadinessService] Fatal fallback error:', e);
+    const fallbackConfig = OFFICIAL_SPORTIX_SPORTS_ROLES[0];
     return {
       event_id: eventId,
       sport: 'Football',
+      sport_id: 'S001',
       format: 'team',
       eligible_count: 0,
       min_required: 10,
@@ -100,9 +165,57 @@ export async function getEventReadiness(eventId: string): Promise<EventReadiness
       is_autosquad_ready: false,
       readiness_state: 'WAITING_FOR_PLAYERS',
       matching_state: 'WAITING_FOR_PLAYERS',
-      target_squad_size: 5,
+      target_squad_size: 11,
       matched_players: 0,
-      remaining_needed: 5,
+      remaining_needed: 11,
+      allocation: allocateEventParticipants(fallbackConfig, [], 32, eventId),
     };
+  }
+}
+
+/**
+ * Update player's role in an event.
+ */
+export async function updateParticipantRole(eventId: string, newRole: string): Promise<{ success: boolean; message?: string }> {
+  try {
+    const session = await account.getSession('current').catch(() => null);
+    const token = session ? (session as any).jwt || '' : '';
+
+    const res = await fetch(`${BACKEND_URL}/api/events/${eventId}/role`, {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json',
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      },
+      body: JSON.stringify({ role: newRole }),
+    });
+
+    if (res.ok) {
+      return { success: true };
+    }
+  } catch (err) {
+    console.warn('[EventReadinessService] Backend role update failed, using direct Appwrite update:', err);
+  }
+
+  // Direct Appwrite update fallback
+  try {
+    const user = await account.get();
+    const parts = await databases.listDocuments(
+      DATABASE_ID,
+      COLLECTIONS.EVENT_PARTICIPANTS,
+      [Query.equal('event_id', eventId), Query.equal('user_id', user.$id), Query.limit(1)]
+    );
+
+    if (parts.documents && parts.documents.length > 0) {
+      const docId = parts.documents[0].$id;
+      await databases.updateDocument(DATABASE_ID, COLLECTIONS.EVENT_PARTICIPANTS, docId, {
+        role: newRole,
+        updated_at: new Date().toISOString(),
+      });
+      return { success: true };
+    }
+    return { success: false, message: 'Participant record not found' };
+  } catch (err: any) {
+    return { success: false, message: err?.message || 'Could not update role' };
   }
 }

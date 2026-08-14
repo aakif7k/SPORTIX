@@ -202,9 +202,27 @@ function docToReel(doc: AppwriteDocument, isLiked = false): DbReel {
 // ─── MEDIA UPLOAD ─────────────────────────────────────────────────────────────
 
 export async function uploadMedia(file: File): Promise<string> {
-  const uploaded = await storage.createFile(BUCKET_ID, ID.unique(), file);
-  const url = storage.getFileView(BUCKET_ID, uploaded.$id);
-  return url.toString();
+  const isVid = file.type.startsWith('video/');
+  const candidateBuckets = Array.from(new Set([
+    BUCKET_ID,
+    isVid ? 'sportix-videos' : 'sportix-images',
+    'sportix-media',
+    '6a5faf6c00197d36a3a9',
+  ])).filter(Boolean);
+
+  let lastError: any = null;
+  for (const bucket of candidateBuckets) {
+    try {
+      const uploaded = await storage.createFile(bucket, ID.unique(), file);
+      const url = storage.getFileView(bucket, uploaded.$id);
+      return url.toString();
+    } catch (err: any) {
+      lastError = err;
+      console.warn(`[socialService] Upload to bucket '${bucket}' failed:`, err?.message || err);
+    }
+  }
+
+  throw lastError || new Error('Failed to upload media across available storage buckets.');
 }
 
 export async function uploadAvatar(authUid: string, file: File): Promise<string> {

@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, Query, Body, HTTPException
 from typing import Optional
 from app.core.dependencies import get_current_user
 from app.schemas.event import EventCreate, EventUpdate
@@ -55,6 +55,12 @@ async def get_event_readiness(event_id: str, user=Depends(get_current_user)):
     return {"success": True, "data": data}
 
 
+@router.get("/{event_id}/allocation")
+async def get_event_allocation(event_id: str, user=Depends(get_current_user)):
+    readiness = await event_readiness_service.get_event_readiness(event_id, user["id"])
+    return {"success": True, "data": readiness.get("allocation", {})}
+
+
 @router.put("/{event_id}")
 async def update_event(event_id: str, payload: EventUpdate, user=Depends(get_current_user)):
     data = await event_service.update(event_id, user["id"], payload.model_dump(exclude_none=True))
@@ -72,16 +78,29 @@ async def join_event(
     event_id: str,
     squad_id: Optional[str] = None,
     entry_type: str = "solo",
+    role: Optional[str] = None,
     user=Depends(get_current_user),
 ):
     try:
-        data = await event_service.join(event_id, user["id"], squad_id, entry_type)
+        data = await event_service.join(event_id, user["id"], squad_id, entry_type, role)
         # Check & trigger 10-athlete AutoSquad readiness notification
         await event_readiness_service.check_and_notify_event_readiness(event_id)
         return {"success": True, "data": data}
     except ValueError as val_err:
-        from fastapi import HTTPException
         raise HTTPException(status_code=400, detail=str(val_err))
+
+
+@router.put("/{event_id}/role")
+async def update_role(
+    event_id: str,
+    payload: dict = Body(...),
+    user=Depends(get_current_user),
+):
+    new_role = payload.get("role")
+    if not new_role:
+        raise HTTPException(status_code=400, detail="Missing 'role' parameter")
+    data = await event_service.update_participant_role(event_id, user["id"], new_role)
+    return {"success": True, "data": data}
 
 
 @router.delete("/{event_id}/join")

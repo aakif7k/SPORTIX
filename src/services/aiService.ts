@@ -1,6 +1,6 @@
 import { GoogleGenerativeAI } from '@google/generative-ai';
 import type { AITeamResult, Team, TeamMember, SportCategory, ExperienceLevel, BracketRound } from '../types';
-import { SPORT_POSITIONS } from './mockData';
+import { getSportRolesSync } from './sportsRoleService';
 import { getEventParticipants } from './eventService';
 import { databases, DATABASE_ID, COLLECTIONS, Query } from '@/lib/appwrite';
 
@@ -55,7 +55,7 @@ async function buildTeamFromEventParticipants(
   id: string,
   eventId: string
 ): Promise<Team> {
-  const positions = SPORT_POSITIONS[sport] || SPORT_POSITIONS.default;
+  const positions = getSportRolesSync(sport);
   const fallbackNames = ['Jordan Hayes', 'Kai Nakamura', 'Lena Hoffman', 'Carlos Reyes', 'Amara Diallo', 'Flynn O\'Brien', 'Zara Patel', 'Dmitri Volkov', 'Sofia Chen', 'Marco Vitale', 'Aisha Kamara'];
   const fallbackAvatars = Array.from({ length: 11 }, (_, i) => `https://i.pravatar.cc/150?img=${20 + i}`);
 
@@ -139,7 +139,7 @@ function generateAnalysisLog(sport: SportCategory, count: number): string[] {
 // ─── GEMINI AI TEAM GENERATION ─────────────────────────────────────────────
 async function generateTeamWithGemini(sport: SportCategory, skillLevel: ExperienceLevel, teamRoster?: TeamMember[]): Promise<{ reasoning: string; positions: string[] }> {
   const genAI = getGenAI();
-  const positions = SPORT_POSITIONS[sport] || SPORT_POSITIONS.default;
+  const positions = getSportRolesSync(sport);
   if (!genAI) {
     return { reasoning: `For ${skillLevel} ${sport}, we prioritize complementary pulse ratings and positional balance across ${teamRoster?.[0]?.name || 'the team'} and ${teamRoster?.[1]?.name || 'key athletes'}.`, positions };
   }

@@ -27,6 +27,9 @@ DAILY_MISSIONS = [
 ]
 
 
+from app.utils.seed_sports_roles import seed_sports_roles
+
+
 def seed_badges():
     print("Seeding badges...")
     for badge in BADGES:
@@ -48,6 +51,7 @@ def seed_missions():
 
 
 if __name__ == "__main__":
+    seed_sports_roles()
     seed_badges()
     seed_missions()
     print("Seeding complete.")

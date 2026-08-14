@@ -3,7 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence, useScroll, useTransform } from 'framer-motion';
 import {
   Calendar, MapPin, Users, Zap, Bell, BellOff,
-  Trophy, Activity, Clock, Star, ArrowRight, ArrowLeft, UserPlus,
+  Trophy, Clock, Star, ArrowRight, ArrowLeft, UserPlus,
   BarChart3, CheckCircle2, Check, Timer,
   Hash, Share2, Settings
 } from 'lucide-react';
@@ -20,6 +20,7 @@ import { BadgeIcon } from '../../components/gamification/BadgeIcon';
 import { EventJoinModal } from './EventJoinModal';
 import { getEventLifecycleState } from '../../services/eventLifecycleService';
 import { EventStatusBadge } from '../../components/events/EventStatusBadge';
+import { UniversalEventReadinessMatrix } from '../../components/events/UniversalEventReadinessMatrix';
 import {
   getEventAnnouncements,
   getEventSchedule,
@@ -230,19 +231,6 @@ export const EventDetail: React.FC = () => {
   const filledSlots = dbParticipants.length;
   const maxSlots    = rawEvent?.maxParticipants || 10;
   const pctFull     = maxSlots > 0 ? Math.min(100, Math.round((filledSlots / maxSlots) * 100)) : 0;
-
-  // Unique Teams Joined (count unique non-null team_id or team/crew/squad entries)
-  const teamSet = new Set(
-    dbParticipants
-      .filter(p => p.team_id || p.entry_type === 'team' || p.entry_type === 'crew' || p.entry_type === 'squad')
-      .map(p => p.team_id || p.$id)
-  );
-  const teamsJoined = teamSet.size;
-
-  // Solo Players (count solo entries or entries without team_id)
-  const soloPlayers = dbParticipants.filter(
-    p => p.entry_type === 'solo' || (!p.team_id && p.entry_type !== 'team' && p.entry_type !== 'crew' && p.entry_type !== 'squad')
-  ).length;
 
   // Open Slots
   const openSlots = Math.max(0, maxSlots - filledSlots);
@@ -550,61 +538,21 @@ export const EventDetail: React.FC = () => {
       </motion.div>
 
       {/* ══════════════════════════════════════════════════════
-          TEAM READINESS METER — full-width immersive bar
+          UNIVERSAL EVENT READINESS MATRIX & ROLE ALLOCATION
       ══════════════════════════════════════════════════════ */}
-      <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.22 }}
-        className="premium-card neon-border rounded-[22px] p-5 mb-6 relative overflow-hidden">
-        <div className="absolute inset-0 pointer-events-none rounded-[22px]" style={{
-          background: 'radial-gradient(ellipse 60% 80% at 20% 50%, var(--accent-surface) 0%, transparent 70%)'
-        }} />
-        <div className="relative z-10">
-          <div className="flex items-center justify-between mb-3">
-            <div className="flex items-center gap-2">
-              <motion.div animate={{ rotate: [0, 360] }} transition={{ repeat: Infinity, duration: 8, ease: 'linear' }}>
-                <Activity size={14} style={{ color: 'var(--accent-text)' }} />
-              </motion.div>
-              <span className="font-mono text-[10px] font-bold uppercase tracking-widest" style={{ color: 'var(--accent-text)' }}>
-                Event Readiness Matrix
-              </span>
-            </div>
-            <div className="font-display text-[26px] leading-none" style={{ color: 'var(--accent-text)' }}>
-              <CountUp to={pctFull} suffix="%" />
-            </div>
-          </div>
-
-          {/* Multi-segment progress bar */}
-          <div className="relative h-3 rounded-full overflow-hidden mb-4" style={{ background: 'var(--bg-elevated)' }}>
-            <motion.div initial={{ width: 0 }} animate={{ width: `${pctFull}%` }}
-              transition={{ duration: 1.2, delay: 0.4, ease: [0.22, 1, 0.36, 1] }}
-              className="h-full rounded-full"
-              style={{ background: `linear-gradient(90deg, var(--accent) 0%, #88FF00 60%, #CCFF00 100%)`, boxShadow: '0 0 12px var(--accent-glow)' }} />
-            {[25, 50, 75].map(tick => (
-              <div key={tick} className="absolute top-0 bottom-0 w-px" style={{ left: `${tick}%`, background: 'rgba(255,255,255,0.15)' }} />
-            ))}
-          </div>
-
-          <div className="grid grid-cols-3 gap-3">
-            {[
-              { label: 'Teams Joined', val: teamsJoined, raw: false },
-              { label: 'Solo Players', val: soloPlayers, raw: false },
-              { label: lifecycle.isEnded ? 'Registration' : 'Open Slots', val: lifecycle.isEnded ? 'Closed' : openSlots, raw: lifecycle.isEnded },
-            ].map((s, i) => (
-              <div key={i} className="text-center">
-                <div className="font-display text-[20px] leading-none" style={{ color: 'var(--text-primary)' }}>
-                  {s.raw ? s.val : <CountUp to={s.val as number} />}
-                </div>
-                <div className="font-mono text-[8px] uppercase tracking-wider mt-0.5" style={{ color: 'var(--text-muted)' }}>{s.label}</div>
-              </div>
-            ))}
-          </div>
-        </div>
-      </motion.div>
+      <UniversalEventReadinessMatrix
+        eventId={event.id}
+        sportName={event.sport}
+        maxCapacity={maxSlots}
+        onAutoSquadTrigger={handleAutoSquadClick}
+        className="mb-6"
+      />
 
       {/* ══════════════════════════════════════════════════════
-          THREE ACTION CARDS
+          ACTION CARDS
       ══════════════════════════════════════════════════════ */}
       <motion.div variants={stagger} initial="hidden" animate="visible"
-        className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
+        className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-6">
 
         {/* ── JOIN / MANAGE EVENT ── */}
         <motion.div variants={fadeUp}>
@@ -689,31 +637,6 @@ export const EventDetail: React.FC = () => {
               )}
             </motion.button>
           )}
-        </motion.div>
-
-        {/* ── JOIN WITH CREW / VIEW CREW ── */}
-        <motion.div variants={fadeUp}>
-          <motion.button
-            whileHover={{ scale: 1.03, y: -4 }}
-            whileTap={{ scale: 0.97 }}
-            onClick={() => navigate(`/app/events/${event.id}/crew`)}
-            className="w-full rounded-[22px] p-5 text-left relative overflow-hidden group transition-all premium-card"
-            style={{ minHeight: 150 }}
-          >
-            <div className="w-10 h-10 rounded-[14px] mb-4 flex items-center justify-center"
-              style={{ background: 'rgba(0,212,255,0.15)', color: '#00D4FF' }}>
-              <Users size={20} />
-            </div>
-            <div className="font-display text-[17px] tracking-wide leading-tight" style={{ color: 'var(--text-primary)' }}>
-              {lifecycle.isEnded ? 'VIEW CREW' : 'JOIN WITH CREW'}
-            </div>
-            <div className="font-mono text-[9px] mt-1" style={{ color: 'var(--text-muted)' }}>
-              {lifecycle.isEnded ? 'Event crew roster' : 'Manage your crew'}
-            </div>
-            <div className="absolute bottom-4 right-4 flex items-center gap-1">
-              <ArrowRight size={14} className="group-hover:translate-x-1 transition-transform" style={{ color: 'var(--text-muted)' }} />
-            </div>
-          </motion.button>
         </motion.div>
 
         {/* ── AI SQUAD LAB ── */}

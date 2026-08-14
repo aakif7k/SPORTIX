@@ -17,9 +17,11 @@ interface PostComposerProps {
   currentUserName?: string;
 }
 
+import { OFFICIAL_SPORTIX_SPORTS_ROLES } from '@/services/sportsRoleService';
+
 const SPORTS = [
-  'Football', 'Basketball', 'Cricket', 'Athletics', 'Tennis',
-  'Swimming', 'Boxing', 'Rugby', 'Volleyball', 'Cycling',
+  'Multi-Sport',
+  ...OFFICIAL_SPORTIX_SPORTS_ROLES.map(s => s.sport)
 ];
 
 const MAX_IMAGES = 4;

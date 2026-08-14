@@ -45,6 +45,7 @@ class Settings(BaseSettings):
     collection_post_likes: str = "post_likes"
     collection_story_views: str = "story_views"
     collection_reel_likes: str = "reel_likes"
+    collection_sports_roles: str = "sportix_sport_roles"
 
     # ── AWS S3 (optional — only needed if you switch to S3) ──────────────────
     aws_access_key_id: str = ""

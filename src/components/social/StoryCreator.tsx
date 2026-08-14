@@ -2,7 +2,12 @@ import React, { useState, useRef } from 'react';
 import { X, Image, Video, Type, Tag, Upload } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 
-const SPORTS = ['Football', 'Basketball', 'Cricket', 'Athletics', 'Tennis', 'Swimming', 'Boxing', 'Rugby'];
+import { OFFICIAL_SPORTIX_SPORTS_ROLES } from '@/services/sportsRoleService';
+
+const SPORTS = [
+  'Multi-Sport',
+  ...OFFICIAL_SPORTIX_SPORTS_ROLES.map(s => s.sport)
+];
 
 interface StoryCreatorProps {
   currentUserId?: string;

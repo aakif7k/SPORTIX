@@ -315,19 +315,58 @@ async def generate(user_id: str, payload: AutoSquadRequest) -> dict:
     # Sort candidates by compatibility score DESC
     scored_candidates.sort(key=lambda x: x["compatibility_score"], reverse=True)
 
-    # 5. SPORT-SPECIFIC SQUAD FORMATION OPTIMIZATION
-    sport_rules = SPORT_FORMATIONS.get(sport, SPORT_FORMATIONS["Football"])
-    required_squad_size = sport_rules["squad_size"] - 1  # exclude user
-    selected_members = scored_candidates[:required_squad_size]
+    # 5. SPORT-SPECIFIC SQUAD FORMATION OPTIMIZATION DYNAMICALLY FROM DATABASE
+    from app.services.sports_role_service import get_sport_role_by_id
+    sport_config = get_sport_role_by_id(sport)
+    if sport_config:
+        target_squad_size = int(sport_config.get("total_players", 5))
+        r1_name = sport_config.get("role_1") or "Player"
+        r1_cnt = int(sport_config.get("role_1_count", 1))
+        r2_name = sport_config.get("role_2") or "Player"
+        r2_cnt = int(sport_config.get("role_2_count", 1))
+        r3_name = sport_config.get("role_3") or "Player"
+        r3_cnt = int(sport_config.get("role_3_count", 1))
+        r4_name = sport_config.get("role_4") or "Player"
+        r4_cnt = int(sport_config.get("role_4_count", 1))
+        
+        role_slots_pool = (
+            [r1_name] * r1_cnt +
+            [r2_name] * r2_cnt +
+            [r3_name] * r3_cnt +
+            [r4_name] * r4_cnt
+        )
+        default_formation = f"{r1_cnt}-{r2_cnt}-{r3_cnt}" if r4_cnt == 0 else f"{r1_cnt}-{r2_cnt}-{r3_cnt}-{r4_cnt}"
+    else:
+        sport_rules = SPORT_FORMATIONS.get(sport, SPORT_FORMATIONS["Football"])
+        target_squad_size = sport_rules["squad_size"]
+        role_slots_pool = sport_rules.get("required_positions", ["Player"] * target_squad_size)
+        default_formation = sport_rules.get("default_formation", "Balanced")
 
-    # Include requesting user as captain
+    required_squad_size = max(0, target_squad_size - 1)  # exclude user
+    selected_members_raw = scored_candidates[:required_squad_size]
+
+    # Include requesting user with selected tactical role
+    user_position = payload.role or requesting_profile.get("position") or (role_slots_pool[0] if role_slots_pool else "Player")
+    
+    # Assign remaining sport roles to squad candidates
+    remaining_roles = list(role_slots_pool)
+    if user_position in remaining_roles:
+        remaining_roles.remove(user_position)
+
+    selected_members = []
+    for idx, cand in enumerate(selected_members_raw):
+        assigned_pos = remaining_roles[idx] if idx < len(remaining_roles) else (cand.get("position") or "Player")
+        cand_copy = dict(cand)
+        cand_copy["position"] = assigned_pos
+        selected_members.append(cand_copy)
+
     user_member_shape = {
         "id": user_id,
         "full_name": requesting_profile.get("full_name", "Alex Rivera"),
         "username": requesting_profile.get("username", "alex"),
         "avatar_url": requesting_profile.get("avatar_url"),
         "sport": sport,
-        "position": requesting_profile.get("position", "CAPTAIN"),
+        "position": user_position,
         "experience_level": requesting_profile.get("experience_level", "pro"),
         "ssr": user_ssr,
         "pulse_score": requesting_profile.get("pulse_score", 750),
@@ -338,7 +377,7 @@ async def generate(user_id: str, payload: AutoSquadRequest) -> dict:
     }
 
     full_squad_members = [user_member_shape] + selected_members
-    overall_compat = round(sum(m.get("compatibility_score", 85) for m in full_squad_members) / len(full_squad_members), 1)
+    overall_compat = round(sum(m.get("compatibility_score", 85) for m in full_squad_members) / max(1, len(full_squad_members)), 1)
 
     # Captain Recommendation Logic
     captain_cand = max(full_squad_members, key=lambda m: (m.get("pulse_score", 100) + (m.get("ssr", 65) * 2)))
@@ -377,7 +416,7 @@ async def generate(user_id: str, payload: AutoSquadRequest) -> dict:
             
             prompt = (
                 f"You are SPORTiX AI Team Intelligence.\n"
-                f"Analyze this {sport} squad draft ({sport_rules['default_formation']} formation):\n"
+                f"Analyze this {sport} squad draft ({default_formation} formation):\n"
                 f"- Event: {event_doc.get('title') if event_doc else 'SPORTiX Match'}\n"
                 f"- Overall Compatibility: {overall_compat}%\n"
                 f"- Average Pulse: {round(sum(m.get('pulse_score', 100) for m in full_squad_members) / len(full_squad_members))}\n"
@@ -429,7 +468,7 @@ async def generate(user_id: str, payload: AutoSquadRequest) -> dict:
         "squadId": f"gen_{request_doc['$id']}",
         "name": f"Volt {sport} Squad",
         "sport": sport,
-        "formation": sport_rules["default_formation"],
+        "formation": default_formation,
         "members": full_squad_members,
         "score_breakdown": avg_components,
         "confidence_score": 85,

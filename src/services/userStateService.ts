@@ -201,14 +201,42 @@ export async function claimDailyRewardIdempotent(
 
   const newPulse = currentPulse + rewardPulse;
 
-  // 5. Update Appwrite profile pulse_score
+  // 5. Update Appwrite profile pulse_score & pulse_scores collection
+  const nowIso = new Date().toISOString();
   try {
     await databases.updateDocument(DATABASE_ID, COLLECTIONS.PROFILES, userId, {
       pulse_score: newPulse,
-      updated_at: new Date().toISOString(),
+      updated_at: nowIso,
     });
+
+    // Update pulse_scores collection
+    const pRes = await databases.listDocuments(DATABASE_ID, COLLECTIONS.PULSE_SCORES, [
+      Query.equal('user_id', userId),
+      Query.limit(1)
+    ]);
+    if (pRes.documents && pRes.documents.length > 0) {
+      await databases.updateDocument(DATABASE_ID, COLLECTIONS.PULSE_SCORES, pRes.documents[0].$id, {
+        total_pulse: newPulse,
+        activity: Math.min(100, (pRes.documents[0] as any).activity + 2),
+        updated_at: nowIso,
+      });
+    } else {
+      await databases.createDocument(DATABASE_ID, COLLECTIONS.PULSE_SCORES, ID.unique(), {
+        user_id: userId,
+        total_pulse: newPulse,
+        match_performance: 0,
+        consistency: 0,
+        team_chemistry: 0,
+        reliability: 0,
+        activity: 2,
+        leadership: 0,
+        tier: newPulse >= 900 ? 'pulse_elite' : newPulse >= 800 ? 'elite' : 'contender',
+        created_at: nowIso,
+        updated_at: nowIso,
+      });
+    }
   } catch (err: any) {
-    console.error('[userStateService] Failed to update profile pulse_score:', err);
+    console.error('[userStateService] Failed to update pulse_score:', err);
     return { success: false, newPulse: currentPulse, message: 'Failed to update Pulse balance' };
   }
 
@@ -266,7 +294,7 @@ export async function getUserSportiXState(userId: string): Promise<UserSportiXSt
     };
   }
 
-  // 1. Fetch user profile from Appwrite
+  // 1. Fetch user pulse_scores & profile from Appwrite
   let pulse = DEFAULT_INITIAL_PULSE;
   let level = 1;
   let matchesPlayed = 0;
@@ -277,9 +305,22 @@ export async function getUserSportiXState(userId: string): Promise<UserSportiXSt
   let loginStreak = 0;
 
   try {
+    const pulseRes = await databases.listDocuments(
+      DATABASE_ID,
+      COLLECTIONS.PULSE_SCORES,
+      [Query.equal('user_id', userId), Query.limit(1)]
+    );
+    if (pulseRes.documents && pulseRes.documents.length > 0) {
+      pulse = Math.round(Number((pulseRes.documents[0] as any).total_pulse ?? DEFAULT_INITIAL_PULSE));
+    }
+  } catch {}
+
+  try {
     const profileDoc = await databases.getDocument(DATABASE_ID, COLLECTIONS.PROFILES, userId);
     if (profileDoc) {
-      pulse = profileDoc.pulse_score ?? DEFAULT_INITIAL_PULSE;
+      if (!pulse || pulse === DEFAULT_INITIAL_PULSE) {
+        pulse = profileDoc.pulse_score ?? DEFAULT_INITIAL_PULSE;
+      }
       level = profileDoc.level ?? 1;
       loginStreak = profileDoc.login_streak ?? 0;
       followersCount = profileDoc.followers_count ?? 0;

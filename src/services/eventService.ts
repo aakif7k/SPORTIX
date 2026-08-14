@@ -184,13 +184,15 @@ async function addParticipantRecord(
   userId:  string,
   status:  'registered' | 'confirmed' = 'registered',
   entryType: 'solo' | 'team' | 'squad' | 'crew' = 'solo',
-  teamId?: string | null
+  teamId?: string | null,
+  role?: string | null
 ): Promise<boolean> {
   try {
     const now = new Date().toISOString();
     const payload: Record<string, any> = {
       event_id:   eventId,
       user_id:    userId,
+      role:       role || '',
       joined_at:  now,
       created_at: now,
       status,
@@ -453,7 +455,8 @@ export async function joinEvent(
   userId: string,
   entryType: 'solo' | 'team' | 'squad' | 'crew' = 'solo',
   teamId?: string | null,
-  teamMembers?: string[]
+  teamMembers?: string[],
+  role?: string | null
 ): Promise<{ success: boolean; message: string; addedCount?: number }> {
   if (isMockId(eventId)) return { success: true, message: 'Joined event' };
 
@@ -483,7 +486,7 @@ export async function joinEvent(
     for (const memberId of membersToAdd) {
       const isMemberJoined = existingRes.documents.some(d => d.user_id === memberId);
       if (!isMemberJoined) {
-        const ok = await addParticipantRecord(eventId, memberId, 'registered', entryType, teamId || null);
+        const ok = await addParticipantRecord(eventId, memberId, 'registered', entryType, teamId || null, role);
         if (ok) addedCount++;
       }
     }

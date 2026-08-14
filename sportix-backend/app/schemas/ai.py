@@ -19,6 +19,7 @@ class SkillLevel(str, Enum):
 class AutoSquadRequest(BaseModel):
     event_id: Optional[str] = None
     sport: Optional[str] = None
+    role: Optional[str] = None
     entry_type: EntryType = EntryType.solo
     skill_level: Optional[SkillLevel] = SkillLevel.amateur
     partner_id: Optional[str] = None

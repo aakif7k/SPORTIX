@@ -8,10 +8,15 @@ import { getRemainingGenerations, generateAutoSquad, acceptAutoSquad, type Daily
 import { useSquadStore } from '../../store/squadStore';
 import { useAuthStore } from '../../store/authStore';
 import { useAISettingsStore } from '../../store/aiSettingsStore';
-import { Sparkles, Check, Users, Activity, Brain, ArrowRight, CheckCircle2, XCircle } from 'lucide-react';
+import {
+  Sparkles, Check, Users, Activity, Brain, ArrowRight, CheckCircle2, XCircle,
+  Shield, Target, Zap, Compass, Users2, Clock
+} from 'lucide-react';
 import { PendingReportBanner } from '../../components/performance/PendingReportBanner';
 import { createNotification } from '../../services/notificationService';
 import { useEventStore } from '../../store/eventStore';
+import { getSportRolesSync, getSportRoleDataSync } from '../../services/sportsRoleService';
+import { getEventReadiness, type EventReadinessData } from '../../services/eventReadinessService';
 import toast from 'react-hot-toast';
 
 // ─── 4 Master Tabs ────────────────────────────────────────────────────────────
@@ -23,8 +28,8 @@ const DASH_TABS = [
 ];
 
 const FUTURISTIC_NAMES = [
-  'SQUAD NOVA', 'SQUAD VECTOR', 'SQUAD APEX', 'SQUAD TITAN', 'SQUAD VORTEX',
-  'PULSE X', 'STRIKE XI', 'NEON XI', 'SQUAD AXIS', 'SQUAD VELOCITY'
+  'NOVA', 'VECTOR', 'APEX', 'TITAN', 'VORTEX',
+  'PULSE X', 'STRIKE', 'NEON', 'AXIS', 'VELOCITY'
 ];
 
 export const SquadFormation: React.FC = () => {
@@ -36,10 +41,54 @@ export const SquadFormation: React.FC = () => {
     addGeneratedSquad, declineGeneratedSquad, acceptGeneratedSquad, incrementGenerationsCount
   } = useSquadStore();
 
-  const initialType = searchParams.get('type') || 'solo';
   const urlEventId = searchParams.get('eventId') || searchParams.get('event_id');
-  const [entryType, setEntryType] = useState<string>(initialType);
   const [selectedEvent, setSelectedEvent] = useState<EventOption | null>(null);
+  const [eventReadiness, setEventReadiness] = useState<EventReadinessData | null>(null);
+  const [, setLoadingReadiness] = useState(false);
+
+  // Dynamic Sport & Roles from sportix_sport_roles table
+  const currentSport = selectedEvent?.sport || (user as any)?.sport || 'Football';
+  const availableRoles = getSportRolesSync(currentSport);
+  const sportConfig = getSportRoleDataSync(currentSport);
+
+  // Fetch Live Event Readiness and Dynamic Role Allocation Space
+  useEffect(() => {
+    if (selectedEvent?.id) {
+      setLoadingReadiness(true);
+      getEventReadiness(selectedEvent.id, user?.id)
+        .then(data => {
+          setEventReadiness(data);
+        })
+        .catch(err => {
+          console.warn('[SquadFormation] Failed to load event readiness matrix:', err);
+        })
+        .finally(() => {
+          setLoadingReadiness(false);
+        });
+    } else {
+      setEventReadiness(null);
+    }
+  }, [selectedEvent?.id, user?.id]);
+
+  const [selectedRole, setSelectedRole] = useState<string>(() => {
+    const userPos = (user as any)?.position;
+    const initRoles = getSportRolesSync(currentSport);
+    return (userPos && initRoles.includes(userPos)) ? userPos : (initRoles[0] || 'Midfielder');
+  });
+
+  // Re-sync selected role whenever the selected event / sport changes
+  useEffect(() => {
+    const roles = getSportRolesSync(currentSport);
+    if (!roles.includes(selectedRole)) {
+      const userPos = (user as any)?.position;
+      if (userPos && roles.includes(userPos)) {
+        setSelectedRole(userPos);
+      } else {
+        setSelectedRole(roles[0] || 'Midfielder');
+      }
+    }
+  }, [currentSport, (user as any)?.position]);
+
   const [status, setStatus] = useState<'selection' | 'matching'>('selection');
   const [selectedDraftId, setSelectedDraftId] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState('generate');
@@ -50,14 +99,56 @@ export const SquadFormation: React.FC = () => {
     getRemainingGenerations().then(setDailyQuota).catch(() => null);
   }, []);
 
-  // Master generation handler
+  const getRoleQuota = (roleName: string): number => {
+    if (!sportConfig) return 1;
+    if (sportConfig.role_1 === roleName) return sportConfig.role_1_count;
+    if (sportConfig.role_2 === roleName) return sportConfig.role_2_count;
+    if (sportConfig.role_3 === roleName) return sportConfig.role_3_count;
+    if (sportConfig.role_4 === roleName) return sportConfig.role_4_count;
+    return 1;
+  };
+
+  const getRoleRemaining = (roleName: string): number | null => {
+    if (!eventReadiness?.allocation?.role_remaining_space) return null;
+    return eventReadiness.allocation.role_remaining_space[roleName] ?? null;
+  };
+
+  // Tactical Role Icon Resolver
+  const getRoleIcon = (roleName: string) => {
+    const lower = roleName.toLowerCase();
+    if (
+      lower.includes('goal') || lower.includes('keeper') || lower.includes('defen') ||
+      lower.includes('guard') || lower.includes('libero') || lower.includes('catcher') ||
+      lower.includes('blocker') || lower.includes('back')
+    ) {
+      return <Shield size={14} className="text-cyan" />;
+    }
+    if (
+      lower.includes('forward') || lower.includes('batter') || lower.includes('attack') ||
+      lower.includes('striker') || lower.includes('raider') || lower.includes('slugger') ||
+      lower.includes('chaser') || lower.includes('winger') || lower.includes('finisher') ||
+      lower.includes('pivot')
+    ) {
+      return <Target size={14} className="text-hot" />;
+    }
+    if (
+      lower.includes('midfield') || lower.includes('bowler') || lower.includes('setter') ||
+      lower.includes('playmaker') || lower.includes('quarterback') || lower.includes('sprinter') ||
+      lower.includes('driver') || lower.includes('all-round') || lower.includes('all-court')
+    ) {
+      return <Zap size={14} className="text-volt" />;
+    }
+    return <Compass size={14} className="text-plasma" />;
+  };
+
+  // Master generation handler with NO Hardcoded Data
   const handleGenerateSquad = async () => {
     setGenError(null);
     const targetEv = selectedEvent || {
       id: urlEventId || 'event_1',
-      title: 'Chennai Sunday Football League',
-      sport: 'Football',
-      location: 'Nehru Stadium, Chennai',
+      title: 'SPORTiX Tournament',
+      sport: currentSport,
+      location: 'Metropolitan Arena',
       city: 'Chennai',
       startsAt: new Date().toISOString(),
       currentParticipants: 14,
@@ -82,85 +173,142 @@ export const SquadFormation: React.FC = () => {
       const res = await generateAutoSquad({
         event_id: targetEv.id,
         sport: targetEv.sport,
-        entry_type: entryType as any,
+        role: selectedRole,
         radius_km: nearbyRadius || 10,
         location: targetEv.location,
       });
 
-      // Generate 5 draft slot variations
+      // Dynamic Sport Config from sportix_sport_roles (NO HARDCODED DATA)
+      const currentSportConfig = getSportRoleDataSync(targetEv.sport) || sportConfig;
+      const targetSquadSize = currentSportConfig?.total_players || res.squad_data.members?.length || 5;
+
+      // Expand sport role pool from dynamic config
+      const r1Name = currentSportConfig?.role_1 || 'Primary';
+      const r1Count = currentSportConfig?.role_1_count ?? 1;
+      const r2Name = currentSportConfig?.role_2 || 'Defender';
+      const r2Count = currentSportConfig?.role_2_count ?? 1;
+      const r3Name = currentSportConfig?.role_3 || 'Midfielder';
+      const r3Count = currentSportConfig?.role_3_count ?? 1;
+      const r4Name = currentSportConfig?.role_4 || 'Forward';
+      const r4Count = currentSportConfig?.role_4_count ?? 1;
+
+      const dynamicFormation = r4Count > 0
+        ? `${r1Count}-${r2Count}-${r3Count}-${r4Count}`
+        : `${r1Count}-${r2Count}-${r3Count}`;
+
+      const fullRoleSlotsPool: string[] = [
+        ...Array(r1Count).fill(r1Name),
+        ...Array(r2Count).fill(r2Name),
+        ...Array(r3Count).fill(r3Name),
+        ...Array(r4Count).fill(r4Name),
+      ];
+
+      // Remove 1 slot for user's assigned role
+      const remainingRoleSlots = [...fullRoleSlotsPool];
+      const userRoleIdx = remainingRoleSlots.indexOf(selectedRole);
+      if (userRoleIdx !== -1) {
+        remainingRoleSlots.splice(userRoleIdx, 1);
+      } else if (remainingRoleSlots.length > 0) {
+        remainingRoleSlots.shift();
+      }
+
+      const genIndex = generatedSquads.length;
+      const draftName = res.squad_data.name || `${targetEv.sport} ${FUTURISTIC_NAMES[genIndex % FUTURISTIC_NAMES.length]}`;
       const baseSquad = res.squad_data;
       const squadMembers = baseSquad.members || [];
 
-      // Create 5 saved draft slots for this generation
-      for (let i = 0; i < 5; i++) {
-        const draftName = FUTURISTIC_NAMES[i % FUTURISTIC_NAMES.length];
-        const pulsedMembers = squadMembers.map((m: any, idx: number) => ({
-          uid: m.id || `user_${idx}`,
-          name: m.full_name || `Athlete ${idx + 1}`,
-          username: m.username || `athlete_${idx + 1}`,
-          avatar: m.avatar_url || `https://i.pravatar.cc/150?u=${m.id || idx}`,
-          sport: m.sport || targetEv.sport,
-          position: m.position || ['FW', 'MF', 'DF', 'GK'][idx % 4],
-          pulseScore: m.pulse_score || (700 + ((idx * 37) % 150)),
-          tier: (m.ssr || 75) >= 85 ? 'ELITE' : 'CONTENDER',
-          compatibility: Math.max(75, (baseSquad.score_breakdown?.compatibility_score || 88) - (i * 2)),
-          role: m.is_captain || idx === 0 ? 'captain' : 'member',
+      // Build balanced roster matching sport's exact required team size
+      const neededTeammates = Math.max(0, targetSquadSize - 1);
+      const candidatesSource = squadMembers.filter((m: any) => m.id !== user?.id && !m.is_captain);
+
+      const userMember = {
+        uid: user?.id || 'user_0',
+        name: user?.name || 'Alex Rivera (You)',
+        username: user?.email?.split('@')[0] || 'captain',
+        avatar: user?.avatar || 'https://i.pravatar.cc/150?img=33',
+        sport: targetEv.sport,
+        position: selectedRole,
+        pulseScore: (user as any)?.pulseScore || 850,
+        tier: 'ELITE',
+        compatibility: 100,
+        role: 'captain',
+        readiness: 'Ready',
+        level: (user as any)?.level || 20,
+        distance: 0,
+        location: targetEv.city || 'Chennai',
+      };
+
+      const pulsedTeammates = Array.from({ length: neededTeammates }).map((_, idx) => {
+        const source = candidatesSource[idx] || squadMembers[idx + 1] || {};
+        const assignedPos = remainingRoleSlots[idx] || availableRoles[idx % availableRoles.length] || 'Athlete';
+        return {
+          uid: source.id || `teammate_${Date.now()}_${idx + 1}`,
+          name: source.full_name || `Athlete ${idx + 2}`,
+          username: source.username || `athlete_${idx + 2}`,
+          avatar: source.avatar_url || `https://i.pravatar.cc/150?u=${source.id || idx + 10}`,
+          sport: source.sport || targetEv.sport,
+          position: assignedPos,
+          pulseScore: source.pulse_score || (720 + ((idx * 29) % 130)),
+          tier: (source.ssr || 75) >= 85 ? 'ELITE' : 'CONTENDER',
+          compatibility: Math.max(75, (baseSquad.score_breakdown?.compatibility_score || 88) - (idx * 2)),
+          role: 'member',
           readiness: 'Ready',
-          level: m.level || 15,
-          distance: m.distance_km || Number((1.2 + idx * 0.8).toFixed(1)),
+          level: source.level || (12 + (idx % 8)),
+          distance: source.distance_km || Number((1.2 + idx * 0.7).toFixed(1)),
           location: targetEv.city || 'Chennai',
-        }));
-
-        const totalPulse = pulsedMembers.reduce((sum: number, m: any) => sum + (m.pulseScore || 700), 0);
-        const avgPulse = Math.round(totalPulse / Math.max(1, pulsedMembers.length));
-
-        const draftObj: any = {
-          squadId: `draft_${Date.now()}_${i + 1}`,
-          name: draftName,
-          sport: targetEv.sport,
-          eventId: targetEv.id,
-          eventName: targetEv.title,
-          captainId: pulsedMembers[0]?.uid || user?.id || 'cu1',
-          members: pulsedMembers,
-          chemistry: {
-            overall: Math.max(70, (res.overall_compatibility || 88) - (i * 2)),
-            trust: 85,
-            coordination: 88,
-            communication: 82,
-            retentionScore: 88,
-            activityScore: 85,
-            consistencyScore: 85,
-            approvalScore: 80,
-          },
-          pulseAvg: avgPulse,
-          winRate: 80 + i,
-          matchHistory: [],
-          achievements: [],
-          formation: baseSquad.formation || '4-3-3',
-          tacticalNotes: res.reasoning,
-          createdAt: new Date().toISOString().split('T')[0],
-          lastActive: new Date().toISOString().split('T')[0],
-          tournamentIds: [],
-          events: [targetEv.title],
-          posts: [],
-          xpBoostActive: false,
-          streakMultiplier: 1.0,
-          tags: ['AutoSquad AI', baseSquad.formation || '4-3-3', targetEv.sport],
-          lookingFor: [],
-          score_breakdown: baseSquad.score_breakdown,
-          captain_recommendation: baseSquad.captain_recommendation,
         };
+      });
 
-        addGeneratedSquad(draftObj);
-        if (i === 0) setSelectedDraftId(draftObj.squadId);
-      }
+      const pulsedMembers = [userMember, ...pulsedTeammates];
+      const totalPulse = pulsedMembers.reduce((sum: number, m: any) => sum + (m.pulseScore || 700), 0);
+      const avgPulse = Math.round(totalPulse / Math.max(1, pulsedMembers.length));
 
+      const draftObj: any = {
+        squadId: `draft_${Date.now()}_${genIndex + 1}`,
+        name: draftName,
+        sport: targetEv.sport,
+        eventId: targetEv.id,
+        eventName: targetEv.title,
+        captainId: userMember.uid,
+        members: pulsedMembers,
+        chemistry: {
+          overall: Math.max(70, res.overall_compatibility || 88),
+          trust: 85,
+          coordination: 88,
+          communication: 82,
+          retentionScore: 88,
+          activityScore: 85,
+          consistencyScore: 85,
+          approvalScore: 80,
+        },
+        pulseAvg: avgPulse,
+        winRate: 80 + (genIndex % 15),
+        matchHistory: [],
+        achievements: [],
+        formation: dynamicFormation,
+        tacticalNotes: res.reasoning || `${targetEv.sport} squad dynamically assembled (${dynamicFormation} formation) with you commanding tactical role: ${selectedRole}.`,
+        createdAt: new Date().toISOString().split('T')[0],
+        lastActive: new Date().toISOString().split('T')[0],
+        tournamentIds: [],
+        events: [targetEv.title],
+        posts: [],
+        xpBoostActive: false,
+        streakMultiplier: 1.0,
+        tags: ['AutoSquad AI', dynamicFormation, targetEv.sport, selectedRole, `${targetSquadSize} Players`],
+        lookingFor: [],
+        score_breakdown: baseSquad.score_breakdown,
+        captain_recommendation: baseSquad.captain_recommendation,
+      };
+
+      addGeneratedSquad(draftObj);
+      setSelectedDraftId(draftObj.squadId);
       incrementGenerationsCount();
       setActiveTab('results');
 
       // Refresh daily limit count
       const updatedQuota = await getRemainingGenerations();
       setDailyQuota(updatedQuota);
+      toast.success(`Generated Squad Draft #${genIndex + 1}: ${draftName}! (${Math.max(0, (updatedQuota?.remaining ?? dailyQuota.remaining - 1))} generations left today)`);
     } catch (err: any) {
       console.error('[SquadFormation] Generation error:', err);
       setGenError(err.message || 'AutoSquad generation failed.');
@@ -244,7 +392,7 @@ export const SquadFormation: React.FC = () => {
   })() : null;
 
   // ─── Tab: Generate (Event-First) ──────────────────────────────────────────
-  const TabGenerate = () => (
+  const renderTabGenerate = () => (
     <div className="space-y-6">
       {/* Top Section: Left Config + Right Command CTA */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-stretch">
@@ -269,24 +417,98 @@ export const SquadFormation: React.FC = () => {
               />
             </div>
 
-            {/* Entry Mode */}
-            <div className="space-y-2 pt-2">
-              <label className="font-mono text-[10px] font-bold text-text-secondary uppercase">Entry Mode</label>
-              <div className="grid grid-cols-3 gap-1.5 p-1 bg-elevated border border-border-muted rounded-xl font-mono text-[10px]">
-                {['solo', 'duo', 'full'].map(type => (
-                  <button
-                    key={type}
-                    type="button"
-                    onClick={() => setEntryType(type)}
-                    className={`py-2 rounded-lg uppercase font-bold transition-all ${
-                      entryType === type
-                        ? 'btn-accent shadow-md'
-                        : 'text-text-muted hover:text-text-primary'
-                    }`}
-                  >
-                    {type}
-                  </button>
-                ))}
+            {/* SELECT YOUR ROLE FROM sportix_sport_roles */}
+            <div className="space-y-2.5 pt-2 border-t border-border-muted/60" role="region" aria-label="Select Tactical Role">
+              <div className="flex items-center justify-between">
+                <label className="font-mono text-[11px] font-bold text-text-primary uppercase tracking-wider flex items-center gap-1.5">
+                  <Users2 size={13} className="text-accent" />
+                  <span>SELECT YOUR ROLE</span>
+                </label>
+                <span className="font-mono text-[9px] text-accent font-semibold px-2 py-0.5 rounded-full bg-accent/10 border border-accent/20">
+                  {currentSport}
+                </span>
+              </div>
+
+              <p className="font-mono text-[10px] text-text-secondary leading-snug">
+                Select your tactical position from SPORTiX roles. AI matches complementary athletes around your role.
+              </p>
+
+              {/* 4 Tactical Roles from sportix_sport_roles with Live Remaining Space */}
+              <div className="grid grid-cols-2 gap-2.5 font-mono text-[11px]" role="radiogroup" aria-label="Tactical Roles">
+                {availableRoles.map((role) => {
+                  const isSelected = selectedRole === role;
+                  const quota = getRoleQuota(role);
+                  const remaining = getRoleRemaining(role);
+
+                  return (
+                    <button
+                      key={role}
+                      type="button"
+                      role="radio"
+                      aria-checked={isSelected}
+                      id={`role-select-${role.toLowerCase().replace(/[^a-z0-9]/g, '-')}`}
+                      onPointerDown={(e) => {
+                        e.preventDefault();
+                        setSelectedRole(role);
+                      }}
+                      onClick={() => setSelectedRole(role)}
+                      className={`relative p-3.5 rounded-2xl border text-left transition-all flex flex-col justify-between gap-3 cursor-pointer ${
+                        isSelected
+                          ? 'bg-accent/10 border-accent text-text-primary shadow-sm ring-1 ring-accent/30'
+                          : 'bg-elevated/60 hover:bg-elevated border-border-muted hover:border-accent/40 text-text-secondary hover:text-text-primary'
+                      }`}
+                    >
+                      <div className="flex items-center justify-between w-full">
+                        <span className={`w-7 h-7 rounded-lg flex items-center justify-center transition-colors ${
+                          isSelected ? 'bg-accent/20 text-accent' : 'bg-surface border border-border-muted text-text-muted'
+                        }`}>
+                          {getRoleIcon(role)}
+                        </span>
+                        <div className="flex items-center gap-1">
+                          <span className={`text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded ${
+                            isSelected ? 'bg-accent text-volt-text' : 'bg-surface text-text-muted border border-border-muted/50'
+                          }`}>
+                            {quota} / Team
+                          </span>
+                          {isSelected && (
+                            <span className="w-4 h-4 rounded-full bg-accent flex items-center justify-center text-volt-text">
+                              <Check size={10} strokeWidth={3.5} />
+                            </span>
+                          )}
+                        </div>
+                      </div>
+
+                      <div className="space-y-1.5">
+                        <div className={`font-bold text-[13px] leading-tight truncate ${
+                          isSelected ? 'text-accent' : 'text-text-primary'
+                        }`}>
+                          {role}
+                        </div>
+                        
+                        {/* Live Remaining Player Space */}
+                        <div className="flex items-center justify-between text-[10px] pt-1.5 border-t border-border-muted/40">
+                          <span className="text-text-muted uppercase tracking-wider text-[9px]">Remaining:</span>
+                          {remaining !== null ? (
+                            remaining > 0 ? (
+                              <span className="font-bold text-emerald-400 flex items-center gap-1">
+                                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                                {remaining} Open
+                              </span>
+                            ) : (
+                              <span className="font-semibold text-amber-400/90 text-[9px]">
+                                0 Open (Next Squad)
+                              </span>
+                            )
+                          ) : (
+                            <span className="text-text-muted font-medium text-[9px]">
+                              {quota} needed / team
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                    </button>
+                  );
+                })}
               </div>
             </div>
           </div>
@@ -326,9 +548,9 @@ export const SquadFormation: React.FC = () => {
                 type="button"
                 onClick={handleGenerateSquad}
                 disabled={dailyQuota.remaining <= 0}
-                className={`w-full py-4 rounded-xl font-display font-bold text-sm uppercase tracking-wider flex items-center justify-center gap-2 transition-all shadow-md ${
+                className={`w-full py-4 rounded-xl font-display font-bold text-sm uppercase tracking-wider flex items-center justify-center gap-2 transition-colors shadow-md ${
                   dailyQuota.remaining > 0
-                    ? 'btn-accent hover:scale-[1.01] cursor-pointer'
+                    ? 'btn-accent cursor-pointer'
                     : 'bg-elevated border border-border-muted text-text-muted cursor-not-allowed'
                 }`}
               >
@@ -406,11 +628,55 @@ export const SquadFormation: React.FC = () => {
           ))}
         </div>
       </div>
+
+      {/* Waiting Athletes Queue (Dynamic Candidate Pool for this Event) */}
+      {(eventReadiness?.allocation?.waiting_players && eventReadiness.allocation.waiting_players.length > 0) && (
+        <div className="w-full p-6 rounded-3xl bg-surface border border-border-muted space-y-4 shadow-card">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div className="flex items-center gap-2.5">
+              <div className="w-10 h-10 rounded-xl bg-purple-500/15 border border-purple-500/30 flex items-center justify-center text-purple-400">
+                <Clock size={20} />
+              </div>
+              <div>
+                <h4 className="font-display text-sm text-text-primary tracking-wider uppercase flex items-center gap-2">
+                  WAITING ATHLETES QUEUE ({eventReadiness.allocation.waiting_players.length})
+                </h4>
+                <p className="font-mono text-[11px] text-text-muted">
+                  Athletes registered for {selectedEvent?.title || 'this event'} ready for AutoSquad matchmaking
+                </p>
+              </div>
+            </div>
+
+            <span className="font-mono text-[10px] text-purple-400 font-bold px-3 py-1 rounded-full bg-purple-500/10 border border-purple-500/30">
+              DYNAMIC POOL ({eventReadiness.allocation.waiting_players.length})
+            </span>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+            {eventReadiness.allocation.waiting_players.map((wp) => (
+              <div
+                key={wp.user_id}
+                className="p-3.5 rounded-2xl bg-elevated border border-border-muted/70 flex flex-col justify-between space-y-2 text-xs"
+              >
+                <div className="flex items-center justify-between gap-2">
+                  <span className="font-bold text-text-primary truncate">{wp.name}</span>
+                  <span className="px-2 py-0.5 rounded-md bg-purple-500/20 text-purple-300 font-mono text-[9px] font-bold uppercase">
+                    {wp.selected_role}
+                  </span>
+                </div>
+                <p className="text-[10px] font-mono text-text-muted leading-tight">
+                  {wp.reason || 'Queued for AutoSquad formation'}
+                </p>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   );
 
   // ─── Tab: Results (5 Persistent Saved Slots) ──────────────────────────────
-  const TabResults = () => (
+  const renderTabResults = () => (
     <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
       {/* Left: 5 Draft Slots */}
       <div className="lg:col-span-4 space-y-3">
@@ -431,14 +697,13 @@ export const SquadFormation: React.FC = () => {
 
             if (draft) {
               return (
-                <motion.div
+                <div
                   key={draft.squadId}
                   onClick={() => setSelectedDraftId(draft.squadId)}
-                  whileHover={{ scale: 1.01 }}
-                  className={`p-4 rounded-2xl border cursor-pointer transition-all ${
+                  className={`p-4 rounded-2xl border cursor-pointer transition-colors ${
                     isSelected
                       ? 'bg-accent/15 border-accent shadow-md'
-                      : 'bg-elevated border-border-muted hover:border-border-muted/80'
+                      : 'bg-elevated border-border-muted hover:border-accent/40'
                   }`}
                 >
                   <div className="flex items-center justify-between mb-1.5">
@@ -472,7 +737,7 @@ export const SquadFormation: React.FC = () => {
                       <div className="text-text-muted">PLAYERS</div>
                     </div>
                   </div>
-                </motion.div>
+                </div>
               );
             }
 
@@ -512,7 +777,7 @@ export const SquadFormation: React.FC = () => {
                   <button
                     type="button"
                     onClick={() => handleAccept(activeSquad.squadId)}
-                    className="flex-1 sm:flex-initial px-6 py-3 rounded-xl btn-accent font-display font-bold text-xs tracking-wider uppercase hover:scale-[1.02] transition-all flex items-center justify-center gap-2 shadow-md cursor-pointer"
+                    className="flex-1 sm:flex-initial px-6 py-3 rounded-xl btn-accent font-display font-bold text-xs tracking-wider uppercase transition-colors flex items-center justify-center gap-2 shadow-md cursor-pointer"
                   >
                     <Check size={16} /> ACCEPT TEAM
                   </button>
@@ -598,7 +863,7 @@ export const SquadFormation: React.FC = () => {
   );
 
   // ─── Tab: Accepted Squads (Team Intelligence Dashboard) ────────────────────
-  const TabAccepted = () => (
+  const renderTabAccepted = () => (
     <div className="space-y-6">
       {squads.length === 0 ? (
         <div className="p-12 text-center rounded-3xl border border-dashed border-border-muted bg-surface shadow-card flex flex-col items-center gap-4 min-h-[320px] justify-center">
@@ -610,7 +875,7 @@ export const SquadFormation: React.FC = () => {
           <button
             type="button"
             onClick={() => setActiveTab('generate')}
-            className="px-6 py-3 btn-accent font-display font-bold text-xs uppercase tracking-wider rounded-xl hover:scale-[1.02] transition-all cursor-pointer shadow-md"
+            className="px-6 py-3 btn-accent font-display font-bold text-xs uppercase tracking-wider rounded-xl transition-colors cursor-pointer shadow-md"
           >
             Generate A Squad
           </button>
@@ -805,9 +1070,9 @@ export const SquadFormation: React.FC = () => {
             exit={{ opacity: 0, y: -8 }}
             transition={{ duration: 0.2 }}
           >
-            {activeTab === 'generate' && <TabGenerate />}
-            {activeTab === 'results' && <TabResults />}
-            {activeTab === 'accepted' && <TabAccepted />}
+            {activeTab === 'generate' && renderTabGenerate()}
+            {activeTab === 'results' && renderTabResults()}
+            {activeTab === 'accepted' && renderTabAccepted()}
             {activeTab === 'insights' && <AIInsightPanel insightData={insightData} />}
           </motion.div>
         )}

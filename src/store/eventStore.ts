@@ -32,7 +32,7 @@ interface EventState {
   deleteEvent:      (id: string) => void;
 
   // Lifecycle actions
-  joinEvent:         (eventId: string, userId: string, entryType?: 'solo' | 'team' | 'squad' | 'crew', teamId?: string, teamMembers?: string[]) => Promise<{ success: boolean; message: string }>;
+  joinEvent:         (eventId: string, userId: string, entryType?: 'solo' | 'team' | 'squad' | 'crew', teamId?: string, teamMembers?: string[], role?: string | null) => Promise<{ success: boolean; message: string }>;
   leaveEvent:        (eventId: string, userId: string) => Promise<{ success: boolean; message: string }>;
   updateEventStatus: (eventId: string, status: EventStatus) => void;
   updateBracket:     (eventId: string, bracket: BracketRound[]) => void;
@@ -160,8 +160,8 @@ export const useEventStore = create<EventState>((set, get) => ({
   },
 
   // ── Join event ─────────────────────────────────────────────────────────────
-  joinEvent: async (eventId, userId, entryType = 'solo', teamId, teamMembers) => {
-    const result = await svcJoinEvent(eventId, userId, entryType, teamId, teamMembers);
+  joinEvent: async (eventId, userId, entryType = 'solo', teamId, teamMembers, role = '') => {
+    const result = await svcJoinEvent(eventId, userId, entryType, teamId, teamMembers, role);
     if (result.success) {
       await get().refreshEventData(eventId);
     }

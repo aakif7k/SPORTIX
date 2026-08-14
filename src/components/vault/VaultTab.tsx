@@ -11,6 +11,7 @@ import { useAuthStore } from '@/store/authStore';
 import toast from 'react-hot-toast';
 import { createNotification } from '@/services/notificationService';
 import { useNotificationStore } from '@/store/notificationStore';
+import { SportTagSelector } from '@/components/social/SportTagSelector';
 
 export interface VaultItem {
   id: string;
@@ -846,17 +847,13 @@ const VaultUploadModal: React.FC<{
           </label>
         )}
 
-        {/* Quick Sport Tag Input */}
-        <div className="flex items-center gap-2 pt-1">
-          <span className="font-mono text-[10px] text-text-muted uppercase font-bold">Sport Tag:</span>
-          <input
-            type="text"
-            value={sportTag}
-            onChange={e => setSportTag(e.target.value)}
-            placeholder="e.g. Football"
-            className="flex-1 bg-elevated border border-border-muted rounded-xl px-3 py-1.5 font-mono text-xs text-text-primary outline-none focus:border-accent"
-          />
-        </div>
+        {/* Quick Sport Tag Selector from sportix_sport_roles */}
+        <SportTagSelector
+          value={sportTag}
+          onChange={setSportTag}
+          label="SPORT TAG:"
+          className="pt-1"
+        />
 
         {/* Progress Bar */}
         {uploading && (
@@ -1008,16 +1005,13 @@ const VaultEditModal: React.FC<{
           />
         </div>
 
-        {/* Edit Sport Tag */}
-        <div className="space-y-1.5">
-          <label className="block font-mono text-xs text-text-muted">Sport Tag</label>
-          <input
-            type="text"
-            value={sportTag}
-            onChange={e => setSportTag(e.target.value)}
-            className="w-full bg-elevated border border-border-muted rounded-xl p-2.5 font-mono text-xs text-text-primary outline-none focus:border-accent"
-          />
-        </div>
+        {/* Edit Sport Tag from sportix_sport_roles */}
+        <SportTagSelector
+          value={sportTag}
+          onChange={setSportTag}
+          label="SPORT TAG:"
+          className="pt-1"
+        />
 
         {/* Action Controls */}
         <div className="flex gap-3 pt-2">

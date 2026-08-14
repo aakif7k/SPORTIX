@@ -21,10 +21,11 @@ export const PostMatchReview: React.FC = () => {
     resetFlow
   } = useMatchStore();
 
-  const { addScoreDelta } = usePulseStore();
+  const { pulseScore, addScoreDelta } = usePulseStore();
 
   // Score delta animation states
-  const [animatedScore, setAnimatedScore] = useState(721);
+  const startScore = pulseScore.score || 100;
+  const [animatedScore, setAnimatedScore] = useState(startScore);
   const [showDeltas, setShowDeltas] = useState(false);
 
   useEffect(() => {
@@ -33,8 +34,8 @@ export const PostMatchReview: React.FC = () => {
       const timer1 = setTimeout(() => setShowDeltas(true), 500);
 
       const timer2 = setTimeout(() => {
-        let current = 721;
-        const target = 732;
+        let current = startScore;
+        const target = Math.min(1000, startScore + 11);
         const duration = 1000;
         const startTime = performance.now();
 
@@ -56,7 +57,7 @@ export const PostMatchReview: React.FC = () => {
         clearTimeout(timer2);
       };
     }
-  }, [currentStep]);
+  }, [currentStep, startScore]);
 
   if (!currentMatch) {
     return (
@@ -280,7 +281,7 @@ export const PostMatchReview: React.FC = () => {
 
             {/* Score shift indicators */}
             <div className="flex items-center justify-center gap-6 py-4 border-t border-b border-border-muted">
-              <span className="font-display text-[32px] text-text-muted">721</span>
+              <span className="font-display text-[32px] text-text-muted">{startScore}</span>
               <ArrowRight size={24} className="text-text-secondary" />
               <span className="font-display text-[64px] text-accent shadow-glow-volt-sm px-4 py-1 rounded-2xl bg-accent-surface">
                 {animatedScore}

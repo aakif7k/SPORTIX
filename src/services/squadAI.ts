@@ -49,19 +49,7 @@ interface GeminiSquadResponse {
   };
 }
 
-// POSITIONS BY SPORT
-const POSITIONS_BY_SPORT: Record<string, string[]> = {
-  Football: ['GK', 'ST', 'CM', 'CB', 'LW', 'RW', 'LB', 'RB', 'CDM', 'CAM'],
-  football: ['GK', 'ST', 'CM', 'CB', 'LW', 'RW', 'LB', 'RB', 'CDM', 'CAM'],
-  Basketball: ['PG', 'SG', 'SF', 'PF', 'C'],
-  basketball: ['PG', 'SG', 'SF', 'PF', 'C'],
-  Tennis: ['Single', 'Double Partner'],
-  tennis: ['Single', 'Double Partner'],
-  Cricket: ['BAT', 'BOWL', 'WKT', 'ALL'],
-  cricket: ['BAT', 'BOWL', 'WKT', 'ALL'],
-  Volleyball: ['Setter', 'Libero', 'Outside Hitter', 'Middle Blocker', 'Opposite'],
-  volleyball: ['Setter', 'Libero', 'Outside Hitter', 'Middle Blocker', 'Opposite'],
-};
+import { getSportRolesSync } from './sportsRoleService';
 
 /**
  * Helper to fetch real candidates from event participants and Appwrite profiles.
@@ -159,8 +147,8 @@ export const generateAIPulseSquad = async (
   const rawCandidates = await fetchCandidatesFromEvent(eventId, sport, userProfile.id);
   emit(`> Found ${rawCandidates.length} eligible athletes in event pool. Computing Pulse synergy...`);
 
-  const sportPositions = POSITIONS_BY_SPORT[sport] || POSITIONS_BY_SPORT.football || ['Member'];
-  const userPosition = sport === 'Basketball' || sport === 'basketball' ? 'SG' : 'RW';
+  const sportPositions = getSportRolesSync(sport);
+  const userPosition = sportPositions[0] || 'Captain';
 
   const candidateAthletes: Athlete[] = [];
   const availableAvatars = [...AVATARS];

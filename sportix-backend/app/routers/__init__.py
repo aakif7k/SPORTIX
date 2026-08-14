@@ -18,6 +18,7 @@ from app.routers import (
     upload,
     settings,
     admin,
+    sports,
 )
 
 __all__ = [
@@ -25,5 +26,5 @@ __all__ = [
     "events", "squads", "matches", "pulse",
     "missions", "coins", "badges", "notifications",
     "leaderboard", "autosquad", "search",
-    "upload", "settings", "admin",
+    "upload", "settings", "admin", "sports",
 ]

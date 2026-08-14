@@ -16,7 +16,9 @@ import { getEventLifecycleState } from '../../services/eventLifecycleService';
 import { createNotification } from '../../services/notificationService';
 import toast from 'react-hot-toast';
 
-interface EventJoinModalProps {
+import { DynamicEventRoleSelector } from '../../components/events/DynamicEventRoleSelector';
+
+export interface EventJoinModalProps {
   isOpen: boolean;
   onClose: () => void;
   onJoined: () => void;
@@ -46,6 +48,7 @@ export const EventJoinModal: React.FC<EventJoinModalProps> = ({ isOpen, onClose,
 
   const [step, setStep] = useState<FlowStep>('choice');
   const [category, setCategory] = useState<'Amateur' | 'Semi-Pro' | 'Professional'>('Semi-Pro');
+  const [selectedRole, setSelectedRole] = useState<string>('');
   const [logs, setLogs] = useState<string[]>([]);
   const [generatedSquad, setGeneratedSquad] = useState<any>(null);
   const [readiness, setReadiness] = useState<EventReadinessData | null>(null);
@@ -62,6 +65,7 @@ export const EventJoinModal: React.FC<EventJoinModalProps> = ({ isOpen, onClose,
         return;
       }
       setStep('choice');
+      setSelectedRole('');
       setLogs([]);
       setGeneratedSquad(null);
       getEventReadiness(event.id).then(setReadiness).catch(() => null);
@@ -124,10 +128,11 @@ export const EventJoinModal: React.FC<EventJoinModalProps> = ({ isOpen, onClose,
         currentUserId,
         'squad',
         generatedSquad.squadId,
-        memberUserIds.length > 0 ? memberUserIds : [currentUserId]
+        memberUserIds.length > 0 ? memberUserIds : [currentUserId],
+        selectedRole || 'Athlete'
       );
     } else {
-      await useEventStore.getState().joinEvent(event.id, currentUserId, 'solo');
+      await useEventStore.getState().joinEvent(event.id, currentUserId, 'solo', undefined, undefined, selectedRole || 'Athlete');
     }
 
     // Send Buzz Notification
@@ -152,7 +157,7 @@ export const EventJoinModal: React.FC<EventJoinModalProps> = ({ isOpen, onClose,
 
   const handleJoinSolo = async () => {
     const currentUserId = user?.id || user?.uid || '';
-    await useEventStore.getState().joinEvent(event.id, currentUserId, 'solo');
+    await useEventStore.getState().joinEvent(event.id, currentUserId, 'solo', undefined, undefined, selectedRole || 'Athlete');
     setStep('confirmed');
     setTimeout(() => onJoined(), 1200);
   };
@@ -212,6 +217,16 @@ export const EventJoinModal: React.FC<EventJoinModalProps> = ({ isOpen, onClose,
                         </button>
                       ))}
                     </div>
+                  </div>
+
+                  {/* Sport Role Selection */}
+                  <div className="pt-1">
+                    <DynamicEventRoleSelector
+                      sportName={event.sport}
+                      selectedRole={selectedRole}
+                      onSelectRole={(r) => setSelectedRole(r)}
+                      roleRemainingSpace={readiness?.allocation?.role_remaining_space}
+                    />
                   </div>
 
                   {/* AutoSquad Readiness Banner */}

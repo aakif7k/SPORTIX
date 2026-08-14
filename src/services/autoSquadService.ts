@@ -127,11 +127,14 @@ export async function getRemainingGenerations(): Promise<DailyLimitInfo> {
   }
 }
 
+import { getSportRolesSync } from './sportsRoleService';
+
 /**
  * Generate AutoSquad suggestion via backend engine
  */
 export async function generateAutoSquad(params: {
   sport: string;
+  role?: string;
   event_id?: string;
   entry_type?: 'solo' | 'duo' | 'squad';
   skill_level?: 'casual' | 'amateur' | 'semi_pro' | 'professional';
@@ -193,6 +196,9 @@ export async function generateAutoSquad(params: {
 
   const candidates = (profilesRes.documents || []).filter(p => p.$id !== user.$id);
   const sport = params.sport || 'Football';
+  const availableRoles = getSportRolesSync(sport);
+  const userRole = params.role || availableRoles[0] || 'Midfielder';
+  const otherRoles = availableRoles.filter(r => r !== userRole);
 
   const squadMembers: SquadMember[] = [
     {
@@ -200,7 +206,7 @@ export async function generateAutoSquad(params: {
       full_name: user.name || 'Alex Rivera',
       username: user.email.split('@')[0],
       sport,
-      position: 'RW',
+      position: userRole,
       experience_level: 'pro',
       ssr: 82.0,
       pulse_score: 847,
@@ -209,26 +215,29 @@ export async function generateAutoSquad(params: {
       compatibility_score: 100,
       is_captain: true,
     },
-    ...candidates.slice(0, 4).map((c, i) => ({
-      id: c.$id,
-      full_name: c.full_name || `Athlete ${i + 1}`,
-      username: c.username || `athlete_${i + 1}`,
-      avatar_url: c.avatar_url,
-      sport: c.sport || sport,
-      position: ['GK', 'CB', 'CM', 'ST'][i] || 'CM',
-      experience_level: c.experience_level || 'amateur',
-      ssr: c.level ? Math.min(95, 60 + c.level) : 72.0,
-      ssr_status: 'established' as const,
-      pulse_score: c.pulse_score || 720,
-      level: c.level || 15,
-      distance_km: Number((1.2 + i * 1.5).toFixed(1)),
-      compatibility_score: Math.max(70, 95 - i * 4),
-    })),
+    ...candidates.slice(0, 4).map((c, i) => {
+      const assignedRole = otherRoles[i % otherRoles.length] || availableRoles[i % availableRoles.length] || 'Teammate';
+      return {
+        id: c.$id,
+        full_name: c.full_name || `Athlete ${i + 1}`,
+        username: c.username || `athlete_${i + 1}`,
+        avatar_url: c.avatar_url,
+        sport: c.sport || sport,
+        position: assignedRole,
+        experience_level: c.experience_level || 'amateur',
+        ssr: c.level ? Math.min(95, 60 + c.level) : 72.0,
+        ssr_status: 'established' as const,
+        pulse_score: c.pulse_score || 720,
+        level: c.level || 15,
+        distance_km: Number((1.2 + i * 1.5).toFixed(1)),
+        compatibility_score: Math.max(70, 95 - i * 4),
+      };
+    }),
   ];
 
   const avgScore = Math.round(squadMembers.reduce((a, b) => a + b.compatibility_score, 0) / squadMembers.length);
 
-  // Record request in Appwrite
+  // Record request in Appwrite (with resilient fallback)
   const reqDoc = await databases.createDocument(
     DATABASE_ID,
     COLLECTIONS.AUTOSQUAD_REQUESTS,
@@ -243,7 +252,10 @@ export async function generateAutoSquad(params: {
       reasoning: `Deterministic AutoSquad lineup constructed for ${sport}. Overall compatibility: ${avgScore}%.`,
       created_at: new Date().toISOString(),
     }
-  );
+  ).catch((e) => {
+    console.warn('[AutoSquadService] Appwrite log create fallback:', e);
+    return { $id: 'req_' + ID.unique() } as any;
+  });
 
   const squadData = {
     squadId: `gen_${reqDoc.$id}`,
