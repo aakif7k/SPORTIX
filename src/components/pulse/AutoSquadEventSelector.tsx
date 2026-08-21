@@ -3,8 +3,6 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { Calendar, MapPin, Users, Trophy, Search, ChevronDown, Check, Flame, ShieldCheck, Lock } from 'lucide-react';
 import { databases, DATABASE_ID, COLLECTIONS, Query } from '@/lib/appwrite';
 
-import { MOCK_EVENTS } from '../../services/mockData';
-
 export interface EventOption {
   id: string;
   title: string;
@@ -20,7 +18,7 @@ export interface EventOption {
 
 interface Props {
   selectedEvent: EventOption | null;
-  onSelectEvent: (event: EventOption) => void;
+  onSelectEvent: (event: EventOption | null) => void;
   preselectedEventId?: string | null;
 }
 
@@ -43,32 +41,40 @@ export const AutoSquadEventSelector: React.FC<Props> = ({ selectedEvent, onSelec
 
         let mapped: EventOption[] = [];
         if (res.documents && res.documents.length > 0) {
-          mapped = res.documents.map((d: any) => ({
-            id: d.$id,
-            title: d.title || 'SPORTiX Tournament',
-            sport: d.sport || 'Football',
-            location: d.location || d.venue || 'Metropolitan Arena',
-            city: d.city || 'Chennai',
-            startsAt: d.starts_at || new Date().toISOString(),
-            currentParticipants: d.current_participants || 12,
-            maxParticipants: d.max_participants || 24,
-            bannerUrl: d.banner_url || null,
-            status: d.status || 'upcoming',
-          }));
-        } else {
-          // Fallback to MOCK_EVENTS if Appwrite collection has 0 events
-          mapped = MOCK_EVENTS.map(m => ({
-            id: m.id,
-            title: m.title,
-            sport: m.sport,
-            location: m.location,
-            city: m.location.split(',')[0] || 'Chennai',
-            startsAt: new Date(Date.now() + 86400000 * 2).toISOString(),
-            currentParticipants: m.participants?.length || 14,
-            maxParticipants: m.maxParticipants || 32,
-            bannerUrl: m.bannerImage || m.banner_image_url || null,
-            status: m.status || 'upcoming',
-          }));
+          // Fetch real participant counts for each event
+          const eventOptions = await Promise.all(
+            res.documents.map(async (d: any) => {
+              let realPartCount = 0;
+              try {
+                const partsRes = await databases.listDocuments(
+                  DATABASE_ID,
+                  COLLECTIONS.EVENT_PARTICIPANTS,
+                  [Query.equal('event_id', d.$id), Query.limit(200)]
+                );
+                const confirmed = (partsRes.documents || []).filter((p: any) => {
+                  const s = (p.status || 'confirmed').toLowerCase();
+                  return s !== 'withdrawn' && s !== 'cancelled' && s !== 'removed';
+                });
+                realPartCount = confirmed.length;
+              } catch {
+                realPartCount = Number(d.current_participants || 0);
+              }
+
+              return {
+                id: d.$id,
+                title: d.title || 'SPORTiX Event',
+                sport: d.sport || 'Football',
+                location: d.location || d.venue || 'SPORTiX Arena',
+                city: d.city || 'Chennai',
+                startsAt: d.starts_at || new Date().toISOString(),
+                currentParticipants: realPartCount,
+                maxParticipants: Number(d.max_participants || 24),
+                bannerUrl: d.banner_url || null,
+                status: d.status || 'upcoming',
+              };
+            })
+          );
+          mapped = eventOptions;
         }
 
         if (mounted) {
@@ -85,23 +91,8 @@ export const AutoSquadEventSelector: React.FC<Props> = ({ selectedEvent, onSelec
         }
       } catch (err) {
         console.error('[AutoSquadEventSelector] Failed to load events:', err);
-        const fallback = MOCK_EVENTS.map(m => ({
-          id: m.id,
-          title: m.title,
-          sport: m.sport,
-          location: m.location,
-          city: m.location.split(',')[0] || 'Chennai',
-          startsAt: new Date(Date.now() + 86400000 * 2).toISOString(),
-          currentParticipants: m.participants?.length || 14,
-          maxParticipants: m.maxParticipants || 32,
-          bannerUrl: m.bannerImage || m.banner_image_url || null,
-          status: m.status || 'upcoming',
-        }));
         if (mounted) {
-          setEvents(fallback);
-          if (!selectedEvent && fallback.length > 0) {
-            onSelectEvent(fallback[0]);
-          }
+          setEvents([]);
         }
       } finally {
         if (mounted) setLoading(false);

@@ -178,7 +178,7 @@ async def generate(user_id: str, payload: AutoSquadRequest) -> dict:
     except Exception:
         all_crew_members = []
 
-    # 3. HARD ELIGIBILITY FILTER
+    # 3. REAL EVENT CANDIDATES & HARD ELIGIBILITY FILTER
     queries = [
         Q.equal("is_active", True),
         Q.limit(100),
@@ -189,23 +189,64 @@ async def generate(user_id: str, payload: AutoSquadRequest) -> dict:
     eligible_candidates = []
     exclusion_reasons = []
 
-    # Check registered event participants to prevent conflicts
-    registered_user_ids = set()
+    # If an event is selected, verify >= 10 confirmed participants and prioritize them
     if payload.event_id:
         try:
             parts_res = db.list_documents(
                 DB_ID, settings.collection_event_participants,
-                queries=[Q.equal("event_id", payload.event_id), Q.equal("status", "confirmed"), Q.limit(200)]
+                queries=[Q.equal("event_id", payload.event_id), Q.limit(200)]
             )
-            registered_user_ids = {p.get("user_id") for p in parts_res.get("documents", [])}
-        except Exception:
-            registered_user_ids = set()
+            raw_parts = parts_res.get("documents", [])
+            confirmed_parts = [
+                p for p in raw_parts
+                if (p.get("status") or "confirmed").lower() not in ["withdrawn", "cancelled", "removed"]
+            ]
+            if len(confirmed_parts) < 10:
+                raise ValueError(
+                    f"AutoSquad locked: {len(confirmed_parts)} / 10 athletes joined. At least 10 athletes must join this event to begin matchmaking."
+                )
+
+            for p in confirmed_parts:
+                p_uid = p.get("user_id")
+                if p_uid and p_uid != user_id:
+                    cand_doc = next((c for c in candidates_raw if c.get("$id") == p_uid), None)
+                    if not cand_doc:
+                        try:
+                            cand_doc = db.get_document(DB_ID, settings.collection_users, p_uid)
+                        except Exception:
+                            cand_doc = None
+                    
+                    if cand_doc:
+                        cand_entry = {
+                            **cand_doc,
+                            "position": p.get("selected_role") or cand_doc.get("position") or "Athlete",
+                            "_distance_km": 0.5,
+                            "_is_event_participant": True,
+                        }
+                    else:
+                        cand_entry = {
+                            "$id": p_uid,
+                            "full_name": p.get("user_name") or f"Athlete {p_uid[:6]}",
+                            "username": f"user_{p_uid[:6]}",
+                            "sport": sport,
+                            "position": p.get("selected_role") or "Athlete",
+                            "level": 15,
+                            "pulse_score": 750,
+                            "_distance_km": 0.5,
+                            "_is_event_participant": True,
+                        }
+                    eligible_candidates.append(cand_entry)
+        except ValueError:
+            raise
+        except Exception as err:
+            print(f"[ai_squad_service] Fetching event participants warning: {err}")
 
     max_radius_km = float(payload.radius_km) if hasattr(payload, "radius_km") and payload.radius_km else 25.0
+    existing_cand_ids = {c.get("$id") for c in eligible_candidates}
 
     for cand in candidates_raw:
         cand_id = cand.get("$id")
-        if cand_id == user_id:
+        if cand_id == user_id or cand_id in existing_cand_ids:
             continue
 
         # Hard Filter 1: Sport Match
@@ -215,12 +256,7 @@ async def generate(user_id: str, payload: AutoSquadRequest) -> dict:
             exclusion_reasons.append({"user_id": cand_id, "name": cand.get("full_name"), "reason": f"Sport mismatch (athlete plays {cand_sport})"})
             continue
 
-        # Hard Filter 2: Event Registration Conflict
-        if cand_id in registered_user_ids:
-            exclusion_reasons.append({"user_id": cand_id, "name": cand.get("full_name"), "reason": "Already registered in this event"})
-            continue
-
-        # Hard Filter 3: Radius / Location
+        # Hard Filter 2: Radius / Location
         cand_lat = cand.get("lat")
         cand_lng = cand.get("lng")
         distance_km = 5.0  # default estimate
@@ -583,6 +619,39 @@ async def accept(request_id: str, user_id: str) -> dict:
                 )
             except Exception:
                 pass  # Ignore duplicate registrations
+
+    # Create or update squad in squads collection
+    squad_name = squad_data.get("name") or f"Volt {req_doc.get('sport', 'Football')} Squad"
+    try:
+        members_list = squad_data.get("members", [])
+        avg_p = int(sum(m.get("pulse_score", 700) for m in members_list) / max(1, len(members_list)))
+        db.create_document(
+            DB_ID,
+            settings.collection_squads,
+            ID.unique(),
+            data={
+                "name": squad_name,
+                "sport": req_doc.get("sport", "Football"),
+                "captain_id": user_id,
+                "members": json.dumps(members_list),
+                "chemistry": json.dumps(squad_data.get("score_breakdown", {})),
+                "pulse_avg": avg_p,
+                "win_rate": 80,
+                "match_history": json.dumps([]),
+                "achievements": json.dumps([]),
+                "formation": squad_data.get("formation", "4-3-3"),
+                "tactical_notes": squad_data.get("reasoning", ""),
+                "tournament_ids": json.dumps([]),
+                "events": json.dumps([event_id] if event_id else []),
+                "posts": json.dumps([]),
+                "xp_boost_active": False,
+                "streak_multiplier": 1.0,
+                "tags": [req_doc.get("sport", "Football"), "AutoSquad AI"],
+                "looking_for": [],
+            }
+        )
+    except Exception as squad_err:
+        print(f"[AutoSquad] Squad creation in collection_squads notice: {squad_err}")
 
     return {"status": "accepted", "squad_data": squad_data}
 

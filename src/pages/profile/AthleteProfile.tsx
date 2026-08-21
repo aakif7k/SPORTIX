@@ -280,21 +280,52 @@ export const AthleteProfile: React.FC = () => {
         </div>
       )}
 
-      {/* ── TAB NAVIGATION ────────────────────────────────────────────────── */}
-      <div className="flex gap-2 bg-surface rounded-2xl p-1.5 border border-border-muted overflow-x-auto scrollbar-none">
-        {TABS.map(tab => (
-          <button
-            key={tab}
-            onClick={() => setActiveTab(tab)}
-            className={`flex-1 min-w-[110px] py-2.5 px-4 rounded-xl text-xs font-mono font-bold uppercase tracking-wider transition-all whitespace-nowrap ${
-              activeTab === tab
-                ? 'bg-accent text-volt-text shadow-md'
-                : 'text-text-secondary hover:text-text-primary hover:bg-elevated'
-            }`}
-          >
-            {tab}
-          </button>
-        ))}
+      {/* ── TAB NAVIGATION (Futuristic Cyber HUD Tabs) ───────────────────────── */}
+      <div className="relative flex gap-1.5 sm:gap-2 bg-[#0A0A0A]/90 backdrop-blur-xl rounded-2xl p-1.5 border border-white/10 shadow-[0_4px_24px_rgba(0,0,0,0.6)] overflow-x-auto scrollbar-none">
+        {TABS.map((tab) => {
+          const isActive = activeTab === tab;
+          const isVault = tab === 'VaultD';
+
+          return (
+            <button
+              key={tab}
+              onClick={() => setActiveTab(tab)}
+              className={`relative flex-1 min-w-[120px] py-3 px-4 rounded-xl text-xs font-mono font-bold uppercase tracking-wider transition-colors duration-200 whitespace-nowrap flex items-center justify-center gap-2 z-10 ${
+                isActive
+                  ? 'text-black'
+                  : isVault
+                  ? 'text-[#CCFF00] hover:text-white hover:bg-white/5'
+                  : 'text-text-secondary hover:text-text-primary hover:bg-white/5'
+              }`}
+            >
+              {isActive && (
+                <motion.div
+                  layoutId="profileActiveTabIndicator"
+                  className={`absolute inset-0 rounded-xl ${
+                    isVault
+                      ? 'bg-[#CCFF00] shadow-[0_0_25px_rgba(204,255,0,0.45)]'
+                      : 'bg-[#CCFF00] shadow-[0_0_20px_rgba(204,255,0,0.35)]'
+                  }`}
+                  transition={{ type: 'spring', stiffness: 450, damping: 35 }}
+                />
+              )}
+
+              <span className="relative z-10 flex items-center gap-1.5">
+                {isVault ? (
+                  <>
+                    <Zap size={13} className={isActive ? 'text-black fill-black' : 'text-[#CCFF00] fill-[#CCFF00] animate-pulse'} />
+                    <span>VAULT<span className={isActive ? 'text-black' : 'text-[#CCFF00]'}>:D</span></span>
+                    {!isActive && (
+                      <span className="w-1.5 h-1.5 rounded-full bg-[#CCFF00] animate-ping ml-0.5" />
+                    )}
+                  </>
+                ) : (
+                  <span>{tab}</span>
+                )}
+              </span>
+            </button>
+          );
+        })}
       </div>
 
       {/* ── TAB CONTENT SECTIONS ──────────────────────────────────────────── */}

@@ -5,7 +5,7 @@ import {
   Calendar, MapPin, Users, Zap, Bell, BellOff,
   Trophy, Clock, Star, ArrowRight, ArrowLeft, UserPlus,
   BarChart3, CheckCircle2, Check, Timer,
-  Hash, Share2, Settings
+  Hash, Share2, Settings, Award, AlertTriangle
 } from 'lucide-react';
 import { useEventStore } from '../../store/eventStore';
 import { useAuthStore } from '../../store/authStore';
@@ -27,6 +27,10 @@ import {
   type EventAnnouncement,
   type EventScheduleItem,
 } from '../../services/announcementService';
+import {
+  getPlayerEventReport,
+  type EventReportItem,
+} from '../../services/eventReportService';
 
 // ─── Particle canvas background ──────────────────────────────────────────────
 const ParticleField: React.FC = () => {
@@ -172,6 +176,7 @@ export const EventDetail: React.FC = () => {
   const [readiness, setReadiness]       = useState<EventReadinessData | null>(null);
   const [announcements, setAnnouncements] = useState<EventAnnouncement[]>([]);
   const [scheduleItems, setScheduleItems] = useState<EventScheduleItem[]>([]);
+  const [playerReport, setPlayerReport]   = useState<EventReportItem | null>(null);
 
   // Real-time ticker state to auto-update event status live
   const [nowDate, setNowDate] = useState<Date>(new Date());
@@ -201,6 +206,12 @@ export const EventDetail: React.FC = () => {
     setScheduleItems(sch);
   };
 
+  const fetchReport = async (eventId: string, uid: string) => {
+    if (!eventId || !uid) return;
+    const res = await getPlayerEventReport(eventId, uid);
+    setPlayerReport(res.report);
+  };
+
   // ── Realtime & initial load ──────────────────────────────────────────────
   useEffect(() => {
     if (!id) return;
@@ -209,6 +220,9 @@ export const EventDetail: React.FC = () => {
     fetchParticipants(id);
     fetchReadiness(id);
     fetchAnnouncementsAndSchedule(id);
+    if (user?.id) {
+      fetchReport(id, user.id);
+    }
 
     // Appwrite Realtime subscription for event_participants
     const channel = `databases.${DATABASE_ID}.collections.${COLLECTIONS.EVENT_PARTICIPANTS}.documents`;
@@ -216,13 +230,14 @@ export const EventDetail: React.FC = () => {
       if (response.payload && response.payload.event_id === id) {
         fetchParticipants(id);
         loadEvent(id);
+        if (user?.id) fetchReport(id, user.id);
       }
     });
 
     return () => {
       unsubscribe();
     };
-  }, [id]);
+  }, [id, user?.id]);
 
   const rawEvent = events.find(e => e.id === id);
   const currentUserId = user?.id || user?.uid || '';
@@ -560,7 +575,7 @@ export const EventDetail: React.FC = () => {
             <motion.button
               whileHover={{ scale: 1.03, y: -4 }}
               whileTap={{ scale: 0.97 }}
-              onClick={() => navigate(`/app/events/${event.id}/manage`)}
+              onClick={() => navigate(lifecycle.isEnded ? `/app/events/${event.id}/manage?tab=reports` : `/app/events/${event.id}/manage`)}
               className="w-full rounded-[22px] p-5 text-left relative overflow-hidden group transition-all"
               style={{
                 background: 'linear-gradient(135deg, #CCFF00 0%, #88FF00 100%)',
@@ -574,16 +589,62 @@ export const EventDetail: React.FC = () => {
                 style={{ borderColor: 'rgba(0,0,0,0.3)' }} />
 
               <div className="w-10 h-10 rounded-[14px] mb-4 flex items-center justify-center bg-black/15">
-                <Settings size={20} className="text-black" />
+                {lifecycle.isEnded ? <Award size={20} className="text-black" /> : <Settings size={20} className="text-black" />}
               </div>
               <div className="font-display text-[17px] tracking-wide leading-tight text-black">
-                MANAGE CLASH
+                {lifecycle.isEnded ? 'REVIEW MATCH REPORTS' : 'MANAGE CLASH'}
               </div>
               <div className="font-mono text-[9px] mt-1 text-black/65">
-                Dashboard & Settings
+                {lifecycle.isEnded ? 'Verify athlete telemetry & approve stats' : 'Dashboard & Settings'}
               </div>
               <div className="absolute bottom-4 right-4 flex items-center gap-1">
                 <ArrowRight size={14} className="text-black/60 group-hover:translate-x-1 transition-transform" />
+              </div>
+            </motion.button>
+          ) : lifecycle.isEnded && isJoined ? (
+            <motion.button
+              whileHover={{ scale: 1.03, y: -4 }}
+              whileTap={{ scale: 0.97 }}
+              onClick={() => navigate(`/app/events/${event.id}/report`)}
+              className="w-full rounded-[22px] p-5 text-left relative overflow-hidden group transition-all"
+              style={{
+                background: playerReport?.validationStatus === 'VERIFIED'
+                  ? 'linear-gradient(135deg, rgba(16,185,129,0.15) 0%, rgba(16,185,129,0.05) 100%)'
+                  : playerReport?.validationStatus === 'CORRECTION_REQUESTED'
+                  ? 'linear-gradient(135deg, rgba(245,158,11,0.2) 0%, rgba(245,158,11,0.05) 100%)'
+                  : playerReport
+                  ? 'linear-gradient(135deg, rgba(204,255,0,0.15) 0%, rgba(204,255,0,0.05) 100%)'
+                  : 'linear-gradient(135deg, #CCFF00 0%, #88FF00 100%)',
+                border: playerReport ? '1px solid rgba(204,255,0,0.3)' : 'none',
+                boxShadow: playerReport ? 'none' : '0 8px 32px rgba(204,255,0,0.35)',
+                minHeight: 150
+              }}
+            >
+              <div className={`w-10 h-10 rounded-[14px] mb-4 flex items-center justify-center ${playerReport ? 'bg-white/10' : 'bg-black/15'}`}>
+                {playerReport?.validationStatus === 'VERIFIED' ? (
+                  <CheckCircle2 size={20} className="text-emerald-400" />
+                ) : playerReport?.validationStatus === 'CORRECTION_REQUESTED' ? (
+                  <AlertTriangle size={20} className="text-amber-400" />
+                ) : (
+                  <Zap size={20} className={playerReport ? 'text-[#CCFF00]' : 'text-black'} />
+                )}
+              </div>
+              <div className={`font-display text-[17px] tracking-wide leading-tight ${playerReport ? 'text-white' : 'text-black'}`}>
+                {playerReport?.validationStatus === 'VERIFIED'
+                  ? 'MATCH REPORT VERIFIED ✓'
+                  : playerReport?.validationStatus === 'CORRECTION_REQUESTED'
+                  ? 'CORRECTION REQUESTED (CLICK TO FIX)'
+                  : playerReport
+                  ? 'REPORT SUBMITTED (UNDER REVIEW)'
+                  : 'SUBMIT MATCH REPORT (+40 PULSE)'}
+              </div>
+              <div className={`font-mono text-[9px] mt-1 ${playerReport ? 'text-text-muted' : 'text-black/65'}`}>
+                {playerReport
+                  ? `Status: ${playerReport.validationStatus} (Click to view report)`
+                  : 'Record your verified match stats & earn rewards'}
+              </div>
+              <div className="absolute bottom-4 right-4 flex items-center gap-1">
+                <ArrowRight size={14} className={`${playerReport ? 'text-white/60' : 'text-black/60'} group-hover:translate-x-1 transition-transform`} />
               </div>
             </motion.button>
           ) : (

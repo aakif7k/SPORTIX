@@ -24,18 +24,26 @@ const RESULT_STYLES = {
   draw: { text: '#FBBF24', bg: 'rgba(251,191,36,0.10)',  border: 'rgba(251,191,36,0.3)',  label: 'DRAW' },
 };
 
-const VALIDATION_ICON = {
-  validated: <CheckCircle2 size={12} style={{ color: '#4ADE80' }} />,
-  pending:   <Clock size={12} style={{ color: '#FBBF24' }} />,
-  disputed:  <AlertTriangle size={12} style={{ color: '#F87171' }} />,
-  partial:   <Clock size={12} style={{ color: '#FBBF24' }} />,
+const VALIDATION_ICON: Record<string, React.ReactNode> = {
+  verified:             <CheckCircle2 size={12} style={{ color: '#4ADE80' }} />,
+  validated:            <CheckCircle2 size={12} style={{ color: '#4ADE80' }} />,
+  rectified:            <CheckCircle2 size={12} style={{ color: '#00D4FF' }} />,
+  submitted:            <Clock size={12} style={{ color: '#CCFF00' }} />,
+  pending:              <Clock size={12} style={{ color: '#FBBF24' }} />,
+  partial:              <Clock size={12} style={{ color: '#FBBF24' }} />,
+  correction_requested: <AlertTriangle size={12} style={{ color: '#FBBF24' }} />,
+  disputed:             <AlertTriangle size={12} style={{ color: '#F87171' }} />,
 };
 
-const VALIDATION_TEXT = {
-  validated: { text: '✓ Validated by teammates',  color: '#4ADE80' },
-  pending:   { text: '⏳ Awaiting validation',     color: '#FBBF24' },
-  disputed:  { text: '⚠ Disputed',                color: '#F87171' },
-  partial:   { text: '⏳ Partially validated',     color: '#FBBF24' },
+const VALIDATION_TEXT: Record<string, { text: string; color: string }> = {
+  verified:             { text: '✓ Verified by Host',          color: '#4ADE80' },
+  validated:            { text: '✓ Validated by Teammates',     color: '#4ADE80' },
+  rectified:            { text: '✓ Rectified by Host',          color: '#00D4FF' },
+  submitted:            { text: '⏳ Awaiting Host Verification', color: '#CCFF00' },
+  pending:              { text: '⏳ Awaiting Validation',        color: '#FBBF24' },
+  partial:              { text: '⏳ Partially Validated',        color: '#FBBF24' },
+  correction_requested: { text: '⚠ Correction Requested',       color: '#FBBF24' },
+  disputed:             { text: '⚠ Disputed by Peers',          color: '#F87171' },
 };
 
 export const MatchHistoryCard: React.FC<MatchHistoryCardProps> = ({

@@ -30,7 +30,7 @@ const BARS = [
 ];
 
 export const PulseShowcase: React.FC = () => (
-  <section className="py-24 bg-[#080808]">
+  <section id="pulse" className="py-24 bg-[#080808] scroll-mt-20">
     <div className="max-w-[1400px] mx-auto px-6 lg:px-12">
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-12 lg:gap-20 items-start">
 

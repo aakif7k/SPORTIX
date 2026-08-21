@@ -209,10 +209,13 @@ const LevelProgressSection: React.FC = () => {
 const DailyRewardsSection: React.FC = () => {
   const { dailyRewards, streakDays, claimDailyReward } = useGamificationStore();
 
+  const todayReward = dailyRewards.find(r => r.isToday && !r.claimed);
+  const claimedCount = dailyRewards.filter(r => r.claimed).length;
+
   return (
     <motion.div
       initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.15 }}
-      className="rounded-[20px] border border-border-muted bg-surface shadow-card p-6"
+      className="rounded-[20px] border border-border-muted bg-surface shadow-card p-6 space-y-4"
     >
       <SectionHeader
         icon={<Gift size={18} />}
@@ -225,22 +228,72 @@ const DailyRewardsSection: React.FC = () => {
       {/* Streak banner */}
       <StreakBanner streak={streakDays} />
 
+      {/* Dynamic Collection Status Banner */}
+      {todayReward ? (
+        <motion.div
+          initial={{ opacity: 0, scale: 0.98 }}
+          animate={{ opacity: 1, scale: 1 }}
+          className="p-3.5 rounded-2xl bg-volt/10 border border-volt/40 shadow-[0_0_20px_rgba(204,255,0,0.12)] flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 text-xs font-mono"
+        >
+          <div className="flex items-center gap-3">
+            <div className="w-9 h-9 rounded-xl bg-volt text-volt-text flex items-center justify-center font-black text-base shadow-[0_0_10px_rgba(204,255,0,0.6)]">
+              ⚡
+            </div>
+            <div>
+              <p className="font-bold text-volt text-xs uppercase tracking-wide">
+                Day {todayReward.day} Reward Ready to Collect!
+              </p>
+              <p className="text-text-secondary text-[11px] mt-0.5">
+                Click <strong className="text-volt">COLLECT</strong> on Day {todayReward.day} below to earn <strong className="text-white">+{todayReward.pulseReward} Pulse</strong> & maintain your daily streak.
+              </p>
+            </div>
+          </div>
+
+          <button
+            onClick={() => claimDailyReward(todayReward.day)}
+            className="w-full sm:w-auto px-5 py-2.5 rounded-xl bg-volt hover:bg-volt-light text-volt-text font-mono font-black text-xs uppercase tracking-wider shadow-[0_0_16px_rgba(204,255,0,0.7)] hover:scale-105 active:scale-95 transition-all cursor-pointer flex items-center justify-center gap-1.5 self-stretch sm:self-auto"
+          >
+            <Zap size={14} className="fill-current" />
+            <span>COLLECT NOW (+{todayReward.pulseReward})</span>
+          </button>
+        </motion.div>
+      ) : (
+        <div className="p-3.5 rounded-2xl bg-emerald-950/20 border border-emerald-500/30 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 text-xs font-mono">
+          <div className="flex items-center gap-3">
+            <div className="w-9 h-9 rounded-xl bg-emerald-500/20 border border-emerald-500/40 text-emerald-400 flex items-center justify-center font-bold text-base">
+              ✓
+            </div>
+            <div>
+              <p className="font-bold text-emerald-400 text-xs uppercase tracking-wide">
+                Today's Daily Reward Collected!
+              </p>
+              <p className="text-text-secondary text-[11px] mt-0.5">
+                You have collected today's reward ({claimedCount}/7 days completed). Next reward unlocks tomorrow at 12:00 AM Midnight.
+              </p>
+            </div>
+          </div>
+          <span className="text-[10px] text-text-muted px-3 py-1.5 rounded-xl bg-base border border-border-muted/50 font-bold self-start sm:self-auto">
+            1 Reward / Day
+          </span>
+        </div>
+      )}
+
       {/* Reward cards strip */}
-      <div className="flex gap-3 overflow-x-auto pb-2 mt-4" style={{ scrollbarWidth: 'none' }}>
+      <div className="flex gap-3 overflow-x-auto pb-2 pt-1" style={{ scrollbarWidth: 'none' }}>
         {dailyRewards.map(reward => (
           <RewardCard key={reward.day} reward={reward} onClaim={claimDailyReward} />
         ))}
       </div>
 
       {/* Weekly bonus callout */}
-      <div className="mt-4 p-3 rounded-[12px] border border-volt/15 bg-volt/5 flex items-center gap-3">
+      <div className="p-3.5 rounded-2xl border border-volt/20 bg-volt/5 flex items-center gap-3">
         <div className="text-2xl">👑</div>
         <div className="flex-1">
           <p className="font-label text-sm font-semibold text-volt">Day 7 Weekly Bonus</p>
           <p className="font-mono text-[10px] text-text-secondary mt-0.5">+100 Pulse · 2x XP Booster · Exclusive Title</p>
         </div>
-        <div className="flex items-center gap-1 text-text-muted font-mono text-[10px]">
-          <Lock size={10} /> {7 - streakDays}d left
+        <div className="flex items-center gap-1.5 text-text-muted font-mono text-[10px] bg-base px-2.5 py-1 rounded-lg border border-border-muted/40">
+          <Lock size={11} /> {Math.max(0, 7 - claimedCount)}d left
         </div>
       </div>
     </motion.div>

@@ -4,7 +4,15 @@ export type PerformanceSport = 'football' | 'cricket' | 'basketball' | 'running'
 
 export type MatchResult = 'win' | 'loss' | 'draw';
 
-export type ValidationStatus = 'pending' | 'validated' | 'disputed' | 'partial';
+export type ValidationStatus =
+  | 'pending'
+  | 'validated'
+  | 'verified'
+  | 'submitted'
+  | 'disputed'
+  | 'partial'
+  | 'correction_requested'
+  | 'rectified';
 
 // ─── SPORT-SPECIFIC STAT INTERFACES ──────────────────────────────────────────
 

@@ -144,6 +144,7 @@ const StatsBar: React.FC = () => {
 
   return (
     <section
+      id="features"
       ref={sectionRef}
       style={{
         width: '100%',

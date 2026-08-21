@@ -113,7 +113,8 @@ export const AutoSquadShowcase: React.FC = () => {
 
   return (
     <section
-      className="py-24 relative overflow-hidden"
+      id="autosquad"
+      className="py-24 relative overflow-hidden scroll-mt-20"
       ref={inViewRef}
       style={{
         background: "#0C0C0C",

@@ -1,104 +1,150 @@
-import { databases, Query, DATABASE_ID, COLLECTIONS } from '../api/appwrite';
+/**
+ * src/services/profileService.ts
+ * ─────────────────────────────────────────────────────────────────────────────
+ * Profile CRUD against the `profiles` collection.
+ * All writes are scoped to the authenticated user's $id — never trust cached IDs
+ * for ownership-sensitive operations.
+ */
+import { account, databases, DATABASE_ID, COLLECTIONS, Query } from '../api/appwrite';
 import { UserProfile } from '../types';
-import { getMediaFileUrl } from './storageService';
+import { toUserProfile } from './authService';
+import { storageService } from './storageService';
 
-function docToProfile(doc: any): UserProfile {
-  const fileUrl = doc.profile_image_url || getMediaFileUrl(doc.profile_image_file_id) || doc.avatar_url || null;
-
-  return {
-    id: doc.$id,
-    full_name: doc.full_name || '',
-    username: doc.username || '',
-    email: doc.email || '',
-    avatar_url: fileUrl,
-    profile_image_file_id: doc.profile_image_file_id || null,
-    profile_image_url: fileUrl,
-    sport: doc.sport || 'Multi-Sport',
-    sports: doc.sports || [],
-    role: doc.role || 'athlete',
-    location: doc.location || '',
-    experience_level: doc.experience_level || 'amateur',
-    is_open_to_recruit: doc.is_open_to_recruit ?? true,
-    pulse_score: doc.pulse_score || 100,
-    level: doc.level || 1,
-    bio: doc.bio || '',
-    created_at: doc.$createdAt,
-  };
-}
-
-export async function getProfile(uid: string): Promise<UserProfile | null> {
-  if (!uid) return null;
-
-  try {
-    const doc = await databases.getDocument(DATABASE_ID, COLLECTIONS.PROFILES, uid);
-    return docToProfile(doc);
-  } catch {
+export const profileService = {
+  /** Get any user profile by Appwrite document ID. */
+  async getProfile(userId: string): Promise<UserProfile | null> {
     try {
-      const res = await databases.listDocuments(
-        DATABASE_ID,
-        COLLECTIONS.PROFILES,
-        [Query.equal('username', uid.toLowerCase().trim()), Query.limit(1)]
-      );
-      if (res.documents.length > 0) {
-        return docToProfile(res.documents[0]);
+      const doc = await databases.getDocument(DATABASE_ID, COLLECTIONS.PROFILES, userId);
+      return toUserProfile(doc);
+    } catch {
+      return null;
+    }
+  },
+
+  /** Get the currently authenticated user's own profile. */
+  async getMyProfile(): Promise<UserProfile | null> {
+    try {
+      const raw = await account.get();
+      return profileService.getProfile(raw.$id);
+    } catch {
+      return null;
+    }
+  },
+
+  /**
+   * Update the authenticated user's profile.
+   * Verifies session ownership at call time.
+   */
+  async updateProfile(data: Partial<UserProfile>): Promise<UserProfile> {
+    const raw = await account.get(); // Always verify — never trust cached ID
+    const { $id, $createdAt, $updatedAt, ...safeData } = data as any;
+
+    const doc = await databases.updateDocument(
+      DATABASE_ID,
+      COLLECTIONS.PROFILES,
+      raw.$id,
+      { ...safeData, updated_at: new Date().toISOString() },
+    );
+    return toUserProfile(doc);
+  },
+
+  /** Complete onboarding — sets is_onboarding_complete = true. */
+  async completeOnboarding(data: {
+    role:             string;
+    sport:            string;
+    sports:           string[];
+    experience_level: string;
+    location:         string;
+    bio:              string;
+    avatar_url:       string | null;
+  }): Promise<UserProfile> {
+    return profileService.updateProfile({
+      ...data,
+      is_onboarding_complete: true,
+    } as any);
+  },
+
+  /**
+   * Upload an avatar image and update the profile.
+   * Returns the updated profile with the new avatar URL.
+   */
+  async uploadAvatar(fileUri: string, mimeType: string): Promise<string> {
+    const { url } = await storageService.upload(fileUri, mimeType, `avatar_${Date.now()}.jpg`);
+    return url;
+  },
+
+  /** Search profiles by username, sport, or location. */
+  async searchProfiles(query: string, limit = 20): Promise<UserProfile[]> {
+    try {
+      const res = await databases.listDocuments(DATABASE_ID, COLLECTIONS.PROFILES, [
+        Query.search('username', query),
+        Query.limit(limit),
+      ]);
+      return res.documents.map(toUserProfile);
+    } catch {
+      return [];
+    }
+  },
+
+  /** Check username availability. */
+  async checkUsernameAvailable(username: string): Promise<boolean> {
+    try {
+      const res = await databases.listDocuments(DATABASE_ID, COLLECTIONS.PROFILES, [
+        Query.equal('username', username.toLowerCase().trim()),
+        Query.limit(1),
+      ]);
+      return res.total === 0;
+    } catch {
+      return true;
+    }
+  },
+
+  /** Follow or unfollow a user. Returns the new follow state. */
+  async toggleFollow(targetUserId: string): Promise<boolean> {
+    const raw = await account.get();
+    const myId = raw.$id;
+
+    if (myId === targetUserId) return false;
+
+    try {
+      // Check if already following
+      const existing = await databases.listDocuments(DATABASE_ID, COLLECTIONS.FOLLOWERS, [
+        Query.equal('follower_id', myId),
+        Query.equal('following_id', targetUserId),
+        Query.limit(1),
+      ]);
+
+      if (existing.total > 0) {
+        // Unfollow
+        await databases.deleteDocument(DATABASE_ID, COLLECTIONS.FOLLOWERS, existing.documents[0].$id);
+        return false;
+      } else {
+        // Follow
+        const { ID } = await import('../api/appwrite');
+        await databases.createDocument(DATABASE_ID, COLLECTIONS.FOLLOWERS, ID.unique(), {
+          follower_id:  myId,
+          following_id: targetUserId,
+          created_at:   new Date().toISOString(),
+        });
+        return true;
       }
-    } catch { /* ignore */ }
-
-    return null;
-  }
-}
-
-export async function searchProfiles(
-  searchTerm: string = '',
-  filters?: {
-    sport?: string;
-    experienceLevel?: string;
-    openToRecruit?: boolean;
-    location?: string;
-  }
-): Promise<UserProfile[]> {
-  try {
-    const queries: string[] = [Query.limit(50)];
-
-    if (filters?.openToRecruit) {
-      queries.push(Query.equal('is_open_to_recruit', true));
+    } catch {
+      return false;
     }
+  },
 
-    const res = await databases.listDocuments(DATABASE_ID, COLLECTIONS.PROFILES, queries);
-    let profiles = res.documents.map(docToProfile);
-
-    if (filters?.sport && filters.sport !== 'all') {
-      const s = filters.sport.toLowerCase();
-      profiles = profiles.filter(p =>
-        p.sport.toLowerCase() === s || p.sports?.some(sp => sp.toLowerCase() === s)
-      );
+  /** Check if the current user is following a target user. */
+  async isFollowing(targetUserId: string): Promise<boolean> {
+    try {
+      const raw = await account.get();
+      const res = await databases.listDocuments(DATABASE_ID, COLLECTIONS.FOLLOWERS, [
+        Query.equal('follower_id', raw.$id),
+        Query.equal('following_id', targetUserId),
+        Query.limit(1),
+      ]);
+      return res.total > 0;
+    } catch {
+      return false;
     }
-
-    if (filters?.experienceLevel && filters.experienceLevel !== 'all') {
-      const l = filters.experienceLevel.toLowerCase();
-      profiles = profiles.filter(p => p.experience_level?.toLowerCase() === l);
-    }
-
-    if (filters?.location?.trim()) {
-      const loc = filters.location.toLowerCase().trim();
-      profiles = profiles.filter(p => p.location?.toLowerCase().includes(loc));
-    }
-
-    if (searchTerm.trim()) {
-      const term = searchTerm.toLowerCase().trim();
-      profiles = profiles.filter(p =>
-        p.full_name.toLowerCase().includes(term) ||
-        p.username.toLowerCase().includes(term) ||
-        p.sport.toLowerCase().includes(term) ||
-        (p.location && p.location.toLowerCase().includes(term)) ||
-        (p.experience_level && p.experience_level.toLowerCase().includes(term)) ||
-        (p.bio && p.bio.toLowerCase().includes(term))
-      );
-    }
-
-    return profiles;
-  } catch (err: any) {
-    console.error('[profileService] searchProfiles error:', err?.message ?? err);
-    return [];
-  }
-}
+  },
+};

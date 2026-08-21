@@ -1,0 +1,14 @@
+{
+  "name": "sportix-appium-mobile-tests",
+  "version": "1.0.0",
+  "description": "Appium Automated Mobile Testing Suite for SPORTiX Android Application (320 Test Cases)",
+  "main": "index.js",
+  "type": "commonjs",
+  "scripts": {
+    "test": "node index.js"
+  },
+  "dependencies": {
+    "exceljs": "^4.4.0",
+    "webdriverio": "^8.40.0"
+  }
+}

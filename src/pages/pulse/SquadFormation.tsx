@@ -4,7 +4,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { AILoader } from '../../components/pulse/AILoader';
 import { AutoSquadEventSelector, type EventOption } from '../../components/pulse/AutoSquadEventSelector';
 import { AIInsightPanel, type AIInsightData } from '../../components/pulse/AIInsightPanel';
-import { getRemainingGenerations, generateAutoSquad, acceptAutoSquad, type DailyLimitInfo } from '../../services/autoSquadService';
+import { getRemainingGenerations, generateAutoSquad, acceptAutoSquad, rejectAutoSquad, type DailyLimitInfo } from '../../services/autoSquadService';
 import { useSquadStore } from '../../store/squadStore';
 import { useAuthStore } from '../../store/authStore';
 import { useAISettingsStore } from '../../store/aiSettingsStore';
@@ -27,18 +27,13 @@ const DASH_TABS = [
   { id: 'insights', label: 'AI Insights', icon: <Brain size={13} /> },
 ];
 
-const FUTURISTIC_NAMES = [
-  'NOVA', 'VECTOR', 'APEX', 'TITAN', 'VORTEX',
-  'PULSE X', 'STRIKE', 'NEON', 'AXIS', 'VELOCITY'
-];
-
 export const SquadFormation: React.FC = () => {
   const [searchParams] = useSearchParams();
   const { user } = useAuthStore();
   const { nearbyRadius } = useAISettingsStore();
   const {
     squads, generatedSquads,
-    addGeneratedSquad, declineGeneratedSquad, acceptGeneratedSquad, incrementGenerationsCount
+    declineGeneratedSquad, acceptGeneratedSquad
   } = useSquadStore();
 
   const urlEventId = searchParams.get('eventId') || searchParams.get('event_id');
@@ -76,18 +71,26 @@ export const SquadFormation: React.FC = () => {
     return (userPos && initRoles.includes(userPos)) ? userPos : (initRoles[0] || 'Midfielder');
   });
 
-  // Re-sync selected role whenever the selected event / sport changes
+  // Re-sync and automatically select optimal role whenever the selected event, sport, or readiness changes
   useEffect(() => {
     const roles = getSportRolesSync(currentSport);
-    if (!roles.includes(selectedRole)) {
+    if (!selectedRole || !roles.includes(selectedRole)) {
       const userPos = (user as any)?.position;
       if (userPos && roles.includes(userPos)) {
         setSelectedRole(userPos);
+      } else if (eventReadiness?.allocation?.role_remaining_space) {
+        const remainingSpace = eventReadiness.allocation.role_remaining_space;
+        const sortedByNeed = [...roles].sort((a, b) => {
+          const remA = remainingSpace[a] ?? 0;
+          const remB = remainingSpace[b] ?? 0;
+          return remB - remA;
+        });
+        setSelectedRole(sortedByNeed[0] || roles[0] || 'Midfielder');
       } else {
         setSelectedRole(roles[0] || 'Midfielder');
       }
     }
-  }, [currentSport, (user as any)?.position]);
+  }, [currentSport, (user as any)?.position, eventReadiness?.allocation?.role_remaining_space, selectedRole]);
 
   const [status, setStatus] = useState<'selection' | 'matching'>('selection');
   const [selectedDraftId, setSelectedDraftId] = useState<string | null>(null);
@@ -97,7 +100,8 @@ export const SquadFormation: React.FC = () => {
 
   useEffect(() => {
     getRemainingGenerations().then(setDailyQuota).catch(() => null);
-  }, []);
+    useSquadStore.getState().loadData().catch(() => null);
+  }, [user?.id]);
 
   const getRoleQuota = (roleName: string): number => {
     if (!sportConfig) return 1;
@@ -144,21 +148,15 @@ export const SquadFormation: React.FC = () => {
   // Master generation handler with NO Hardcoded Data
   const handleGenerateSquad = async () => {
     setGenError(null);
-    const targetEv = selectedEvent || {
-      id: urlEventId || 'event_1',
-      title: 'SPORTiX Tournament',
-      sport: currentSport,
-      location: 'Metropolitan Arena',
-      city: 'Chennai',
-      startsAt: new Date().toISOString(),
-      currentParticipants: 14,
-      maxParticipants: 32,
-      bannerUrl: null,
-      status: 'upcoming'
-    };
 
     if (!selectedEvent) {
-      setSelectedEvent(targetEv);
+      setGenError('Please select an active event to begin AutoSquad matchmaking.');
+      return;
+    }
+
+    if (selectedEvent.currentParticipants < 10) {
+      setGenError(`AutoSquad locked: ${selectedEvent.currentParticipants} / 10 athletes joined. At least 10 athletes must join this event to begin matchmaking.`);
+      return;
     }
 
     if (dailyQuota.remaining <= 0) {
@@ -171,144 +169,26 @@ export const SquadFormation: React.FC = () => {
 
     try {
       const res = await generateAutoSquad({
-        event_id: targetEv.id,
-        sport: targetEv.sport,
+        event_id: selectedEvent.id,
+        sport: selectedEvent.sport,
         role: selectedRole,
         radius_km: nearbyRadius || 10,
-        location: targetEv.location,
+        location: selectedEvent.location,
       });
 
-      // Dynamic Sport Config from sportix_sport_roles (NO HARDCODED DATA)
-      const currentSportConfig = getSportRoleDataSync(targetEv.sport) || sportConfig;
-      const targetSquadSize = currentSportConfig?.total_players || res.squad_data.members?.length || 5;
-
-      // Expand sport role pool from dynamic config
-      const r1Name = currentSportConfig?.role_1 || 'Primary';
-      const r1Count = currentSportConfig?.role_1_count ?? 1;
-      const r2Name = currentSportConfig?.role_2 || 'Defender';
-      const r2Count = currentSportConfig?.role_2_count ?? 1;
-      const r3Name = currentSportConfig?.role_3 || 'Midfielder';
-      const r3Count = currentSportConfig?.role_3_count ?? 1;
-      const r4Name = currentSportConfig?.role_4 || 'Forward';
-      const r4Count = currentSportConfig?.role_4_count ?? 1;
-
-      const dynamicFormation = r4Count > 0
-        ? `${r1Count}-${r2Count}-${r3Count}-${r4Count}`
-        : `${r1Count}-${r2Count}-${r3Count}`;
-
-      const fullRoleSlotsPool: string[] = [
-        ...Array(r1Count).fill(r1Name),
-        ...Array(r2Count).fill(r2Name),
-        ...Array(r3Count).fill(r3Name),
-        ...Array(r4Count).fill(r4Name),
-      ];
-
-      // Remove 1 slot for user's assigned role
-      const remainingRoleSlots = [...fullRoleSlotsPool];
-      const userRoleIdx = remainingRoleSlots.indexOf(selectedRole);
-      if (userRoleIdx !== -1) {
-        remainingRoleSlots.splice(userRoleIdx, 1);
-      } else if (remainingRoleSlots.length > 0) {
-        remainingRoleSlots.shift();
-      }
-
-      const genIndex = generatedSquads.length;
-      const draftName = res.squad_data.name || `${targetEv.sport} ${FUTURISTIC_NAMES[genIndex % FUTURISTIC_NAMES.length]}`;
-      const baseSquad = res.squad_data;
-      const squadMembers = baseSquad.members || [];
-
-      // Build balanced roster matching sport's exact required team size
-      const neededTeammates = Math.max(0, targetSquadSize - 1);
-      const candidatesSource = squadMembers.filter((m: any) => m.id !== user?.id && !m.is_captain);
-
-      const userMember = {
-        uid: user?.id || 'user_0',
-        name: user?.name || 'Alex Rivera (You)',
-        username: user?.email?.split('@')[0] || 'captain',
-        avatar: user?.avatar || 'https://i.pravatar.cc/150?img=33',
-        sport: targetEv.sport,
-        position: selectedRole,
-        pulseScore: (user as any)?.pulseScore || 850,
-        tier: 'ELITE',
-        compatibility: 100,
-        role: 'captain',
-        readiness: 'Ready',
-        level: (user as any)?.level || 20,
-        distance: 0,
-        location: targetEv.city || 'Chennai',
-      };
-
-      const pulsedTeammates = Array.from({ length: neededTeammates }).map((_, idx) => {
-        const source = candidatesSource[idx] || squadMembers[idx + 1] || {};
-        const assignedPos = remainingRoleSlots[idx] || availableRoles[idx % availableRoles.length] || 'Athlete';
-        return {
-          uid: source.id || `teammate_${Date.now()}_${idx + 1}`,
-          name: source.full_name || `Athlete ${idx + 2}`,
-          username: source.username || `athlete_${idx + 2}`,
-          avatar: source.avatar_url || `https://i.pravatar.cc/150?u=${source.id || idx + 10}`,
-          sport: source.sport || targetEv.sport,
-          position: assignedPos,
-          pulseScore: source.pulse_score || (720 + ((idx * 29) % 130)),
-          tier: (source.ssr || 75) >= 85 ? 'ELITE' : 'CONTENDER',
-          compatibility: Math.max(75, (baseSquad.score_breakdown?.compatibility_score || 88) - (idx * 2)),
-          role: 'member',
-          readiness: 'Ready',
-          level: source.level || (12 + (idx % 8)),
-          distance: source.distance_km || Number((1.2 + idx * 0.7).toFixed(1)),
-          location: targetEv.city || 'Chennai',
-        };
-      });
-
-      const pulsedMembers = [userMember, ...pulsedTeammates];
-      const totalPulse = pulsedMembers.reduce((sum: number, m: any) => sum + (m.pulseScore || 700), 0);
-      const avgPulse = Math.round(totalPulse / Math.max(1, pulsedMembers.length));
-
-      const draftObj: any = {
-        squadId: `draft_${Date.now()}_${genIndex + 1}`,
-        name: draftName,
-        sport: targetEv.sport,
-        eventId: targetEv.id,
-        eventName: targetEv.title,
-        captainId: userMember.uid,
-        members: pulsedMembers,
-        chemistry: {
-          overall: Math.max(70, res.overall_compatibility || 88),
-          trust: 85,
-          coordination: 88,
-          communication: 82,
-          retentionScore: 88,
-          activityScore: 85,
-          consistencyScore: 85,
-          approvalScore: 80,
-        },
-        pulseAvg: avgPulse,
-        winRate: 80 + (genIndex % 15),
-        matchHistory: [],
-        achievements: [],
-        formation: dynamicFormation,
-        tacticalNotes: res.reasoning || `${targetEv.sport} squad dynamically assembled (${dynamicFormation} formation) with you commanding tactical role: ${selectedRole}.`,
-        createdAt: new Date().toISOString().split('T')[0],
-        lastActive: new Date().toISOString().split('T')[0],
-        tournamentIds: [],
-        events: [targetEv.title],
-        posts: [],
-        xpBoostActive: false,
-        streakMultiplier: 1.0,
-        tags: ['AutoSquad AI', dynamicFormation, targetEv.sport, selectedRole, `${targetSquadSize} Players`],
-        lookingFor: [],
-        score_breakdown: baseSquad.score_breakdown,
-        captain_recommendation: baseSquad.captain_recommendation,
-      };
-
-      addGeneratedSquad(draftObj);
-      setSelectedDraftId(draftObj.squadId);
-      incrementGenerationsCount();
-      setActiveTab('results');
-
-      // Refresh daily limit count
+      // Reload real persisted squads and quota from Appwrite
+      await useSquadStore.getState().loadData();
       const updatedQuota = await getRemainingGenerations();
       setDailyQuota(updatedQuota);
-      toast.success(`Generated Squad Draft #${genIndex + 1}: ${draftName}! (${Math.max(0, (updatedQuota?.remaining ?? dailyQuota.remaining - 1))} generations left today)`);
+
+      const genSquads = useSquadStore.getState().generatedSquads;
+      const latestSquad = genSquads.find((s: any) => s.requestId === res.request_id) || genSquads[0];
+      if (latestSquad) {
+        setSelectedDraftId(latestSquad.squadId);
+      }
+
+      setActiveTab('results');
+      toast.success(`Generated Squad Draft: ${res.squad_data.name}! (${updatedQuota?.remaining ?? 0} generations remaining today)`);
     } catch (err: any) {
       console.error('[SquadFormation] Generation error:', err);
       setGenError(err.message || 'AutoSquad generation failed.');
@@ -317,18 +197,27 @@ export const SquadFormation: React.FC = () => {
     }
   };
 
-  const handleDecline = (id: string) => {
+  const handleDecline = async (id: string) => {
+    const target = generatedSquads.find(s => s.squadId === id);
+    const reqId = (target as any)?.requestId || id.replace('draft_', '').replace('gen_', '');
+    await rejectAutoSquad(reqId).catch(() => null);
     declineGeneratedSquad(id);
+    await useSquadStore.getState().loadData();
+
     if (selectedDraftId === id) {
-      const rem = generatedSquads.filter(s => s.squadId !== id);
+      const rem = useSquadStore.getState().generatedSquads.filter(s => s.squadId !== id);
       setSelectedDraftId(rem.length > 0 ? rem[0].squadId : null);
     }
+    toast('Squad draft rejected', { icon: '🗑️' });
   };
 
   const handleAccept = async (id: string) => {
     const targetSquad = generatedSquads.find(s => s.squadId === id);
-    await acceptAutoSquad(id).catch(() => null);
+    const reqId = (targetSquad as any)?.requestId || id.replace('draft_', '').replace('gen_', '');
+    
+    await acceptAutoSquad(reqId).catch(() => null);
     acceptGeneratedSquad(id);
+    await useSquadStore.getState().loadData();
     setActiveTab('accepted');
 
     const currentUserId = user?.id || '';
@@ -370,12 +259,13 @@ export const SquadFormation: React.FC = () => {
 
   // Prepare AI Insight data for current accepted / generated squad
   const currentInsightSquad = squads[0] || activeSquad;
-  const insightData: AIInsightData | null = currentInsightSquad ? (() => {
-    const pulses = currentInsightSquad.members.map((m: any) => m.pulseScore || 700);
-    const highestPulse = Math.max(...pulses);
-    const lowestPulse = Math.min(...pulses);
-    const avgPulse = Math.round(pulses.reduce((a: number, b: number) => a + b, 0) / Math.max(1, pulses.length));
-    const topPlayer = currentInsightSquad.members.find((m: any) => (m.pulseScore || 700) === highestPulse) || currentInsightSquad.members[0];
+  const insightData: AIInsightData | null = currentInsightSquad && currentInsightSquad.members?.length > 0 ? (() => {
+    const validMembers = currentInsightSquad.members.filter((m: any) => typeof (m.pulseScore ?? m.pulse_score) === 'number');
+    const pulses = validMembers.map((m: any) => Number(m.pulseScore ?? m.pulse_score ?? 700));
+    const highestPulse = pulses.length > 0 ? Math.max(...pulses) : 750;
+    const lowestPulse = pulses.length > 0 ? Math.min(...pulses) : 700;
+    const avgPulse = pulses.length > 0 ? Math.round(pulses.reduce((a: number, b: number) => a + b, 0) / pulses.length) : 725;
+    const topPlayer: any = validMembers.find((m: any) => Number(m.pulseScore ?? m.pulse_score ?? 700) === highestPulse) || validMembers[0] || currentInsightSquad.members[0];
 
     return {
       teamName: currentInsightSquad.name,
@@ -383,11 +273,11 @@ export const SquadFormation: React.FC = () => {
       avgPulse,
       highestPulse,
       lowestPulse,
-      pulseSpread: highestPulse - lowestPulse,
-      topPerformerName: topPlayer?.name || 'Athlete',
-      topPerformerUsername: (topPlayer as any)?.username || 'athlete',
-      topPerformerPulse: topPlayer?.pulseScore || highestPulse,
-      rawInsightText: currentInsightSquad.tacticalNotes,
+      pulseSpread: Math.max(0, highestPulse - lowestPulse),
+      topPerformerName: topPlayer?.name || topPlayer?.full_name || 'Athlete',
+      topPerformerUsername: topPlayer?.username || 'athlete',
+      topPerformerPulse: topPlayer?.pulseScore ?? topPlayer?.pulse_score ?? highestPulse,
+      rawInsightText: currentInsightSquad.tacticalNotes || '',
     };
   })() : null;
 
@@ -792,24 +682,30 @@ export const SquadFormation: React.FC = () => {
               </div>
 
               {/* Metrics Summary */}
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 pt-4 border-t border-border-muted">
-                <div className="p-3 bg-elevated rounded-xl">
-                  <span className="font-mono text-[10px] text-text-muted block uppercase">AI BALANCE</span>
-                  <strong className="font-display text-base text-accent block mt-0.5">{activeSquad.chemistry.overall}</strong>
-                </div>
-                <div className="p-3 bg-elevated rounded-xl">
-                  <span className="font-mono text-[10px] text-text-muted block uppercase">AVG PULSE</span>
-                  <strong className="font-display text-base text-text-primary block mt-0.5">⚡ {activeSquad.pulseAvg}</strong>
-                </div>
-                <div className="p-3 bg-elevated rounded-xl">
-                  <span className="font-mono text-[10px] text-text-muted block uppercase">AVG SSR</span>
-                  <strong className="font-display text-base text-text-primary block mt-0.5">81</strong>
-                </div>
-                <div className="p-3 bg-elevated rounded-xl">
-                  <span className="font-mono text-[10px] text-text-muted block uppercase">PLAYERS</span>
-                  <strong className="font-display text-base text-text-primary block mt-0.5">{activeSquad.members.length}</strong>
-                </div>
-              </div>
+              {(() => {
+                const memberSSRs = activeSquad.members.map((m: any) => Number(m.ssr) || 72);
+                const avgSSR = Math.round(memberSSRs.reduce((a: number, b: number) => a + b, 0) / Math.max(1, memberSSRs.length));
+                return (
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 pt-4 border-t border-border-muted">
+                    <div className="p-3 bg-elevated rounded-xl">
+                      <span className="font-mono text-[10px] text-text-muted block uppercase">AI BALANCE</span>
+                      <strong className="font-display text-base text-accent block mt-0.5">{activeSquad.chemistry.overall}%</strong>
+                    </div>
+                    <div className="p-3 bg-elevated rounded-xl">
+                      <span className="font-mono text-[10px] text-text-muted block uppercase">AVG PULSE</span>
+                      <strong className="font-display text-base text-text-primary block mt-0.5">⚡ {activeSquad.pulseAvg}</strong>
+                    </div>
+                    <div className="p-3 bg-elevated rounded-xl">
+                      <span className="font-mono text-[10px] text-text-muted block uppercase">AVG SSR</span>
+                      <strong className="font-display text-base text-text-primary block mt-0.5">{avgSSR}</strong>
+                    </div>
+                    <div className="p-3 bg-elevated rounded-xl">
+                      <span className="font-mono text-[10px] text-text-muted block uppercase">PLAYERS</span>
+                      <strong className="font-display text-base text-text-primary block mt-0.5">{activeSquad.members.length}</strong>
+                    </div>
+                  </div>
+                );
+              })()}
             </div>
 
             {/* Athlete Cards Grid */}
@@ -819,29 +715,36 @@ export const SquadFormation: React.FC = () => {
               </h4>
               <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
                 {activeSquad.members.map((m: any) => (
-                  <div key={m.uid} className="p-4 rounded-2xl bg-surface border border-border-muted space-y-3">
+                  <div key={m.uid || m.id} className="p-4 rounded-2xl bg-surface border border-border-muted space-y-3">
                     <div className="flex items-center gap-3">
                       <img
-                        src={m.avatar || `https://i.pravatar.cc/150?u=${m.uid}`}
-                        alt={m.name}
+                        src={m.avatar || m.avatar_url || `https://i.pravatar.cc/150?u=${m.uid || m.id}`}
+                        alt={m.name || m.full_name}
                         className="w-11 h-11 rounded-xl object-cover border border-border-muted"
                       />
                       <div className="min-w-0 flex-1">
-                        <h5 className="font-sans font-bold text-xs text-text-primary truncate">
-                          {m.name}
-                        </h5>
+                        <div className="flex items-center gap-1.5">
+                          <h5 className="font-sans font-bold text-xs text-text-primary truncate">
+                            {m.name || m.full_name}
+                          </h5>
+                          {m.role === 'captain' && (
+                            <span className="px-1.5 py-0.2 bg-accent/20 text-accent font-mono text-[8px] font-bold rounded">
+                              CPT
+                            </span>
+                          )}
+                        </div>
                         <p className="font-mono text-[10px] text-text-muted truncate">
-                          @{m.username}
+                          @{m.username || 'athlete'} • <span className="text-accent font-semibold">{m.position || 'Athlete'}</span>
                         </p>
                       </div>
                     </div>
 
                     <div className="flex items-center justify-between font-mono text-[10px] pt-2 border-t border-border-muted/50">
                       <span className="text-accent font-bold flex items-center gap-1">
-                        ⚡ {m.pulseScore || 700} Pulse
+                        ⚡ {m.pulseScore || m.pulse_score || 720} Pulse
                       </span>
                       <span className="text-text-muted flex items-center gap-1">
-                        📍 {m.location || 'Chennai'}
+                        SSR: {m.ssr || 70}
                       </span>
                     </div>
                   </div>
@@ -854,7 +757,7 @@ export const SquadFormation: React.FC = () => {
             <Activity size={28} className="text-text-muted" />
             <h3 className="font-display text-base uppercase text-text-primary">NO SQUAD DRAFTS</h3>
             <p className="font-mono text-xs text-text-muted">
-              Select an event and click Generate AutoSquad to build draft squads.
+              Select an event with at least 10 joined athletes and click Generate AutoSquad to build draft squads.
             </p>
           </div>
         )}
@@ -870,7 +773,7 @@ export const SquadFormation: React.FC = () => {
           <Users size={28} className="text-accent" />
           <h3 className="font-display text-base uppercase text-text-primary">NO ACCEPTED SQUADS</h3>
           <p className="font-mono text-xs text-text-muted max-w-sm">
-            Accept a generated squad to build and view your accepted team dashboard.
+            Accept an AutoSquad result and your crew will appear here.
           </p>
           <button
             type="button"
@@ -882,10 +785,17 @@ export const SquadFormation: React.FC = () => {
         </div>
       ) : (
         squads.map(squad => {
-          const pulses = squad.members.map((m: any) => m.pulseScore || 700);
-          const highestPulse = Math.max(...pulses);
-          const lowestPulse = Math.min(...pulses);
-          const avgPulse = Math.round(pulses.reduce((a: number, b: number) => a + b, 0) / Math.max(1, pulses.length));
+          const validPulses = (squad.members || [])
+            .map((m: any) => Number(m.pulseScore || m.pulse_score))
+            .filter((p: number) => !isNaN(p) && p > 0);
+          const highestPulse = validPulses.length > 0 ? Math.max(...validPulses) : 'N/A';
+          const lowestPulse = validPulses.length > 0 ? Math.min(...validPulses) : 'N/A';
+          const avgPulse = validPulses.length > 0
+            ? Math.round(validPulses.reduce((a: number, b: number) => a + b, 0) / validPulses.length)
+            : 'N/A';
+          const pulseSpread = (typeof highestPulse === 'number' && typeof lowestPulse === 'number')
+            ? `${highestPulse - lowestPulse} pts`
+            : 'N/A';
 
           return (
             <div key={squad.squadId} className="p-6 rounded-3xl bg-surface border border-border-muted space-y-6 shadow-card">
@@ -912,18 +822,20 @@ export const SquadFormation: React.FC = () => {
                     </span>
                   </div>
                   <p className="font-mono text-xs text-text-muted mt-1">
-                    Event: {(squad as any).eventName || selectedEvent?.title || 'Chennai Sunday Football League'} • {squad.sport}
+                    Event: {(squad as any).eventName || selectedEvent?.title || 'SPORTiX Match'} • {squad.sport}
                   </p>
                 </div>
 
                 <div className="flex items-center gap-3">
                   <div className="text-right">
                     <span className="font-mono text-[10px] text-text-muted uppercase block">TEAM PULSE</span>
-                    <span className="font-display text-lg text-accent font-bold">⚡ {avgPulse}</span>
+                    <span className="font-display text-lg text-accent font-bold">
+                      {avgPulse !== 'N/A' ? `⚡ ${avgPulse}` : 'N/A'}
+                    </span>
                   </div>
                   <div className="text-right">
                     <span className="font-mono text-[10px] text-text-muted uppercase block">PLAYERS</span>
-                    <span className="font-display text-lg text-text-primary font-bold">{squad.members.length}</span>
+                    <span className="font-display text-lg text-text-primary font-bold">{squad.members?.length || 0}</span>
                   </div>
                 </div>
               </div>
@@ -932,48 +844,61 @@ export const SquadFormation: React.FC = () => {
               <div className="p-4 rounded-2xl bg-elevated border border-border-muted grid grid-cols-2 sm:grid-cols-4 gap-3 text-center font-mono text-xs">
                 <div>
                   <span className="text-text-muted text-[10px] uppercase block">AVERAGE PULSE</span>
-                  <strong className="text-accent text-sm">⚡ {avgPulse}</strong>
+                  <strong className="text-accent text-sm">
+                    {avgPulse !== 'N/A' ? `⚡ ${avgPulse}` : 'N/A'}
+                  </strong>
                 </div>
                 <div>
                   <span className="text-text-muted text-[10px] uppercase block">HIGHEST PULSE</span>
-                  <strong className="text-text-primary text-sm">⚡ {highestPulse}</strong>
+                  <strong className="text-text-primary text-sm">
+                    {highestPulse !== 'N/A' ? `⚡ ${highestPulse}` : 'N/A'}
+                  </strong>
                 </div>
                 <div>
                   <span className="text-text-muted text-[10px] uppercase block">LOWEST PULSE</span>
-                  <strong className="text-text-primary text-sm">⚡ {lowestPulse}</strong>
+                  <strong className="text-text-primary text-sm">
+                    {lowestPulse !== 'N/A' ? `⚡ ${lowestPulse}` : 'N/A'}
+                  </strong>
                 </div>
                 <div>
                   <span className="text-text-muted text-[10px] uppercase block">PULSE SPREAD</span>
-                  <strong className="text-text-primary text-sm">{highestPulse - lowestPulse} pts</strong>
+                  <strong className="text-text-primary text-sm">{pulseSpread}</strong>
                 </div>
               </div>
 
               {/* Player Cards Grid */}
               <div className="space-y-3">
                 <h4 className="font-mono text-xs font-bold text-text-secondary uppercase tracking-wider">
-                  ATHLETES
+                  ATHLETES ({squad.members?.length || 0})
                 </h4>
                 <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
-                  {squad.members.map((m: any) => (
-                    <div key={m.uid} className="p-4 rounded-2xl bg-elevated border border-border-muted space-y-3">
+                  {(squad.members || []).map((m: any) => (
+                    <div key={m.uid || m.id || m.userId} className="p-4 rounded-2xl bg-elevated border border-border-muted space-y-3">
                       <div className="flex items-center gap-3">
                         <img
-                          src={m.avatar || `https://i.pravatar.cc/150?u=${m.uid}`}
-                          alt={m.name}
+                          src={m.avatar || m.avatar_url || `https://i.pravatar.cc/150?u=${m.uid || m.id || m.userId}`}
+                          alt={m.name || m.full_name}
                           className="w-12 h-12 rounded-xl object-cover border border-border-muted"
                         />
                         <div className="min-w-0 flex-1">
-                          <h5 className="font-sans font-bold text-xs text-text-primary truncate">
-                            {m.name}
-                          </h5>
+                          <div className="flex items-center gap-1.5">
+                            <h5 className="font-sans font-bold text-xs text-text-primary truncate">
+                              {m.name || m.full_name || 'Athlete'}
+                            </h5>
+                            {m.role === 'captain' && (
+                              <span className="px-1.5 py-0.2 bg-accent/20 text-accent font-mono text-[8px] font-bold rounded">
+                                CPT
+                              </span>
+                            )}
+                          </div>
                           <p className="font-mono text-[10px] text-text-muted truncate">
-                            @{m.username}
+                            @{m.username || 'athlete'} • <span className="text-accent font-semibold">{m.position || 'Athlete'}</span>
                           </p>
                         </div>
                       </div>
 
                       <div className="flex items-center justify-between font-mono text-[10px] pt-2 border-t border-border-muted/50">
-                        <span className="text-accent font-bold">⚡ {m.pulseScore || 700} Pulse</span>
+                        <span className="text-accent font-bold">⚡ {m.pulseScore || m.pulse_score || 700} Pulse</span>
                         <span className="text-text-muted">📍 {m.location || 'Chennai'}</span>
                       </div>
                     </div>

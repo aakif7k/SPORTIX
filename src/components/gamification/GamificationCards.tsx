@@ -13,7 +13,8 @@ interface RewardCardProps {
 export const RewardCard: React.FC<RewardCardProps> = ({ reward, onClaim }) => {
   const [burst, setBurst] = useState(false);
 
-  const handleClaim = () => {
+  const handleClaim = (e: React.MouseEvent) => {
+    e.stopPropagation();
     if (reward.claimed || reward.isLocked || !reward.isToday) return;
     setBurst(true);
     onClaim(reward.day);
@@ -23,8 +24,8 @@ export const RewardCard: React.FC<RewardCardProps> = ({ reward, onClaim }) => {
   const state = reward.claimed ? 'claimed' : reward.isToday && !reward.isLocked ? 'today' : reward.isLocked ? 'locked' : 'available';
 
   const cardStyle = {
-    claimed: 'border-volt/20 bg-volt/5',
-    today: 'border-volt/60 bg-volt/10 shadow-[0_0_20px_rgba(204,255,0,0.15)]',
+    claimed: 'border-emerald-500/30 bg-emerald-950/10 shadow-sm',
+    today: 'border-volt/80 bg-volt/15 shadow-[0_0_25px_rgba(204,255,0,0.25)] ring-1 ring-volt/40',
     locked: 'border-border-muted bg-elevated/20 opacity-60',
     available: 'border-border-muted bg-elevated/30',
   }[state];
@@ -34,10 +35,10 @@ export const RewardCard: React.FC<RewardCardProps> = ({ reward, onClaim }) => {
       whileHover={state !== 'locked' ? { y: -2 } : {}}
       whileTap={state === 'today' ? { scale: 0.97 } : {}}
       onClick={handleClaim}
-      className={`relative flex flex-col items-center gap-2 p-3 rounded-xl border transition-all cursor-pointer flex-shrink-0 w-[88px] ${cardStyle}`}
+      className={`relative flex flex-col items-center justify-between gap-2 p-3 rounded-2xl border transition-all flex-shrink-0 min-w-[104px] w-[104px] ${cardStyle}`}
     >
       {/* Day label */}
-      <div className={`font-mono text-[9px] uppercase tracking-widest ${reward.isBonusDay ? 'text-volt font-bold' : 'text-text-muted'}`}>
+      <div className={`font-mono text-[10px] font-bold uppercase tracking-widest ${reward.isBonusDay ? 'text-volt font-black' : reward.isToday ? 'text-volt' : 'text-text-muted'}`}>
         {reward.label}
       </div>
 
@@ -54,35 +55,60 @@ export const RewardCard: React.FC<RewardCardProps> = ({ reward, onClaim }) => {
             />
           )}
         </AnimatePresence>
-        <div className={`w-10 h-10 rounded-xl flex items-center justify-center text-2xl relative ${reward.isBonusDay ? 'bg-volt/20' : 'bg-elevated'}`}
-          style={reward.isBonusDay ? { boxShadow: '0 0 12px rgba(204,255,0,0.3)' } : {}}>
+        <div className={`w-11 h-11 rounded-2xl flex items-center justify-center text-2xl relative ${reward.isBonusDay ? 'bg-volt/20' : reward.claimed ? 'bg-emerald-500/20' : reward.isToday ? 'bg-volt/20' : 'bg-elevated'}`}
+          style={reward.isBonusDay ? { boxShadow: '0 0 14px rgba(204,255,0,0.35)' } : {}}>
           {reward.isLocked ? <Lock size={16} className="text-text-muted" /> : reward.icon}
           {reward.claimed && (
-            <div className="absolute inset-0 rounded-xl bg-volt/20 flex items-center justify-center">
-              <Check size={14} className="text-volt" />
+            <div className="absolute inset-0 rounded-2xl bg-emerald-500/20 flex items-center justify-center">
+              <Check size={16} className="text-emerald-400 stroke-[3]" />
             </div>
           )}
         </div>
       </div>
 
       {/* Reward value */}
-      <div className="text-center">
-        <div className={`font-mono font-bold text-[13px] ${reward.claimed ? 'text-volt/60' : reward.isLocked ? 'text-text-muted' : 'text-volt'}`}>
+      <div className="text-center w-full">
+        <div className={`font-mono font-black text-sm ${reward.claimed ? 'text-emerald-400' : reward.isLocked ? 'text-text-muted' : 'text-volt'}`}>
           +{reward.pulseReward}
         </div>
         {reward.xpBooster && !reward.isLocked && (
-          <div className="font-mono text-[9px] text-purple-400">{reward.xpBooster}x XP</div>
+          <div className="font-mono text-[9px] text-purple-400 font-bold">{reward.xpBooster}x XP</div>
         )}
-        <div className="font-label text-[9px] text-text-muted">PULSE</div>
+        <div className="font-mono text-[9px] text-text-muted uppercase tracking-wider">PULSE</div>
       </div>
 
-      {/* Today indicator */}
+      {/* Action / Status Pill */}
+      <div className="w-full mt-1">
+        {reward.claimed ? (
+          <div className="w-full py-1 rounded-lg bg-emerald-500/15 border border-emerald-500/30 text-emerald-400 font-mono text-[9px] font-black uppercase text-center flex items-center justify-center gap-1">
+            <Check size={10} className="stroke-[3]" />
+            <span>COLLECTED</span>
+          </div>
+        ) : reward.isToday ? (
+          <button
+            onClick={handleClaim}
+            className="w-full py-1.5 rounded-lg bg-volt hover:bg-volt-light text-volt-text font-mono text-[10px] font-black uppercase tracking-wider text-center shadow-[0_0_12px_rgba(204,255,0,0.6)] flex items-center justify-center gap-1 cursor-pointer transition-all hover:scale-105 active:scale-95"
+          >
+            <Zap size={10} className="fill-current" />
+            <span>COLLECT</span>
+          </button>
+        ) : (
+          <div className="w-full py-1 rounded-lg bg-base/60 border border-border-muted/40 text-text-muted font-mono text-[8px] font-bold uppercase text-center flex items-center justify-center gap-1">
+            <Lock size={9} />
+            <span>LOCKED</span>
+          </div>
+        )}
+      </div>
+
+      {/* Today pulse indicator badge */}
       {reward.isToday && !reward.claimed && (
-        <div className="absolute -top-1 -right-1 w-3 h-3 rounded-full bg-volt animate-pulse shadow-[0_0_8px_rgba(204,255,0,0.8)]" />
+        <div className="absolute -top-1 -right-1 px-1.5 py-0.5 rounded-full bg-volt text-volt-text font-mono text-[8px] font-black uppercase shadow-[0_0_10px_rgba(204,255,0,0.9)] animate-bounce">
+          TODAY
+        </div>
       )}
       {/* Bonus crown */}
       {reward.isBonusDay && (
-        <div className="absolute -top-2 left-1/2 -translate-x-1/2 font-mono text-[10px]">👑</div>
+        <div className="absolute -top-2 left-1/2 -translate-x-1/2 font-mono text-[11px] filter drop-shadow">👑</div>
       )}
     </motion.div>
   );

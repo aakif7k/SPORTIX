@@ -1,0 +1,15 @@
+{
+  "name": "sportix-selenium-tests",
+  "version": "1.0.0",
+  "description": "End-to-End Selenium Automated Testing Suite for SPORTiX Web Application (320 Test Cases)",
+  "main": "index.js",
+  "type": "commonjs",
+  "scripts": {
+    "test": "node index.js"
+  },
+  "dependencies": {
+    "exceljs": "^4.4.0",
+    "selenium-webdriver": "^4.27.0",
+    "chromedriver": "^131.0.0"
+  }
+}

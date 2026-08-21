@@ -1,0 +1,13 @@
+{
+  "name": "sportix-load-tests",
+  "version": "1.0.0",
+  "description": "Baseline & High-Concurrency Load Testing Suite for SPORTiX (100 VUs, 60s Duration, RPS & Latency Telemetry)",
+  "main": "index.js",
+  "type": "commonjs",
+  "scripts": {
+    "test": "node index.js"
+  },
+  "dependencies": {
+    "exceljs": "^4.4.0"
+  }
+}

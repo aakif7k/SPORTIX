@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import type { Notification } from '../types';
 import { getNotifications, markNotificationRead, markAllNotificationsRead, clearAllNotifications } from '../services/notificationService';
+import { syncPendingReportNotifications } from '../services/eventReportService';
 import { useAuthStore } from './authStore';
 
 interface NotificationState {
@@ -21,6 +22,9 @@ export const useNotificationStore = create<NotificationState>((set) => ({
   loadNotifications: async () => {
     const user = useAuthStore.getState().user;
     if (!user) return;
+    try {
+      await syncPendingReportNotifications(user.id);
+    } catch {}
     const notifications = await getNotifications(user.id);
     set({ notifications, unreadCount: notifications.filter(n => !n.read).length });
   },

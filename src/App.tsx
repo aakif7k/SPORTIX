@@ -24,6 +24,7 @@ import { AITeamBuilder } from './pages/events/AITeamBuilder';
 import { EventCrewPage } from './pages/events/EventCrewPage';
 import { EventDiscussion } from './pages/events/EventDiscussion';
 import { ManageEvent } from './pages/events/ManageEvent';
+import { EventMatchReport } from './pages/events/EventMatchReport';
 import { MessagesPage } from './pages/messages/MessagesPage';
 import { SearchPage } from './pages/discover/SearchPage';
 import { NotificationCenter } from './pages/notifications/NotificationCenter';
@@ -79,6 +80,7 @@ const App: React.FC = () => {
             <Route path="events/manage" element={<ManageEventsDashboard />} />
             <Route path="events/:id" element={<EventDetail />} />
             <Route path="events/:id/manage" element={<ManageEvent />} />
+            <Route path="events/:id/report" element={<EventMatchReport />} />
             <Route path="events/:id/ai-team" element={<AITeamBuilder />} />
             <Route path="events/:id/crew" element={<EventCrewPage />} />
             <Route path="events/:id/discussion" element={<EventDiscussion />} />

@@ -1,13 +1,13 @@
 /**
  * usePendingReport.ts — Real DB check for pending match reports
  * Returns true ONLY if the user has an actual unsubmitted report.
- * New users with zero match history always return false.
  */
 import { useState, useEffect } from 'react';
 import { useAuth } from '@/context/AuthContext';
-import { hasPendingMatchReport } from '@/services/socialService';
+import { getPendingReportsForUser, type PendingReportEvent } from '@/services/eventReportService';
 
 export interface PendingMatchData {
+  eventId: string;
   matchId: string;
   eventName: string;
   sport: string;
@@ -19,9 +19,10 @@ export function usePendingReport(): {
   hasPending: boolean;
   isLoading: boolean;
   pendingMatch?: PendingMatchData;
+  pendingList: PendingReportEvent[];
 } {
   const { user } = useAuth();
-  const [hasPending, setHasPending] = useState(false);
+  const [pendingList, setPendingList] = useState<PendingReportEvent[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
   // Check if user dismissed within 24h
@@ -31,30 +32,35 @@ export function usePendingReport(): {
     : false;
 
   useEffect(() => {
-    if (!user || isDismissed) {
-      setHasPending(false);
+    if (!user?.id || isDismissed) {
+      setPendingList([]);
       setIsLoading(false);
       return;
     }
 
     setIsLoading(true);
-    hasPendingMatchReport(user.id)
-      .then(pending => setHasPending(pending))
-      .catch(() => setHasPending(false))
+    getPendingReportsForUser(user.id)
+      .then(res => setPendingList(res))
+      .catch(() => setPendingList([]))
       .finally(() => setIsLoading(false));
   }, [user?.id, isDismissed]);
 
-  const mockPending: PendingMatchData = {
-    matchId: 'm-pending-01',
-    eventName: 'Pro Football 5v5 Championship',
-    sport: 'football',
-    date: new Date(Date.now() - 86400000).toISOString(),
-    daysAgo: 1,
-  };
+  const firstPending = pendingList[0];
+  const pendingMatch: PendingMatchData | undefined = firstPending
+    ? {
+        eventId: firstPending.eventId,
+        matchId: firstPending.eventId,
+        eventName: firstPending.eventName,
+        sport: firstPending.sport,
+        date: firstPending.date,
+        daysAgo: Math.max(0, Math.floor((Date.now() - new Date(firstPending.date).getTime()) / (1000 * 60 * 60 * 24))),
+      }
+    : undefined;
 
   return {
-    hasPending: hasPending && !isDismissed,
+    hasPending: pendingList.length > 0 && !isDismissed,
     isLoading,
-    pendingMatch: hasPending ? mockPending : undefined,
+    pendingMatch,
+    pendingList,
   };
 }

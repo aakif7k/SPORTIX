@@ -90,6 +90,9 @@ export const EventBrowse: React.FC = () => {
         </div>
       </div>
 
+      {/* ── PENDING REPORT BANNER ────────────────────────────────────────── */}
+      <PendingReportBanner />
+
       {/* ── FEATURED HERO EVENT BANNER ───────────────────────────────────── */}
       {featuredEvent && (
         <motion.div 

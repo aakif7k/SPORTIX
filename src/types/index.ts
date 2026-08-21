@@ -238,7 +238,10 @@ export interface Conversation {
 
 export type NotificationType =
   | 'event_invite' | 'ai_match' | 'connection_request'
-  | 'like' | 'comment' | 'match_reminder' | 'team_update' | 'achievement';
+  | 'like' | 'comment' | 'match_reminder' | 'team_update' | 'achievement'
+  | 'event_report' | 'match_report_ready' | 'match_report_submitted'
+  | 'match_report_verified' | 'match_report_correction_requested'
+  | 'match_report_disputed' | 'match_report_rectified';
 
 export interface Notification {
   id: string;

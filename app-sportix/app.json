@@ -1,17 +1,23 @@
 {
   "expo": {
-    "name": "app-sportix",
+    "name": "SPORTiX",
     "slug": "app-sportix",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
-    "userInterfaceStyle": "light",
+    "userInterfaceStyle": "dark",
+    "scheme": "sportix",
+    "splash": {
+      "backgroundColor": "#060606"
+    },
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "bundleIdentifier": "com.sportix.app"
     },
     "android": {
+      "package": "com.sportix.app",
       "adaptiveIcon": {
-        "backgroundColor": "#E6F4FE",
+        "backgroundColor": "#060606",
         "foregroundImage": "./assets/android-icon-foreground.png",
         "backgroundImage": "./assets/android-icon-background.png",
         "monochromeImage": "./assets/android-icon-monochrome.png"
@@ -24,6 +30,24 @@
     "updates": {
       "enabled": false,
       "checkAutomatically": "NEVER"
-    }
+    },
+    "plugins": [
+      "expo-secure-store",
+      "expo-font",
+      "expo-web-browser",
+      [
+        "expo-local-authentication",
+        {
+          "faceIDPermission": "Allow SPORTiX to use Face ID for secure access."
+        }
+      ],
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Allow SPORTiX to access your photos to set your avatar and share media.",
+          "cameraPermission": "Allow SPORTiX to use your camera to capture moments."
+        }
+      ]
+    ]
   }
 }

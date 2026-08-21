@@ -1,34 +1,47 @@
+/**
+ * src/components/ui/GlassCard.tsx
+ * Glassmorphic card using expo-blur.
+ */
 import React from 'react';
-import { View, StyleSheet, StyleProp, ViewStyle } from 'react-native';
+import { StyleSheet, StyleProp, ViewStyle } from 'react-native';
+import { BlurView } from 'expo-blur';
+import { useTheme } from '../../theme/ThemeContext';
 
-interface GlassCardProps {
-  children: React.ReactNode;
-  style?: StyleProp<ViewStyle>;
-  borderColor?: string;
+export interface GlassCardProps {
+  children:   React.ReactNode;
+  style?:     StyleProp<ViewStyle>;
+  intensity?: number;
+  tint?:      'light' | 'dark' | 'default';
+  hasCorners?: boolean;
 }
 
-export const GlassCard: React.FC<GlassCardProps> = ({
-  children,
-  style,
-  borderColor = 'rgba(0, 212, 255, 0.2)',
-}) => {
+export function GlassCard({ children, style, intensity = 20, tint }: GlassCardProps) {
+  const { isDark } = useTheme();
+  const resolvedTint = tint ?? (isDark ? 'dark' : 'light');
+
   return (
-    <View style={[styles.card, { borderColor }, style]}>
+    <BlurView
+      intensity={intensity}
+      tint={resolvedTint}
+      style={[styles.card, isDark ? styles.darkBorder : styles.lightBorder, style]}
+    >
       {children}
-    </View>
+    </BlurView>
   );
-};
+}
 
 const styles = StyleSheet.create({
   card: {
-    backgroundColor: '#0A1118',
-    borderRadius: 20,
-    borderWidth: 1,
+    borderRadius: 16,
+    overflow: 'hidden',
     padding: 16,
-    shadowColor: '#00D4FF',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.1,
-    shadowRadius: 12,
-    elevation: 4,
+  },
+  darkBorder: {
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.08)',
+  },
+  lightBorder: {
+    borderWidth: 1,
+    borderColor: 'rgba(0,0,0,0.07)',
   },
 });

@@ -1,282 +1,400 @@
-import React, { useState, useEffect, useRef } from 'react';
-import { View, Text, TextInput, FlatList, TouchableOpacity, StyleSheet, ActivityIndicator, KeyboardAvoidingView, Platform } from 'react-native';
-import { ScreenWrapper } from '../../components/ui/ScreenWrapper';
-import { Avatar } from '../../components/ui/Avatar';
-import { getOrCreateConversation, getConversationMessages, sendMessage } from '../../services/messageService';
+/**
+ * src/screens/messages/DirectChatScreen.tsx
+ * ─────────────────────────────────────────────────────────────────────────────
+ * Tactical In-Game Direct Chat — SPORTiX Mobile.
+ */
+
+import React, { useEffect, useState, useRef, useCallback } from 'react';
+import {
+  View,
+  Text,
+  FlatList,
+  TextInput,
+  StyleSheet,
+  TouchableOpacity,
+  KeyboardAvoidingView,
+  Platform,
+  Image,
+  ActivityIndicator,
+} from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import { LinearGradient } from 'expo-linear-gradient';
+import Animated, { FadeInDown } from 'react-native-reanimated';
+import { ArrowLeft, Send, Zap, Shield, Sparkles } from 'lucide-react-native';
+
+import { useTheme } from '../../theme/ThemeContext';
 import { useAuthStore } from '../../store/authStore';
-import { DbMessage } from '../../types';
-import { ChevronLeft, Send, CheckCheck } from 'lucide-react-native';
-import { client, DATABASE_ID, COLLECTIONS } from '../../api/appwrite';
+import { messageService } from '../../services/messageService';
+import { subscribeToConversation } from '../../utils/realtimeManager';
+import { Message } from '../../types';
+import { triggerHaptic } from '../../utils/haptics';
 
-export const DirectChatScreen = ({ route, navigation }: any) => {
-  const { conversationId: initialConvId, userId: targetUserId, partner: passedPartner } = route.params || {};
-  const user = useAuthStore(state => state.user);
+const QUICK_REACTIONS = ['⚡', '🔥', '🏆', '⚽', '🎯', '💪'];
 
-  const [convId, setConvId] = useState<string | null>(initialConvId || null);
-  const [messages, setMessages] = useState<DbMessage[]>([]);
-  const [input, setInput] = useState('');
+export function DirectChatScreen({ route, navigation }: any) {
+  const { conversationId, title } = route.params;
+  const { colors } = useTheme();
+  const profile = useAuthStore((state) => state.profile);
+
+  const [messages, setMessages] = useState<Message[]>([]);
+  const [text, setText] = useState('');
   const [loading, setLoading] = useState(true);
+  const [sending, setSending] = useState(false);
+  const listRef = useRef<FlatList>(null);
 
-  const flatListRef = useRef<FlatList>(null);
-
-  // Initialize conversation
   useEffect(() => {
-    let isMounted = true;
-    if (initialConvId) {
-      setConvId(initialConvId);
-      setLoading(false);
-      return;
-    }
-
-    if (user?.id && targetUserId) {
-      getOrCreateConversation(user.id, targetUserId).then(cId => {
-        if (isMounted) {
-          setConvId(cId);
-          setLoading(false);
-        }
-      });
-    } else {
-      setLoading(false);
-    }
-
-    return () => { isMounted = false; };
-  }, [initialConvId, user?.id, targetUserId]);
-
-  // Load messages & subscribe to realtime
-  useEffect(() => {
-    if (!convId) return;
-
-    getConversationMessages(convId).then(msgs => {
+    messageService.getMessages(conversationId).then((msgs) => {
       setMessages(msgs);
+      setLoading(false);
     });
 
-    const channel = `databases.${DATABASE_ID}.collections.${COLLECTIONS.MESSAGES}.documents`;
-    const unsubscribe = client.subscribe(channel, (response: any) => {
-      if (response.payload && response.payload.conversation_id === convId) {
-        getConversationMessages(convId).then(setMessages);
-      }
+    const unsub = subscribeToConversation(conversationId, (payload: any) => {
+      const newMsg: Message = {
+        $id: payload.$id,
+        conversation_id: payload.conversation_id,
+        sender_id: payload.sender_id,
+        content: payload.content ?? '',
+        $createdAt: payload.$createdAt,
+      };
+      setMessages((prev) => [...prev, newMsg]);
+      setTimeout(() => listRef.current?.scrollToEnd({ animated: true }), 100);
     });
 
     return () => {
-      unsubscribe();
+      try {
+        unsub();
+      } catch {
+        // Ignored
+      }
     };
-  }, [convId]);
+  }, [conversationId]);
 
-  const handleSend = async () => {
-    if (!input.trim() || !convId || !user?.id) return;
-    const text = input.trim();
-    setInput('');
+  const handleSend = useCallback(
+    async (contentToSend?: string) => {
+      const trimmed = (contentToSend || text).trim();
+      if (!trimmed || sending) return;
+      triggerHaptic('light');
+      setSending(true);
+      if (!contentToSend) setText('');
 
-    const temp: DbMessage = {
-      $id: `temp_${Date.now()}`,
-      conversation_id: convId,
-      sender_id: user.id,
-      message: text,
-      message_type: 'text',
-      created_at: new Date().toISOString(),
-      status: 'sending',
-    };
+      try {
+        const sent = await messageService.sendMessage(conversationId, trimmed);
+        setMessages((prev) => [...prev, { ...sent, sender: profile ?? undefined }]);
+        setTimeout(() => listRef.current?.scrollToEnd({ animated: true }), 100);
+      } catch (e) {
+        if (!contentToSend) setText(trimmed);
+      } finally {
+        setSending(false);
+      }
+    },
+    [text, sending, conversationId, profile]
+  );
 
-    setMessages(prev => [...prev, temp]);
-    setTimeout(() => flatListRef.current?.scrollToEnd({ animated: true }), 50);
-
-    await sendMessage(convId, user.id, text);
-    getConversationMessages(convId).then(setMessages);
-  };
-
-  const renderBubble = ({ item }: { item: DbMessage }) => {
-    const isOwn = item.sender_id === user?.id;
-
+  const renderMsg = ({ item }: { item: Message }) => {
+    const isMe = item.sender_id === profile?.$id;
     return (
-      <View style={[styles.bubbleWrapper, isOwn ? styles.ownWrapper : styles.partnerWrapper]}>
-        <View style={[styles.bubble, isOwn ? styles.ownBubble : styles.partnerBubble]}>
-          <Text style={[styles.msgText, isOwn ? styles.ownText : styles.partnerText]}>
-            {item.message}
+      <View style={[styles.msgWrapper, isMe ? styles.msgRight : styles.msgLeft]}>
+        <View
+          style={[
+            styles.bubble,
+            isMe ? styles.bubbleMe : styles.bubbleThem,
+          ]}
+        >
+          <Text
+            style={[
+              styles.msgText,
+              isMe ? styles.msgTextMe : styles.msgTextThem,
+            ]}
+          >
+            {item.content}
           </Text>
-          <View style={styles.timeRow}>
-            <Text style={[styles.timeText, isOwn ? styles.ownTime : styles.partnerTime]}>
-              {new Date(item.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-            </Text>
-            {isOwn && <CheckCheck size={12} color="#000" />}
-          </View>
+          <Text
+            style={[
+              styles.msgTime,
+              isMe ? styles.msgTimeMe : styles.msgTimeThem,
+            ]}
+          >
+            {item.$createdAt
+              ? new Date(item.$createdAt).toLocaleTimeString('en-US', {
+                  hour: '2-digit',
+                  minute: '2-digit',
+                })
+              : 'Just now'}
+          </Text>
         </View>
       </View>
     );
   };
 
   return (
-    <ScreenWrapper bg="#050A0E">
-      <KeyboardAvoidingView
-        style={styles.keyboardContainer}
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-      >
-        {/* Header (No phone/video calls) */}
-        <View style={styles.header}>
-          <TouchableOpacity style={styles.backBtn} onPress={() => navigation.goBack()}>
-            <ChevronLeft size={20} color="#FFF" />
+    <LinearGradient colors={['#000000', '#030508', '#000000']} style={styles.flex}>
+      <SafeAreaView style={styles.flex} edges={['top', 'bottom']}>
+        {/* Top Chat Bar */}
+        <View style={styles.topAppBar}>
+          <TouchableOpacity
+            onPress={() => {
+              triggerHaptic('selection');
+              navigation.goBack();
+            }}
+            style={styles.backBtn}
+          >
+            <ArrowLeft size={18} color="#FFF" />
           </TouchableOpacity>
 
-          <Avatar
-            uri={passedPartner?.avatar}
-            name={passedPartner?.name || 'Athlete'}
-            size={36}
-            isOnline={passedPartner?.isOnline}
-          />
+          <View style={styles.chatHeaderCenter}>
+            <Text style={styles.chatTitle} numberOfLines={1}>
+              {title || 'Athlete Huddle'}
+            </Text>
+            <View style={styles.onlineStatusRow}>
+              <View style={styles.onlineDot} />
+              <Text style={styles.onlineStatusText}>TACTICAL ENCRYPTED CHANNEL</Text>
+            </View>
+          </View>
 
-          <View style={styles.headerInfo}>
-            <Text style={styles.partnerTitle}>{passedPartner?.name || 'Athlete Chat'}</Text>
-            <Text style={styles.statusText}>Active Now</Text>
+          <View style={styles.zapWrap}>
+            <Zap size={16} color="#CCFF00" />
           </View>
         </View>
 
-        {/* Chat Body */}
         {loading ? (
-          <View style={styles.center}>
+          <View style={styles.loader}>
             <ActivityIndicator color="#CCFF00" size="large" />
+            <Text style={styles.loaderText}>CONNECTING TO HUDDLE...</Text>
           </View>
         ) : (
           <FlatList
-            ref={flatListRef}
+            ref={listRef}
             data={messages}
-            keyExtractor={item => item.$id}
-            renderItem={renderBubble}
-            contentContainerStyle={styles.messagesList}
-            onContentSizeChange={() => flatListRef.current?.scrollToEnd({ animated: true })}
+            keyExtractor={(m) => m.$id}
+            renderItem={renderMsg}
+            contentContainerStyle={styles.messageList}
+            onContentSizeChange={() => listRef.current?.scrollToEnd({ animated: true })}
+            showsVerticalScrollIndicator={false}
           />
         )}
 
-        {/* Input Bar */}
-        <View style={styles.inputBar}>
-          <TextInput
-            style={styles.input}
-            placeholder="Type a message..."
-            placeholderTextColor="#555"
-            value={input}
-            onChangeText={setInput}
-          />
-          <TouchableOpacity style={styles.sendBtn} onPress={handleSend}>
-            <Send size={16} color="#000" />
-          </TouchableOpacity>
+        {/* Quick Reaction Bar */}
+        <View style={styles.reactionBar}>
+          {QUICK_REACTIONS.map((emoji) => (
+            <TouchableOpacity
+              key={emoji}
+              style={styles.reactionChip}
+              onPress={() => handleSend(emoji)}
+            >
+              <Text style={styles.reactionText}>{emoji}</Text>
+            </TouchableOpacity>
+          ))}
         </View>
-      </KeyboardAvoidingView>
-    </ScreenWrapper>
+
+        {/* Message Input Box */}
+        <KeyboardAvoidingView
+          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+          keyboardVerticalOffset={Platform.OS === 'ios' ? 10 : 0}
+        >
+          <View style={styles.inputBar}>
+            <TextInput
+              style={styles.textInput}
+              placeholder="Send tactical message or tactic..."
+              placeholderTextColor="#64748B"
+              value={text}
+              onChangeText={setText}
+              onSubmitEditing={() => handleSend()}
+              returnKeyType="send"
+            />
+            <TouchableOpacity
+              onPress={() => handleSend()}
+              style={[styles.sendBtn, !text.trim() && styles.sendBtnDisabled]}
+              disabled={!text.trim() || sending}
+            >
+              {sending ? (
+                <ActivityIndicator color="#000" size="small" />
+              ) : (
+                <Send size={16} color="#000" />
+              )}
+            </TouchableOpacity>
+          </View>
+        </KeyboardAvoidingView>
+      </SafeAreaView>
+    </LinearGradient>
   );
-};
+}
 
 const styles = StyleSheet.create({
-  keyboardContainer: {
-    flex: 1,
-  },
-  header: {
+  flex: { flex: 1 },
+  topAppBar: {
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'space-between',
     paddingHorizontal: 16,
     paddingVertical: 10,
     borderBottomWidth: 1,
-    borderBottomColor: 'rgba(255, 255, 255, 0.08)',
-    gap: 10,
+    borderBottomColor: 'rgba(255, 255, 255, 0.06)',
   },
   backBtn: {
-    padding: 4,
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: '#121820',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.08)',
   },
-  headerInfo: {
+  chatHeaderCenter: {
+    alignItems: 'center',
     flex: 1,
+    marginHorizontal: 12,
   },
-  partnerTitle: {
+  chatTitle: {
+    fontSize: 14,
+    fontFamily: 'Urbanist_800ExtraBold',
     color: '#FFF',
-    fontSize: 15,
-    fontWeight: 'bold',
   },
-  statusText: {
-    color: '#CCFF00',
-    fontSize: 10,
+  onlineStatusRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    marginTop: 2,
   },
-  messagesList: {
-    paddingHorizontal: 16,
-    paddingVertical: 12,
+  onlineDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: '#00FF78',
+  },
+  onlineStatusText: {
+    fontSize: 8,
+    fontFamily: 'Urbanist_700Bold',
+    color: '#64748B',
+    letterSpacing: 0.5,
+  },
+  zapWrap: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: 'rgba(204, 255, 0, 0.12)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+
+  loader: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
     gap: 10,
   },
-  bubbleWrapper: {
-    flexDirection: 'row',
+  loaderText: {
+    fontSize: 11,
+    fontFamily: 'Urbanist_800ExtraBold',
+    color: '#CCFF00',
+    letterSpacing: 0.8,
   },
-  ownWrapper: {
+
+  messageList: {
+    padding: 16,
+    gap: 10,
+  },
+  msgWrapper: {
+    flexDirection: 'row',
+    marginBottom: 6,
+  },
+  msgRight: {
     justifyContent: 'flex-end',
   },
-  partnerWrapper: {
+  msgLeft: {
     justifyContent: 'flex-start',
   },
   bubble: {
-    maxWidth: '75%',
-    padding: 12,
+    maxWidth: '78%',
+    paddingHorizontal: 14,
+    paddingVertical: 10,
     borderRadius: 16,
+    gap: 4,
   },
-  ownBubble: {
+  bubbleMe: {
     backgroundColor: '#CCFF00',
-    borderBottomRightRadius: 2,
+    borderBottomRightRadius: 4,
   },
-  partnerBubble: {
+  bubbleThem: {
     backgroundColor: '#121A22',
-    borderBottomLeftRadius: 2,
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.08)',
+    borderColor: 'rgba(255, 255, 255, 0.06)',
+    borderBottomLeftRadius: 4,
   },
   msgText: {
     fontSize: 13,
     lineHeight: 18,
   },
-  ownText: {
+  msgTextMe: {
+    fontFamily: 'Urbanist_700Bold',
     color: '#000',
-    fontWeight: '500',
   },
-  partnerText: {
+  msgTextThem: {
+    fontFamily: 'Urbanist_500Medium',
     color: '#FFF',
   },
-  timeRow: {
+  msgTime: {
+    fontSize: 8,
+    alignSelf: 'flex-end',
+  },
+  msgTimeMe: {
+    color: 'rgba(0, 0, 0, 0.6)',
+    fontFamily: 'Urbanist_700Bold',
+  },
+  msgTimeThem: {
+    color: '#64748B',
+    fontFamily: 'Urbanist_500Medium',
+  },
+
+  reactionBar: {
     flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'flex-end',
-    gap: 4,
-    marginTop: 4,
+    justifyContent: 'center',
+    gap: 10,
+    paddingVertical: 6,
   },
-  timeText: {
-    fontSize: 9,
+  reactionChip: {
+    backgroundColor: '#121A22',
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.06)',
   },
-  ownTime: {
-    color: 'rgba(0,0,0,0.6)',
+  reactionText: {
+    fontSize: 14,
   },
-  partnerTime: {
-    color: '#666',
-  },
+
   inputBar: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 12,
+    paddingHorizontal: 16,
     paddingVertical: 10,
-    backgroundColor: '#0A1118',
+    backgroundColor: '#0C131A',
     borderTopWidth: 1,
-    borderTopColor: 'rgba(255, 255, 255, 0.08)',
-    gap: 8,
+    borderTopColor: 'rgba(255, 255, 255, 0.06)',
+    gap: 10,
   },
-  input: {
+  textInput: {
     flex: 1,
-    height: 42,
     backgroundColor: '#121A22',
-    borderRadius: 12,
+    borderRadius: 14,
     paddingHorizontal: 14,
-    color: '#FFF',
+    paddingVertical: 10,
     fontSize: 13,
+    fontFamily: 'Urbanist_500Medium',
+    color: '#FFF',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.06)',
   },
   sendBtn: {
     width: 42,
     height: 42,
-    borderRadius: 12,
+    borderRadius: 14,
     backgroundColor: '#CCFF00',
     alignItems: 'center',
     justifyContent: 'center',
   },
-  center: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
+  sendBtnDisabled: {
+    opacity: 0.4,
   },
 });

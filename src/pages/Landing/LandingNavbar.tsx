@@ -97,15 +97,7 @@ const LandingNavbar: React.FC = () => {
         }}
       >
         <div
-          style={{
-            maxWidth: '1280px',
-            margin: '0 auto',
-            height: '100%',
-            padding: '0 24px',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'space-between',
-          }}
+          className="max-w-[1400px] mx-auto h-full px-5 sm:px-8 lg:px-12 flex items-center justify-between"
         >
           {/* Logo */}
           <button

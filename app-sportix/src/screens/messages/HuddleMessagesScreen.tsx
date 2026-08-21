@@ -1,220 +1,474 @@
-import React, { useState, useEffect } from 'react';
-import { View, Text, FlatList, TouchableOpacity, StyleSheet, ActivityIndicator, TextInput } from 'react-native';
-import { ScreenWrapper } from '../../components/ui/ScreenWrapper';
-import { GlassCard } from '../../components/ui/GlassCard';
-import { Avatar } from '../../components/ui/Avatar';
-import { getUserConversations } from '../../services/messageService';
-import { useAuthStore } from '../../store/authStore';
-import { ConversationSummary } from '../../types';
-import { Search, Plus, MessageSquare, UserX } from 'lucide-react-native';
+/**
+ * src/screens/messages/HuddleMessagesScreen.tsx
+ * ─────────────────────────────────────────────────────────────────────────────
+ * Huddle Chat & Squad Communications — SPORTiX Design System & Urbanist Typography.
+ */
 
-export const HuddleMessagesScreen = ({ navigation }: any) => {
-  const user = useAuthStore(state => state.user);
-  const [conversations, setConversations] = useState<ConversationSummary[]>([]);
+import React, { useEffect, useState } from 'react';
+import {
+  View,
+  Text,
+  FlatList,
+  StyleSheet,
+  TouchableOpacity,
+  Image,
+  ActivityIndicator,
+  TextInput,
+} from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import { LinearGradient } from 'expo-linear-gradient';
+import Animated, { FadeInDown } from 'react-native-reanimated';
+import {
+  MessageCircle,
+  Search,
+  Zap,
+  Bell,
+  Settings,
+  Users,
+  ShieldCheck,
+  Plus,
+} from 'lucide-react-native';
+
+import { useTheme } from '../../theme/ThemeContext';
+import { useAuthStore } from '../../store/authStore';
+import { useNotificationStore } from '../../store/notificationStore';
+import { messageService } from '../../services/messageService';
+import { Conversation } from '../../types';
+import { EmptyState } from '../../components/ui/EmptyState';
+import { triggerHaptic } from '../../utils/haptics';
+
+export function HuddleMessagesScreen({ navigation }: any) {
+  const { colors } = useTheme();
+  const profile = useAuthStore((state) => state.profile);
+  const unreadCount = useNotificationStore((state) => state.unreadCount);
+
+  const [conversations, setConversations] = useState<Conversation[]>([]);
   const [loading, setLoading] = useState(true);
-  const [searchQ, setSearchQ] = useState('');
+  const [search, setSearch] = useState('');
+  const [chatType, setChatType] = useState<'all' | 'direct' | 'squads'>('all');
 
   useEffect(() => {
-    if (user?.id) {
-      getUserConversations(user.id).then(res => {
-        setConversations(res);
-        setLoading(false);
-      });
-    } else {
-      setLoading(false);
-    }
-  }, [user?.id]);
+    messageService
+      .getMyConversations()
+      .then(setConversations)
+      .finally(() => setLoading(false));
+  }, []);
 
-  const filtered = conversations.filter(c =>
-    c.partner.name.toLowerCase().includes(searchQ.toLowerCase()) ||
-    c.partner.username.toLowerCase().includes(searchQ.toLowerCase())
+  const filtered = conversations.filter((c) =>
+    c.name.toLowerCase().includes(search.toLowerCase())
   );
 
-  const renderConversationItem = ({ item }: { item: ConversationSummary }) => (
-    <TouchableOpacity
-      activeOpacity={0.8}
-      onPress={() => navigation.navigate('DirectChat', { conversationId: item.id, partner: item.partner })}
-    >
-      <GlassCard style={styles.convCard}>
-        <Avatar uri={item.partner.avatar} name={item.partner.name} size={44} isOnline={item.partner.isOnline} />
+  const renderConv = ({ item, index }: { item: Conversation; index: number }) => {
+    const time = item.last_message_at
+      ? new Date(item.last_message_at).toLocaleTimeString('en-US', {
+          hour: '2-digit',
+          minute: '2-digit',
+        })
+      : 'Just now';
 
-        <View style={styles.convInfo}>
-          <View style={styles.convHeader}>
-            <Text style={styles.partnerName}>{item.partner.name}</Text>
-            <Text style={styles.timeText}>
-              {item.lastMessage ? new Date(item.lastMessage.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : ''}
+    return (
+      <Animated.View
+        entering={FadeInDown.delay(Math.min(200, index * 50)).duration(300)}
+      >
+        <TouchableOpacity
+          onPress={() => {
+            triggerHaptic('light');
+            navigation.navigate('DirectChat', {
+              conversationId: item.$id,
+              title: item.name,
+            });
+          }}
+          style={styles.convCard}
+          activeOpacity={0.85}
+        >
+          <View style={styles.avatarWrap}>
+            {item.avatar_url ? (
+              <Image
+                source={{ uri: item.avatar_url }}
+                style={styles.avatar}
+                resizeMode="cover"
+              />
+            ) : (
+              <View style={styles.avatarPlaceholder}>
+                <Text style={styles.avatarInitial}>
+                  {item.name.charAt(0).toUpperCase()}
+                </Text>
+              </View>
+            )}
+            <View style={styles.onlineDot} />
+          </View>
+
+          <View style={styles.convInfo}>
+            <View style={styles.convNameRow}>
+              <Text style={styles.convName} numberOfLines={1}>
+                {item.name}
+              </Text>
+              <Text style={styles.timeText}>{time}</Text>
+            </View>
+            <Text style={styles.lastMsg} numberOfLines={1}>
+              {item.last_message || 'Tap to begin tactical communication'}
             </Text>
           </View>
-          <Text style={styles.lastMsgText} numberOfLines={1}>
-            {item.lastMessage?.content || 'No messages yet'}
-          </Text>
-        </View>
-
-        {item.unreadCount > 0 && (
-          <View style={styles.unreadBadge}>
-            <Text style={styles.unreadText}>{item.unreadCount}</Text>
-          </View>
-        )}
-      </GlassCard>
-    </TouchableOpacity>
-  );
+        </TouchableOpacity>
+      </Animated.View>
+    );
+  };
 
   return (
-    <ScreenWrapper style={styles.container}>
-      <View style={styles.header}>
-        <Text style={styles.title}>HUDDLE <Text style={styles.highlight}>MESSAGES</Text></Text>
-        <TouchableOpacity style={styles.plusBtn} onPress={() => navigation.navigate('DiscoverTab')}>
-          <Plus size={18} color="#000" />
-        </TouchableOpacity>
-      </View>
-
-      <View style={styles.searchBar}>
-        <Search size={16} color="#888" style={styles.searchIcon} />
-        <TextInput
-          style={styles.searchInput}
-          placeholder="Search real athletes to chat..."
-          placeholderTextColor="#555"
-          value={searchQ}
-          onChangeText={setSearchQ}
-        />
-      </View>
-
-      {loading ? (
-        <View style={styles.centerContainer}>
-          <ActivityIndicator color="#00D4FF" size="large" />
-          <Text style={styles.loadingText}>Syncing chats from Appwrite...</Text>
-        </View>
-      ) : (
-        <FlatList
-          data={filtered}
-          keyExtractor={item => item.id}
-          renderItem={renderConversationItem}
-          contentContainerStyle={styles.listContainer}
-          showsVerticalScrollIndicator={false}
-          ListEmptyComponent={
-            <View style={styles.centerContainer}>
-              <UserX size={36} color="#555" />
-              <Text style={styles.emptyTitle}>No active conversations yet.</Text>
-              <Text style={styles.emptySub}>Explore Discover to scout athletes and start chatting!</Text>
+    <LinearGradient colors={['#000000', '#030508', '#000000']} style={styles.flex}>
+      <SafeAreaView style={styles.flex} edges={['top']}>
+        {/* Top App Bar */}
+        <View style={styles.topAppBar}>
+          <View style={styles.topBrand}>
+            <View style={styles.voltZapCircle}>
+              <Zap size={14} color="#000" strokeWidth={3} fill="#000" />
             </View>
-          }
-        />
-      )}
-    </ScreenWrapper>
+            <Text style={styles.brandTitle}>SPORTIX</Text>
+            <View style={styles.huddleBadge}>
+              <Text style={styles.huddleBadgeText}>HUDDLE</Text>
+            </View>
+          </View>
+
+          <View style={styles.headerActions}>
+            <TouchableOpacity
+              onPress={() => {
+                triggerHaptic('selection');
+                navigation.navigate('Notifications');
+              }}
+              style={styles.iconCircleBtn}
+            >
+              <Bell size={18} color="#FFF" />
+              {unreadCount > 0 && (
+                <View style={styles.badge}>
+                  <Text style={styles.badgeText}>
+                    {unreadCount > 9 ? '9+' : unreadCount}
+                  </Text>
+                </View>
+              )}
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.iconCircleBtn}
+              onPress={() => {
+                triggerHaptic('selection');
+                navigation.navigate('Settings');
+              }}
+            >
+              <Settings size={18} color="#94A3B8" />
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.avatarBtn}
+              onPress={() => {
+                triggerHaptic('selection');
+                navigation.navigate('ProfileDNATab');
+              }}
+            >
+              <Image
+                source={{
+                  uri:
+                    profile?.avatar_url ||
+                    'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=100&q=80',
+                }}
+                style={styles.avatarImg}
+                resizeMode="cover"
+              />
+            </TouchableOpacity>
+          </View>
+        </View>
+
+        {/* Search Bar */}
+        <View style={styles.searchSection}>
+          <View style={styles.searchBar}>
+            <Search size={16} color="#64748B" />
+            <TextInput
+              style={styles.searchInput}
+              placeholder="Search teammates, squads, channels..."
+              placeholderTextColor="#64748B"
+              value={search}
+              onChangeText={setSearch}
+            />
+          </View>
+
+          {/* Filter Pills */}
+          <View style={styles.filterRow}>
+            {[
+              { id: 'all', label: 'ALL CHATS' },
+              { id: 'direct', label: 'DIRECT' },
+              { id: 'squads', label: 'SQUAD HUDDLES' },
+            ].map((tab) => {
+              const isSel = chatType === tab.id;
+              return (
+                <TouchableOpacity
+                  key={tab.id}
+                  style={[styles.filterChip, isSel && styles.filterChipActive]}
+                  onPress={() => {
+                    triggerHaptic('selection');
+                    setChatType(tab.id as any);
+                  }}
+                >
+                  <Text
+                    style={[
+                      styles.filterChipText,
+                      isSel && styles.filterChipTextActive,
+                    ]}
+                  >
+                    {tab.label}
+                  </Text>
+                </TouchableOpacity>
+              );
+            })}
+          </View>
+        </View>
+
+        {loading ? (
+          <View style={styles.loader}>
+            <ActivityIndicator color="#CCFF00" size="large" />
+            <Text style={styles.loaderText}>SYNCING HUDDLE MESSAGES...</Text>
+          </View>
+        ) : (
+          <FlatList
+            data={filtered}
+            keyExtractor={(c) => c.$id}
+            renderItem={renderConv}
+            contentContainerStyle={styles.list}
+            ListEmptyComponent={
+              <EmptyState
+                icon="💬"
+                title="NO HUDDLES YET"
+                subtitle="Start a direct chat with any athlete or form an AI AutoSquad!"
+              />
+            }
+          />
+        )}
+      </SafeAreaView>
+    </LinearGradient>
   );
-};
+}
 
 const styles = StyleSheet.create({
-  container: {
+  flex: { flex: 1 },
+  topAppBar: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
     paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(255, 255, 255, 0.06)',
   },
-  header: {
+  topBrand: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: 16,
-    paddingTop: 8,
+    gap: 8,
   },
-  title: {
-    color: '#FFF',
-    fontSize: 26,
-    fontWeight: '900',
-  },
-  highlight: {
-    color: '#CCFF00',
-  },
-  plusBtn: {
-    width: 36,
-    height: 36,
-    borderRadius: 12,
+  voltZapCircle: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
     backgroundColor: '#CCFF00',
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  brandTitle: {
+    fontSize: 18,
+    fontFamily: 'Urbanist_900Black',
+    color: '#CCFF00',
+    letterSpacing: 1,
+  },
+  huddleBadge: {
+    backgroundColor: 'rgba(0, 212, 255, 0.12)',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 6,
+  },
+  huddleBadgeText: {
+    fontSize: 8,
+    fontFamily: 'Urbanist_800ExtraBold',
+    color: '#00D4FF',
+    letterSpacing: 0.5,
+  },
+  headerActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  iconCircleBtn: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: '#121820',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.08)',
+    position: 'relative',
+  },
+  badge: {
+    position: 'absolute',
+    top: -2,
+    right: -2,
+    minWidth: 16,
+    height: 16,
+    borderRadius: 8,
+    backgroundColor: '#FF3B30',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 3,
+  },
+  badgeText: {
+    fontSize: 8,
+    fontFamily: 'Urbanist_900Black',
+    color: '#FFF',
+  },
+  avatarBtn: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    overflow: 'hidden',
+    borderWidth: 1.5,
+    borderColor: '#CCFF00',
+  },
+  avatarImg: {
+    width: '100%',
+    height: '100%',
+  },
+
+  searchSection: {
+    paddingHorizontal: 16,
+    paddingTop: 12,
+    paddingBottom: 6,
+    gap: 10,
   },
   searchBar: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#0A1118',
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.1)',
+    backgroundColor: '#0C131A',
+    borderRadius: 14,
     paddingHorizontal: 12,
-    marginBottom: 16,
-  },
-  searchIcon: {
-    marginRight: 8,
+    paddingVertical: 8,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.06)',
+    gap: 8,
   },
   searchInput: {
     flex: 1,
-    height: 44,
+    fontSize: 12,
+    fontFamily: 'Urbanist_500Medium',
     color: '#FFF',
-    fontSize: 13,
   },
-  listContainer: {
+  filterRow: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  filterChip: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 10,
+    backgroundColor: '#0C131A',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.06)',
+  },
+  filterChipActive: {
+    backgroundColor: '#CCFF00',
+    borderColor: '#CCFF00',
+  },
+  filterChipText: {
+    fontSize: 10,
+    fontFamily: 'Urbanist_700Bold',
+    color: '#64748B',
+  },
+  filterChipTextActive: {
+    color: '#000',
+    fontFamily: 'Urbanist_900Black',
+  },
+
+  loader: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
     gap: 10,
-    paddingBottom: 24,
+  },
+  loaderText: {
+    fontSize: 11,
+    fontFamily: 'Urbanist_800ExtraBold',
+    color: '#CCFF00',
+    letterSpacing: 0.8,
+  },
+  list: {
+    padding: 16,
+    gap: 10,
   },
   convCard: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 12,
     padding: 12,
+    backgroundColor: '#0C131A',
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.06)',
+    gap: 12,
+  },
+  avatarWrap: {
+    position: 'relative',
+  },
+  avatar: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.1)',
+  },
+  avatarPlaceholder: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: '#18202A',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.1)',
+  },
+  avatarInitial: {
+    color: '#CCFF00',
+    fontSize: 16,
+    fontFamily: 'Urbanist_900Black',
+  },
+  onlineDot: {
+    position: 'absolute',
+    bottom: 0,
+    right: 0,
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+    backgroundColor: '#00FF78',
+    borderWidth: 1.5,
+    borderColor: '#0C131A',
   },
   convInfo: {
     flex: 1,
-    gap: 4,
+    gap: 3,
   },
-  convHeader: {
+  convNameRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
   },
-  partnerName: {
+  convName: {
+    fontSize: 13,
+    fontFamily: 'Urbanist_800ExtraBold',
     color: '#FFF',
-    fontSize: 14,
-    fontWeight: 'bold',
+    flex: 1,
+    marginRight: 6,
   },
   timeText: {
-    color: '#666',
-    fontSize: 10,
+    fontSize: 9,
+    fontFamily: 'Urbanist_500Medium',
+    color: '#64748B',
   },
-  lastMsgText: {
-    color: '#888',
-    fontSize: 12,
-  },
-  unreadBadge: {
-    width: 20,
-    height: 20,
-    borderRadius: 10,
-    backgroundColor: '#CCFF00',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  unreadText: {
-    color: '#000',
-    fontSize: 10,
-    fontWeight: 'bold',
-  },
-  centerContainer: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 40,
-    gap: 8,
-  },
-  loadingText: {
-    color: '#888',
-    fontSize: 12,
-  },
-  emptyTitle: {
-    color: '#FFF',
-    fontSize: 15,
-    fontWeight: 'bold',
-  },
-  emptySub: {
-    color: '#888',
-    fontSize: 12,
-    textAlign: 'center',
-    maxWidth: 240,
+  lastMsg: {
+    fontSize: 11,
+    fontFamily: 'Urbanist_400Regular',
+    color: '#94A3B8',
   },
 });

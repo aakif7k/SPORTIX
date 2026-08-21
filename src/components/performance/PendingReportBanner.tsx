@@ -108,11 +108,11 @@ export const PendingReportBanner: React.FC = () => {
               <motion.button
                 whileHover={{ scale: 1.04, boxShadow: '0 0 16px rgba(251,191,36,0.3)' }}
                 whileTap={{ scale: 0.97 }}
-                onClick={() => navigate(`/app/clashhub/report/${pendingMatch.matchId}`)}
+                onClick={() => navigate(`/app/events/${pendingMatch.eventId || pendingMatch.matchId}/report`)}
                 className="flex items-center gap-2 px-5 py-2 rounded-[10px] font-condensed font-semibold text-[15px] transition-all"
-                style={{ background: '#FBBF24', color: '#080808' }}
+                style={{ background: '#CCFF00', color: '#080808' }}
               >
-                Complete Report <ArrowRight size={15} />
+                Complete Report (+40 Pulse) <ArrowRight size={15} />
               </motion.button>
             </div>
           </div>

@@ -2,10 +2,10 @@ import React, { useState } from 'react';
 import { motion } from 'framer-motion';
 import { 
   CheckCheck, Trash2, Calendar, Brain, User2, Heart, Clock, Trophy, 
-  Bell, CheckCircle2, Zap
+  Bell, CheckCircle2, Zap, FileText, AlertTriangle
 } from 'lucide-react';
 import { useNotificationStore } from '../../store/notificationStore';
-import type { Notification, NotificationType } from '../../types';
+import type { Notification } from '../../types';
 
 const UPCOMING_DROPS = [
   { id: 1, title: 'Summer Championship Bracket', time: '14:00', type: 'Tournament' },
@@ -43,8 +43,17 @@ const UpcomingDropsRow: React.FC = () => (
   </div>
 );
 
-const TYPE_CONFIG: Record<NotificationType, { icon: React.ComponentType<{ size?: number; className?: string }>; color: string; bg: string }> = {
+import { useNavigate } from 'react-router-dom';
+
+const TYPE_CONFIG: Record<string, { icon: React.ComponentType<{ size?: number; className?: string }>; color: string; bg: string }> = {
   event_invite: { icon: Calendar, color: 'text-[#CCFF00]', bg: 'bg-[#CCFF00]/10 border-[#CCFF00]/30' },
+  event_report: { icon: Trophy, color: 'text-[#CCFF00]', bg: 'bg-[#CCFF00]/10 border-[#CCFF00]/30 shadow-[0_0_12px_rgba(204,255,0,0.2)]' },
+  match_report_ready: { icon: Trophy, color: 'text-[#CCFF00]', bg: 'bg-[#CCFF00]/10 border-[#CCFF00]/30' },
+  match_report_submitted: { icon: FileText, color: 'text-[#00D4FF]', bg: 'bg-[#00D4FF]/10 border-[#00D4FF]/30' },
+  match_report_verified: { icon: CheckCircle2, color: 'text-emerald-400', bg: 'bg-emerald-500/10 border-emerald-500/30' },
+  match_report_correction_requested: { icon: AlertTriangle, color: 'text-amber-400', bg: 'bg-amber-500/10 border-amber-500/30' },
+  match_report_disputed: { icon: AlertTriangle, color: 'text-rose-400', bg: 'bg-rose-500/10 border-rose-500/30' },
+  match_report_rectified: { icon: Zap, color: 'text-cyan-400', bg: 'bg-cyan-500/10 border-cyan-500/30' },
   ai_match: { icon: Brain, color: 'text-[#00D4FF]', bg: 'bg-[#00D4FF]/10 border-[#00D4FF]/30' },
   connection_request: { icon: User2, color: 'text-purple-400', bg: 'bg-purple-500/10 border-purple-500/30' },
   like: { icon: Heart, color: 'text-red-400', bg: 'bg-red-500/10 border-red-500/30' },
@@ -69,14 +78,28 @@ const isYesterday = (ts: string) => {
 
 const NotifItem: React.FC<{ notif: Notification }> = ({ notif }) => {
   const { markRead } = useNotificationStore();
+  const navigate = useNavigate();
   const config = TYPE_CONFIG[notif.type] || { icon: Bell, color: 'text-white', bg: 'bg-elevated border-white/10' };
   const Icon = config.icon;
+
+  const handleClick = () => {
+    markRead(notif.id);
+    if (notif.relatedId) {
+      if (notif.type === 'event_report' || notif.type === 'match_report_ready' || notif.type === 'match_report_correction_requested') {
+        navigate(`/app/events/${notif.relatedId}/report`);
+      } else if (notif.type === 'match_report_submitted' || notif.type === 'match_report_disputed') {
+        navigate(`/app/events/${notif.relatedId}/manage?tab=reports`);
+      } else if (notif.relatedType === 'event') {
+        navigate(`/app/events/${notif.relatedId}`);
+      }
+    }
+  };
 
   return (
     <motion.div
       initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}
       whileHover={{ y: -2 }}
-      onClick={() => markRead(notif.id)}
+      onClick={handleClick}
       className={`flex items-start gap-4 p-4 rounded-2xl border cursor-pointer transition-all ${
         notif.read ? 'bg-surface/50 border-border-muted/50 opacity-60' : 'bg-surface border-volt/20 shadow-md'
       }`}
@@ -113,9 +136,15 @@ const GroupLabel: React.FC<{ label: string }> = ({ label }) => (
   </div>
 );
 
+import { useEffect } from 'react';
+
 export const NotificationCenter: React.FC = () => {
-  const { notifications, unreadCount, markAllRead, clearAll } = useNotificationStore();
+  const { notifications, unreadCount, loadNotifications, markAllRead, clearAll } = useNotificationStore();
   const [filter, setFilter] = useState<'all' | 'unread'>('all');
+
+  useEffect(() => {
+    loadNotifications();
+  }, [loadNotifications]);
 
   const filteredNotifications = filter === 'unread' ? notifications.filter(n => !n.read) : notifications;
 

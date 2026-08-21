@@ -16,7 +16,7 @@ export const HeroSection: React.FC = () => {
   const [showDemo, setShowDemo] = useState(false);
 
   return (
-    <section className="relative min-h-[92vh] flex items-center overflow-hidden bg-[#060606] pt-24 pb-16 lg:py-0" id="hero">
+    <section className="relative overflow-hidden bg-[#060606] pt-[92px] pb-12 sm:pt-[100px] sm:pb-16 lg:pt-[104px] lg:pb-20" id="hero">
       {/* Dynamic Cyber Grid & Radial Glow */}
       <div 
         className="absolute inset-0 pointer-events-none opacity-30"

@@ -1,8 +1,9 @@
 import { create } from 'zustand';
-import type { Squad, ChatMessage, Tournament, Athlete } from '../types/pulse.types';
+import type { Squad, ChatMessage, Tournament } from '../types/pulse.types';
 import { useAuthStore } from './authStore';
 import { getSquads, updateSquad } from '../services/squadService';
 import { getMessages, createMessage } from '../services/messageService';
+import { getUserGeneratedSquads } from '../services/autoSquadService';
 
 interface SquadStoreState {
   squads: Squad[];
@@ -41,144 +42,6 @@ interface SquadStoreState {
   reset: () => void;
 }
 
-export const mockAthletes: Athlete[] = [
-  { uid: 'u1', name: 'Marcus Reid', avatar: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=150', sport: 'Football', position: 'ST', pulseScore: 847, tier: 'ELITE', compatibility: 94, role: 'member', readiness: 'Ready', level: 84, distance: 1.2 },
-  { uid: 'u2', name: 'Zaid Al-Hassan', avatar: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=150', sport: 'Football', position: 'CM', pulseScore: 793, tier: 'ELITE', compatibility: 91, role: 'strategist', readiness: 'Ready', level: 79, distance: 4.5 },
-  { uid: 'u3', name: 'Priya Nair', avatar: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=150', sport: 'Football', position: 'GK', pulseScore: 721, tier: 'CONTENDER', compatibility: 85, role: 'member', readiness: 'Maybe', level: 72, distance: 6.1 },
-  { uid: 'u4', name: 'Devon Clarke', avatar: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150', sport: 'Football', position: 'CB', pulseScore: 689, tier: 'CONTENDER', compatibility: 78, role: 'recruiter', readiness: 'Ready', level: 68, distance: 8.2 },
-  { uid: 'u5', name: 'Aisha Mensah', avatar: 'https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?w=150', sport: 'Football', position: 'LW', pulseScore: 812, tier: 'ELITE', compatibility: 88, role: 'vice', readiness: 'Ready', level: 81, distance: 3.3 },
-  { uid: 'cu1', name: 'Alex Rivera (You)', avatar: 'https://images.pexels.com/photos/1486064/pexels-photo-1486064.jpeg?cs=srgb&dl=pexels-nkhajotia-1486064.jpg&fm=jpg', sport: 'Football', position: 'RW', pulseScore: 721, tier: 'CONTENDER', compatibility: 100, role: 'captain', readiness: 'Ready', level: 24, distance: 0 }
-];
-
-export const mockMatchHistory: any[] = [
-  {
-    matchId: 'm1',
-    squadId: 'squad-1',
-    opponentName: 'Rapid XI',
-    result: 'W',
-    score: '3 - 1',
-    date: '2026-05-18',
-    chemistryDelta: 8,
-    topPerformer: { uid: 'u1', name: 'Marcus Reid', avatar: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=150', statsSummary: '2 Goals, 1 Assist' }
-  },
-  {
-    matchId: 'm2',
-    squadId: 'squad-1',
-    opponentName: 'Cyber Athletico',
-    result: 'D',
-    score: '2 - 2',
-    date: '2026-05-14',
-    chemistryDelta: 2,
-    topPerformer: { uid: 'u2', name: 'Zaid Al-Hassan', avatar: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=150', statsSummary: '1 Goal, 85% Pass Accuracy' }
-  },
-  {
-    matchId: 'm3',
-    squadId: 'squad-1',
-    opponentName: 'Titan United',
-    result: 'W',
-    score: '1 - 0',
-    date: '2026-05-10',
-    chemistryDelta: 5,
-    topPerformer: { uid: 'u3', name: 'Priya Nair', avatar: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=150', statsSummary: '6 Saves, Clean Sheet' }
-  }
-];
-
-export const mockAchievements = [
-  { id: 'a1', name: '5 Match Win Streak', icon: 'Trophy', description: 'Win 5 matches in a row', unlocked: true },
-  { id: 'a2', name: 'Chemistry 90%+', icon: 'Zap', description: 'Reach overall team chemistry above 90%', unlocked: false },
-  { id: 'a3', name: 'Zero Disputes', icon: 'Shield', description: 'Complete 10 matches with no post-match validation disputes', unlocked: true },
-  { id: 'a4', name: 'Pulse Elite Squad', icon: 'Flame', description: 'Average squad Pulse Score above 800', unlocked: false }
-];
-
-const initialChats: Record<string, ChatMessage[]> = {
-  'squad-1': [
-    { msgId: 'c1', senderId: 'u2', senderName: 'Zaid Al-Hassan', senderAvatar: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=150', senderRole: 'strategist', content: 'Hey team, let\'s focus on tactical counter-attacks for tomorrow\'s match.', type: 'text', timestamp: '2026-05-19T14:30:00Z' },
-    { msgId: 'c2', senderId: 'cu1', senderName: 'Alex Rivera (You)', senderAvatar: 'https://images.pexels.com/photos/1486064/pexels-photo-1486064.jpeg?cs=srgb&dl=pexels-nkhajotia-1486064.jpg&fm=jpg', senderRole: 'captain', content: 'Tactical Update: Switching to 4-3-3 for this weekend', type: 'tactical', tacticalData: { formation: '4-3-3', notes: 'Using overlapping wingers and low-block defense.' }, timestamp: '2026-05-19T15:00:00Z' },
-    { msgId: 'c3', senderId: 'cu1', senderName: 'Alex Rivera (You)', senderAvatar: 'https://images.pexels.com/photos/1486064/pexels-photo-1486064.jpeg?cs=srgb&dl=pexels-nkhajotia-1486064.jpg&fm=jpg', senderRole: 'captain', content: '📅 Match vs Rapid XI — Saturday 6PM — City Ground', type: 'announcement', announcementData: { matchTime: 'Saturday 6PM', venue: 'City Ground' }, timestamp: '2026-05-19T15:05:00Z' },
-    {
-      msgId: 'c4',
-      senderId: 'u2',
-      senderName: 'Zaid Al-Hassan',
-      senderAvatar: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=150',
-      senderRole: 'strategist',
-      content: 'Best time for practice?',
-      type: 'poll',
-      pollData: {
-        question: 'Best time for practice?',
-        options: [
-          { text: 'Friday 5PM', votes: 4 },
-          { text: 'Saturday 10AM', votes: 2 },
-          { text: 'Sunday 2PM', votes: 0 }
-        ],
-        votedUsers: ['u1', 'u2', 'u3', 'u4', 'u5', 'cu1']
-      },
-      timestamp: '2026-05-19T16:20:00Z'
-    },
-    { msgId: 'c5', senderId: 'system', senderName: 'Pulse Engine', senderAvatar: '', content: '🏆 Squad reached 90% Chemistry!', type: 'achievement', timestamp: '2026-05-19T17:00:00Z' }
-  ]
-};
-
-const mockTournaments: Tournament[] = [
-  {
-    tournamentId: 't-1',
-    name: 'Metropolitan Cup 2026',
-    sport: 'Football',
-    squadIds: ['squad-1'],
-    currentRound: 1,
-    status: 'In Progress',
-    startDate: '2026-05-20',
-    endDate: '2026-05-30',
-    prizePool: '$5,000 USD',
-    bracket: {
-      rounds: [
-        {
-          roundName: 'Semifinals',
-          matches: [
-            { matchId: 'tm-1', squadA: { squadId: 'squad-1', name: 'Iron Pulse FC' }, squadB: { squadId: 'squad-3', name: 'Alpha Striking' }, status: 'Scheduled', date: '2026-05-22T18:00:00Z' }
-          ]
-        }
-      ]
-    }
-  }
-];
-
-const loadLocalState = () => {
-  try {
-    const savedGenerated = localStorage.getItem('sportix_generated_squads');
-    const savedCount = localStorage.getItem('sportix_daily_gen_count');
-    const savedDate = localStorage.getItem('sportix_last_gen_date');
-    const savedSquads = localStorage.getItem('sportix_squads');
-    const savedChats = localStorage.getItem('sportix_chats');
-    
-    const todayStr = new Date().toISOString().split('T')[0];
-    let genCount = savedCount ? parseInt(savedCount, 10) : 0;
-    let genDate = savedDate || todayStr;
-    
-    if (genDate !== todayStr) {
-      genCount = 0;
-      genDate = todayStr;
-      localStorage.setItem('sportix_daily_gen_count', '0');
-      localStorage.setItem('sportix_last_gen_date', todayStr);
-    }
-    
-    return {
-      generatedSquads: savedGenerated ? JSON.parse(savedGenerated) : [],
-      dailyGenerationsCount: genCount,
-      lastGenerationDate: genDate,
-      squads: savedSquads ? JSON.parse(savedSquads) : null,
-      chats: savedChats ? JSON.parse(savedChats) : null
-    };
-  } catch (e) {
-    return {
-      generatedSquads: [],
-      dailyGenerationsCount: 0,
-      lastGenerationDate: new Date().toISOString().split('T')[0],
-      squads: null,
-      chats: null
-    };
-  }
-};
-
 const saveToLocalStorage = (key: string, value: any) => {
   try {
     localStorage.setItem(key, JSON.stringify(value));
@@ -187,26 +50,41 @@ const saveToLocalStorage = (key: string, value: any) => {
   }
 };
 
-const localState = loadLocalState();
-
 export const useSquadStore = create<SquadStoreState>((set) => ({
-  squads: localState.squads || [],
-  activeSquadId: localState.squads?.[0]?.squadId || null,
-  chats: localState.chats || initialChats,
-  tournaments: mockTournaments,
-  generatedSquads: localState.generatedSquads,
-  dailyGenerationsCount: localState.dailyGenerationsCount,
-  lastGenerationDate: localState.lastGenerationDate,
+  squads: [],
+  activeSquadId: null,
+  chats: {},
+  tournaments: [],
+  generatedSquads: [],
+  dailyGenerationsCount: 0,
+  lastGenerationDate: new Date().toISOString().split('T')[0],
 
   loadData: async () => {
-    const squads = await getSquads();
-    set({ squads });
-    // Also load chats for all squads
-    const chats: Record<string, ChatMessage[]> = {};
-    for (const squad of squads) {
-      chats[squad.squadId] = await getMessages(squad.squadId);
+    const user = useAuthStore.getState().user;
+    const currentUserId = user?.id || '';
+
+    try {
+      const squads = await getSquads(currentUserId);
+      set({ squads, activeSquadId: squads[0]?.squadId || null });
+
+      if (currentUserId) {
+        const genSquads = await getUserGeneratedSquads(currentUserId);
+        if (genSquads && genSquads.length > 0) {
+          set({ generatedSquads: genSquads });
+        }
+      }
+
+      // Load chats for squads
+      const chats: Record<string, ChatMessage[]> = {};
+      for (const squad of squads) {
+        if (squad.squadId) {
+          chats[squad.squadId] = await getMessages(squad.squadId);
+        }
+      }
+      set(state => ({ chats: { ...state.chats, ...chats } }));
+    } catch (err) {
+      console.warn('[squadStore] loadData error:', err);
     }
-    set(state => ({ chats: { ...state.chats, ...chats } }));
   },
 
   setActiveSquadId: (id) => set({ activeSquadId: id }),

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   ArrowLeft, Users, Trash2, X, Plus, Edit, Eye,
@@ -36,10 +36,12 @@ import {
   type EventScheduleItem,
 } from '../../services/announcementService';
 import { getEventLifecycleState } from '../../services/eventLifecycleService';
+import { HostEventReportsTab } from './components/HostEventReportsTab';
 import type { EventFormat, SportCategory, ExperienceLevel } from '../../types';
 
 const TABS = [
   { id: 'dashboard', label: 'Overview', icon: BarChart3 },
+  { id: 'reports', label: 'Match Reports', icon: Award },
   { id: 'schedule', label: 'Schedule', icon: Timer },
   { id: 'participants', label: 'Athletes', icon: Users },
   { id: 'bracket', label: 'Bracket', icon: Trophy },
@@ -51,10 +53,12 @@ const TABS = [
 export const ManageEvent: React.FC = () => {
   const { id } = useParams();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const { events, loadEvent, updateEvent } = useEventStore();
   const { user } = useAuthStore();
 
-  const [activeTab, setActiveTab] = useState('dashboard');
+  const tabParam = searchParams.get('tab');
+  const [activeTab, setActiveTab] = useState(tabParam || 'dashboard');
   const [loading, setLoading] = useState(true);
   const [dbParticipants, setDbParticipants] = useState<DbEventParticipant[]>([]);
   const [announcements, setAnnouncements] = useState<EventAnnouncement[]>([]);
@@ -664,6 +668,13 @@ export const ManageEvent: React.FC = () => {
                   </div>
                 </div>
 
+              </motion.div>
+            )}
+
+            {/* ── MATCH REPORTS TAB ── */}
+            {activeTab === 'reports' && (
+              <motion.div key="reports" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }}>
+                <HostEventReportsTab eventId={rawEvent.id} hostId={currentUserId} />
               </motion.div>
             )}
 
