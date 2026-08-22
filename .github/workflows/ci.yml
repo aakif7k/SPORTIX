@@ -5,7 +5,7 @@
 # Appwrite project and runs only when the secret is present — a fork's pull
 # request cannot run it, and it must not fail the build for that reason.
 name: CI
- 
+  
 on:
   push:
     branches: ['**']
