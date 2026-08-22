@@ -1,0 +1,13 @@
+{
+  "name": "sportix-e2e-tests",
+  "version": "1.0.0",
+  "description": "200 Comprehensive End-to-End Test Cases for SPORTiX Platform",
+  "main": "index.js",
+  "type": "commonjs",
+  "scripts": {
+    "test": "node index.js"
+  },
+  "dependencies": {
+    "exceljs": "^4.4.0"
+  }
+}

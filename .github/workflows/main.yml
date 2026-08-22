@@ -1,0 +1,174 @@
+name: SPORTiX - Automated E2E & QA Test Suite
+
+on:
+  push:
+    branches: [ main, master ]
+  pull_request:
+    branches: [ main, master ]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  e2e_tests:
+    name: "📝 200 End-to-End Test Cases"
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Source Code
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js Environment
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache-dependency-path: e2e-tests/package.json
+
+      - name: Install E2E Test Dependencies
+        run: |
+          cd e2e-tests
+          npm install
+
+      - name: Execute 200 End-to-End Test Cases
+        run: |
+          cd e2e-tests
+          npm test
+
+      - name: Upload E2E Test Artifact
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: e2e-report
+          path: e2e-tests/reports/
+          retention-days: 14
+
+  selenium_tests:
+    name: "🌐 Selenium WebDriver UI Automation"
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Source Code
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js Environment
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache-dependency-path: selenium-tests/package.json
+
+      - name: Install Selenium Test Dependencies
+        run: |
+          cd selenium-tests
+          npm install
+
+      - name: Execute Selenium E2E Web Automation Suite (320 Test Cases)
+        run: |
+          cd selenium-tests
+          npm test
+
+      - name: Upload Selenium Report Artifact
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: selenium-report
+          path: selenium-tests/reports/
+          retention-days: 14
+
+  appium_tests:
+    name: "📱 Appium Mobile App Automation"
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Source Code
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js Environment
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache-dependency-path: appium-tests/package.json
+
+      - name: Install Appium Test Dependencies
+        run: |
+          cd appium-tests
+          npm install
+
+      - name: Execute Android Appium Mobile Automation Suite (320 Test Cases)
+        run: |
+          cd appium-tests
+          npm test
+
+      - name: Upload Appium Report Artifact
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: appium-report
+          path: appium-tests/reports/
+          retention-days: 14
+
+  load_tests:
+    name: "⚡ High-Concurrency Load & Stress Benchmark"
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Source Code
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js Environment
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache-dependency-path: load-tests/package.json
+
+      - name: Install Load Test Dependencies
+        run: |
+          cd load-tests
+          npm install
+
+      - name: Execute High-Concurrency Load & Stress Benchmark (100 VUs)
+        env:
+          DURATION: 20
+          VUS: 100
+        run: |
+          cd load-tests
+          npm test
+
+      - name: Upload Load & Stress Report Artifact
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: load-stress-report
+          path: load-tests/reports/
+          retention-days: 14
+
+  master_qa_report:
+    name: "📊 Generate Master QA Report"
+    needs: [e2e_tests, selenium_tests, appium_tests, load_tests]
+    runs-on: ubuntu-latest
+    if: always()
+    steps:
+      - name: Checkout Source Code
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js Environment
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Download All Pipeline Test Artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: downloaded-artifacts/
+
+      - name: Install Report Generator Dependencies
+        run: |
+          npm install exceljs --no-save
+
+      - name: Generate Master Executive QA Report & Step Summary
+        run: |
+          node scripts/generate-master-report.cjs
+
+      - name: Upload Master QA Report Artifact
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: master-qa-report
+          path: master-qa-report/
+          retention-days: 30
